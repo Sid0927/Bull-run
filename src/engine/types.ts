@@ -9,6 +9,19 @@ export interface GameConfig {
   seed: number;
   /** Play-test variant: override some starting prices (each must be a track space). */
   startPrices?: Partial<Record<CompanyId, number>>;
+  /** Play-test variant: starting cash per player (default ₹1,500). */
+  startingCash?: number;
+  /**
+   * Play-test variant: at the end of each round (after any dividends), every company whose
+   * outstanding count is at or below this level drops one step. Undefined = no drift.
+   */
+  driftAtOrBelow?: number;
+  /**
+   * "down": drift always drops a step (and can bankrupt a company).
+   * "toStart": it drops a step only while the price is above the starting price. Drift only
+   * ever moves a price down, so it can never push a short past its cap at the end of a round.
+   */
+  driftMode?: "down" | "toStart";
 }
 
 export interface Player {
@@ -90,7 +103,7 @@ export type Action =
 export type GameEvent = { text: string } & (
   | { kind: "setup" }
   | { kind: "openingAllocation"; company: CompanyId; requested: number[]; allocated: number[] }
-  | { kind: "price"; company: CompanyId; from: number; to: number; steps: number; cause: "threshold" | "news" | "opening" }
+  | { kind: "price"; company: CompanyId; from: number; to: number; steps: number; cause: "threshold" | "news" | "opening" | "drift" }
   | { kind: "ceiling"; company: CompanyId }
   | { kind: "trade"; player: Seat; trade: TradeKind | "forcedSell"; company: CompanyId; prices: number[]; total: number }
   | { kind: "news"; player: Seat; card: number }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  CHAIRMAN_MULTIPLIER,
   COMPANIES,
   COMPANY_IDS,
   DIVIDEND_ROUNDS,
@@ -84,7 +85,14 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
           Players
           <div className="seg" role="group" aria-label="Players">
             {[3, 4, 5].map((n) => (
-              <button key={n} className={n === count ? "on" : ""} onClick={() => setCount(n)}>
+              <button
+                key={n}
+                className={n === count ? "on" : ""}
+                onClick={() => {
+                  setCount(n);
+                  if (n === 5 && rounds === 12) setRounds(9);
+                }}
+              >
                 {n}
               </button>
             ))}
@@ -105,6 +113,7 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
               </button>
             ))}
           </div>
+          {count === 5 && rounds === 12 && <span className="muted small">9 rounds is recommended for 5 players: 12 leaves a wide gap between first and last.</span>}
         </div>
         <div className="field">
           Starting prices
@@ -320,7 +329,7 @@ function Board({ s }: { s: GameState }) {
       })}
       <div className="legend small muted">
         Dividend bands: <span className="sw b0" /> below ₹120 · <span className="sw b1" /> ₹120–200 ₹10 · <span className="sw b2" /> ₹225–350 ₹20 ·{" "}
-        <span className="sw b3" /> ₹400–500 ₹30 (HUL, HDFC Bank double). Chairman (6+ shares) gets 5× the per-share dividend.
+        <span className="sw b3" /> ₹400–500 ₹30 (HUL, HDFC Bank double). Chairman (6+ shares) gets {CHAIRMAN_MULTIPLIER}× the per-share dividend.
       </div>
     </section>
     </div>

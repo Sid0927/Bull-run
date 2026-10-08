@@ -17,6 +17,9 @@ const opts = {
   strategies: arg("strategies", "random,favour,dividend").split(","),
   seed: Number(arg("seed", "1")),
   startPrices: parseStarts(arg("start", "")),
+  startingCash: arg("cash", "") ? Number(arg("cash", "")) : undefined,
+  driftAtOrBelow: arg("drift", "") ? Number(arg("drift", "")) : undefined,
+  driftMode: arg("drift-mode", "down") as "down" | "toStart",
 };
 
 /** --start SUN=150,INFY=120 */

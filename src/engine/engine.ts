@@ -129,7 +129,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   const deck = rng.shuffle(NEWS_CARDS.map((c) => c.id));
   const players = config.players.map((name) => ({
     name,
-    cash: STARTING_CASH,
+    cash: config.startingCash ?? STARTING_CASH,
     shares: zeroHoldings(),
     hand: [] as number[],
     shortBanned: false,
@@ -204,7 +204,7 @@ function reduce(ctx: Ctx, a: Action) {
 
 // ─── Price movement ─────────────────────────────────────────────────────────────────────
 
-function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "news" | "opening", why: string) {
+function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "news" | "opening" | "drift", why: string) {
   const co = ctx.s.companies[c];
   if (co.bankrupt || steps === 0) return;
   const from = co.priceIndex;
@@ -222,7 +222,7 @@ function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "
     to: TRACK[to],
     steps: to - from,
     cause,
-    text: `${cname(c)} ${signed(to - from)}${cause === "threshold" ? ": " : " from "}${why} — ${fmt(TRACK[from])} → ${fmt(TRACK[to])}${capped}`,
+    text: `${cname(c)} ${signed(to - from)}${cause === "threshold" || cause === "drift" ? ": " : " from "}${why} — ${fmt(TRACK[from])} → ${fmt(TRACK[to])}${capped}`,
   });
   if (to === 0) bankrupt(ctx, c);
 }
@@ -732,6 +732,16 @@ function nextTurn(ctx: Ctx) {
 function endRound(ctx: Ctx) {
   const s = ctx.s;
   if ((DIVIDEND_ROUNDS as readonly number[]).includes(s.round)) payDividends(ctx);
+  if (s.config.driftAtOrBelow !== undefined) {
+    for (const c of COMPANY_IDS) {
+      const n = outstanding(s, c);
+      if (s.companies[c].bankrupt || n > s.config.driftAtOrBelow) continue;
+      const toStart = s.config.driftMode === "toStart";
+      const home = indexOfPrice(startPrice(s.config, c));
+      const step = toStart && s.companies[c].priceIndex <= home ? 0 : -1;
+      if (step) movePrice(ctx, c, step, "drift", `no buyers: ${n} outstanding at the end of the round`);
+    }
+  }
   ctx.events.push({
     kind: "roundEnd",
     round: s.round,

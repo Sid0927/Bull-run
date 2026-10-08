@@ -436,7 +436,7 @@ describe("dividends", () => {
     const r = endRound(s);
     const div = r.events.filter((e) => e.kind === "dividend" && e.paid.length > 0);
     assert.deepEqual(div.map((e) => e.kind === "dividend" && [e.company, e.perShare]), [["HUL", 40], ["INFY", 10]]);
-    assert.equal(r.state.players[0].cash, 1500 + 7 * 40 + 5 * 40);
+    assert.equal(r.state.players[0].cash, 1500 + 7 * 40 + 3 * 40);
     assert.equal(r.state.players[1].cash, 1500 + 2 * 10);
     assert.equal(r.state.players[2].cash, 1500 - 40);
   });
@@ -461,6 +461,30 @@ describe("dividends", () => {
     assert.equal(r.state.players[2].shares.ONGC, 3);
     assert.equal(r.state.players[2].shortBanned, false);
     assert.ok(r.events.some((e) => e.kind === "shortfall"));
+  });
+});
+
+describe("play-test variants", () => {
+  test("drift: a company at or below the level drops one step at the end of the round", () => {
+    let s = midGame();
+    s.config.driftAtOrBelow = 0;
+    setPrice(s, "ONGC", 100);
+    setPrice(s, "DLF", 100);
+    s.players[1].shares.DLF = 2;
+    const quiet = NEWS_CARDS.filter((k) => !k.effects.ONGC && !k.effects.DLF).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    for (let i = 0; i < 3; i++) {
+      give(s, i, s.deck[s.deck.length - 1]);
+      s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
+      s = ok(s, { type: "draw", player: i, from: "deck" }).state;
+    }
+    assert.equal(price(s, "ONGC"), 90);
+    assert.equal(price(s, "DLF"), 100);
+  });
+
+  test("starting cash can be set", () => {
+    const { state } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: 1200 });
+    assert.ok(state.players.every((p) => p.cash === 1200));
   });
 });
 

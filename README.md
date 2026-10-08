@@ -23,6 +23,8 @@ npm test             # rules tests (Node's own test runner via tsx)
 npm run typecheck
 npm run build        # static site in dist/ — open it from any web host
 npm run sim -- --games 1000 --players 4 --rounds 9 --strategies random,favour,dividend --seed 1 --json report.json
+npm run sim -- --start SUN=120,INFY=120,ONGC=100,DLF=100,HUL=80,HDFC=80 --cash 1200 --drift 0 --drift-mode toStart
+npm run sim:starts   # compares starting-price layouts
 ```
 
 Simulator strategies: `random` (any legal move), `favour` (buys what its hand will push up,
@@ -55,6 +57,14 @@ were settled (8 Oct 2026).
 | 13 | Does the opening count as a round? | No. The opening is **round 0**; a 6/9/12-round game is that many rounds of turns after it. Dividends at the end of rounds 3, 6, 9, 12. |
 | 14 | Net worth and cash both tied | Shared win. |
 | 15 | Deck runs out (including while refilling the market) | The played cards (the opening's included) are shuffled into a new deck at once and the draw or refill continues. |
+
+Changes after the first simulations (8 Oct 2026):
+
+- **Chairman bonus is 3× the per-share dividend** (was 5×).
+- **5 players: 9 rounds is recommended.** 12 is still allowed; the setup screen says so.
+- Play-test variants, off by default, available in the simulator (`--start`, `--cash`,
+  `--drift`, `--drift-mode`) and partly in the app: a tiered starting-price layout, starting
+  cash, and end-of-round drift for companies nobody holds.
 
 Engine-level choices the rules did not reach:
 
