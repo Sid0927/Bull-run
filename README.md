@@ -67,6 +67,31 @@ Changes after the first simulations (8 Oct 2026):
   `--drift`, `--drift-mode`) and partly in the app: a tiered starting-price layout, starting
   cash, and end-of-round drift for companies nobody holds.
 
+## Zomato IPO (added 9 Oct 2026)
+
+A seventh company, Zomato (New-age tech), lists at the **start of round 4**, before the first
+turn. It has its own track, 12 certificates, 3 short tokens, a chairman token and a marker.
+
+1. **Sealed bids.** Each player writes 0–6 shares and one price: ₹60, ₹70, ₹80 or ₹90. You
+   must be able to pay shares × your price.
+2. **Listing price.** From ₹90 down, add up the shares bid at that price or more. The first
+   price where that reaches 12 is the listing price; if it never does, it lists at ₹60.
+3. **Allotment.** Bids above the listing price are filled in full. Bids at it share what is
+   left one at a time, clockwise from the start player. Bids below it get nothing. Unsold
+   shares stay in the bank.
+4. **Everyone pays the listing price**, then the price rises one step for each of 3, 6, 9 and
+   12 shares sold (the opening's rule).
+5. **Its 8 news cards are shuffled into the deck.** Four are its own (+2, +3, −2, −3) and two
+   mirrored pairs tie it to the board: *Fuel prices cut / hiked* (Zomato ±2, ONGC ∓1) and
+   *Quick commerce boom / Dining out returns* (Zomato ±2, DLF ∓1). Bull run and Market crash
+   move it once it is listed; before that they pass it by.
+6. **It pays no dividend** and **cannot be shorted until round 5**. Otherwise every normal rule
+   applies, bankruptcy and re-listing included.
+
+The band and bid limit come from simulation: ₹90–120 with 4 shares a bid was undersubscribed
+in 85% of 4-player games and always listed at the floor. ₹60–90 with 6 shares fills far more
+often. Simulator flags: `--no-ipo`; band and limit are `ipoBand` / `ipoMaxBid` in `runBatch`.
+
 Engine-level choices the rules did not reach:
 
 - **Caps are checked after each trade action completes**, not between the shares inside it, so

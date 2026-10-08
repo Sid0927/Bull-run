@@ -77,7 +77,7 @@ input, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line)
 @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
 .side { display: grid; gap: 12px; }
 
-.board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.board { display: grid; grid-template-columns: repeat(var(--tracks, 6), minmax(0, 1fr)); gap: 8px; }
 .track { background: var(--panel); border: 1px solid var(--line); border-top: 6px solid var(--co); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; min-width: 0; }
 .track-head { padding: 2px 4px 6px; }
 .co-name { font-weight: 700; color: var(--co); font-size: 15px; }
@@ -156,7 +156,12 @@ textarea { width: 100%; font-family: var(--font-num); font-size: 11px; }
 .record-box { margin: 12px; display: grid; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 .record-box textarea { height: 80px; }
 .board-scroll { overflow-x: auto; min-width: 0; }
-.board-scroll .board { min-width: 760px; }
+.board-scroll .board { min-width: 860px; }
+.track.unlisted .spaces { opacity: 0.35; }
+.rounds li.ipo { border-style: dashed; border-color: var(--amber); }
+.check { display: flex !important; grid-auto-flow: column; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: auto; }
+.field { display: grid; gap: 4px; font-weight: 500; }
 .layout > * { min-width: 0; }
 .log .dividend, .card.market .card-type { color: var(--amber); }
 .brand { font-size: 24px; text-transform: uppercase; }

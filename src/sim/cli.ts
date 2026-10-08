@@ -20,6 +20,7 @@ const opts = {
   startingCash: arg("cash", "") ? Number(arg("cash", "")) : undefined,
   driftAtOrBelow: arg("drift", "") ? Number(arg("drift", "")) : undefined,
   driftMode: arg("drift-mode", "down") as "down" | "toStart",
+  ipo: !process.argv.includes("--no-ipo"),
 };
 
 /** --start SUN=150,INFY=120 */
@@ -86,5 +87,11 @@ function print(r: Report, ms: number) {
 
   console.log("\nAverage cash per player at the end of each round");
   console.log("  " + r.cashByRound.map((x) => `R${x.round} ${rs(x.avgCash)}`).join("  "));
+  if (r.ipo.games) {
+    const ip = r.ipo;
+    console.log("\nZomato IPO");
+    console.log(`  lists at ${rs(ip.avgListing)} on average (${Object.entries(ip.listingDistribution).map(([p, n]) => `₹${p}: ${n}`).join(", ")}), ${rs(ip.avgAfterPop)} after the first-day pop`);
+    console.log(`  ${ip.avgAllotted} of 12 shares allotted · undersubscribed in ${ip.undersubscribedPct}% · biggest allottee wins ${ip.biggestAllotteeWinPct}% · ends at ${rs(ip.avgZomatoFinal)} on average`);
+  }
   console.log(`\n${r.avgActionsPerGame} actions per game on average.`);
 }

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  ALL_CARDS,
+  IPO_CARDS,
+  ipoBook,
   COMPANY_IDS,
   STARTING_CASH,
   NEWS_CARDS,
@@ -99,9 +102,14 @@ describe("news deck", () => {
     NEWS_CARDS.forEach((c, i) => assert.equal(c.id, i + 1));
   });
 
-  test("every company's up and down steps balance across the deck", () => {
+  test("every company's up and down steps balance, before and after the IPO cards join", () => {
     for (const c of COMPANY_IDS) {
+      if (c === "ZOM") continue; // only Bull run and Market crash name it before it lists, and they cancel
       const net = NEWS_CARDS.reduce((n, k) => n + (k.effects[c] ?? 0), 0);
+      assert.equal(net, 0, `${c} is net ${net}`);
+    }
+    for (const c of COMPANY_IDS) {
+      const net = ALL_CARDS.reduce((n, k) => n + (k.effects[c] ?? 0), 0);
       assert.equal(net, 0, `${c} is net ${net}`);
     }
   });
@@ -233,7 +241,7 @@ describe("bankruptcy", () => {
 
   test("re-lists at ₹60 at the start of the next round", () => {
     let s = midGame();
-    s.companies.SUN = { priceIndex: 0, bankrupt: true };
+    s.companies.SUN = { priceIndex: 0, bankrupt: true, listed: true };
     // Finish round 1: each of 3 players plays and draws.
     for (let i = 0; i < 3; i++) {
       give(s, i, s.deck[0]);
@@ -248,7 +256,7 @@ describe("bankruptcy", () => {
 
   test("bankrupt in the final round stays at ₹0", () => {
     let s = midGame({ round: 6, rounds: 6 });
-    s.companies.SUN = { priceIndex: 0, bankrupt: true };
+    s.companies.SUN = { priceIndex: 0, bankrupt: true, listed: true };
     for (let i = 0; i < 3; i++) {
       give(s, i, s.deck[0]);
       s = ok(s, play(i, s.players[i].hand[0])).state;
@@ -486,6 +494,130 @@ describe("play-test variants", () => {
   test("starting cash can be set", () => {
     const { state } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: 1200 });
     assert.ok(state.players.every((p) => p.cash === 1200));
+  });
+});
+
+// ─── The IPO ────────────────────────────────────────────────────────────────────────────
+
+describe("Zomato IPO", () => {
+  const bid = (qty: number, price: number) => ({ qty, price });
+
+  test("example 1: competitive book lists at ₹80, the cut-off bidders are rationed clockwise from the start player", () => {
+    // Asha, Bilal, Chitra, Dev; Bilal (seat 1) started the round.
+    const r = ipoBook([bid(6, 90), bid(3, 80), bid(4, 80), bid(3, 80)], 1);
+    assert.equal(r.listingPrice, 80);
+    assert.deepEqual(r.allocated, [6, 2, 2, 2]);
+  });
+
+  test("example 2: a bid below the listing price gets nothing", () => {
+    const r = ipoBook([bid(6, 90), bid(3, 80), bid(4, 80), bid(3, 70)], 1);
+    assert.equal(r.listingPrice, 80);
+    assert.deepEqual(r.allocated, [6, 3, 3, 0]);
+  });
+
+  test("example 3: undersubscribed lists at the floor and the rest stay in the bank", () => {
+    const r = ipoBook([bid(3, 70), bid(3, 60), bid(3, 90), bid(0, 0)], 0);
+    assert.equal(r.listingPrice, 60);
+    assert.deepEqual(r.allocated, [3, 3, 3, 0]);
+  });
+
+  function listZomato(s: GameState, at: number) {
+    s.companies.ZOM = { priceIndex: indexOfPrice(at), bankrupt: false, listed: true };
+    s.deck.push(...IPO_CARDS.map((k) => k.id));
+  }
+
+  function toRound4(players = 4): GameState {
+    let s = midGame({ round: 3, players });
+    s.startPlayer = 1;
+    s.phase = { kind: "turn", player: 1, turnInRound: 0, actionsUsed: 0, step: "trade" };
+    const quiet = NEWS_CARDS.filter((k) => Object.keys(k.effects).length < 6).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    for (let k = 0; k < players; k++) {
+      const i = (1 + k) % players;
+      give(s, i, s.deck[s.deck.length - 1]);
+      s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
+      s = ok(s, { type: "draw", player: i, from: "deck" }).state;
+    }
+    return s;
+  }
+
+  test("bids open at the start of round 4, then the listing pops by the thresholds and its cards join the deck", () => {
+    let s = toRound4();
+    assert.equal(s.round, 4);
+    assert.equal(s.phase.kind, "ipo");
+    const deckBefore = s.deck.length;
+    const bids: [number, number][] = [[6, 90], [3, 80], [4, 80], [3, 80]];
+    bids.forEach(([q, p], i) => {
+      s = ok(s, { type: "ipoBid", player: i, qty: q, price: p }).state;
+    });
+    assert.equal(s.companies.ZOM.listed, true);
+    assert.equal(price(s, "ZOM"), 120); // ₹80 + 4 thresholds
+    assert.deepEqual(s.players.map((p) => p.shares.ZOM), [6, 2, 2, 2]);
+    assert.equal(s.players[0].cash, STARTING_CASH - 480);
+    assert.equal(s.chairmen.ZOM, 0);
+    assert.equal(s.deck.length, deckBefore + IPO_CARDS.length);
+    const ph = s.phase as GameState["phase"];
+    assert.equal(ph.kind === "turn" && ph.player, 1);
+  });
+
+  test("bids are 0–6 shares at a band price you can afford", () => {
+    const s = toRound4();
+    illegal(s, { type: "ipoBid", player: 0, qty: 7, price: 80 }, /0 to 6/);
+    illegal(s, { type: "ipoBid", player: 0, qty: 2, price: 95 }, /₹60, ₹70, ₹80, ₹90/);
+    s.players[0].cash = 200;
+    illegal(s, { type: "ipoBid", player: 0, qty: 3, price: 80 }, /could cost ₹240/);
+  });
+
+  test("before listing it cannot be traded and market-wide news passes it by", () => {
+    const s = midGame();
+    illegal(s, buy(0, "ZOM", 1), /not listed/);
+    give(s, 0, BULL_RUN);
+    const r = ok(s, play(0, BULL_RUN));
+    assert.equal(r.state.companies.ZOM.listed, false);
+    assert.ok(!r.events.some((e) => e.kind === "price" && e.company === "ZOM"));
+  });
+
+  test("no shorting in its listing round; allowed from round 5", () => {
+    const s = midGame({ round: 4 });
+    listZomato(s, 150);
+    illegal(s, short(0, "ZOM", 1), /listing round/);
+    s.round = 5;
+    ok(s, short(0, "ZOM", 1));
+  });
+
+  test("Zomato pays no dividend", () => {
+    let s = midGame({ round: 6 });
+    listZomato(s, 400);
+    s.players[0].shares.ZOM = 7;
+    s.chairmen.ZOM = 0;
+    s.players[1].shares.HUL = 1; // a company that does pay, to show the payout ran
+    setPrice(s, "HUL", 200);
+    const events: GameEvent[] = [];
+    const quiet = ALL_CARDS.filter((k) => !k.effects.ZOM && !k.effects.HUL).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    for (let i = 0; i < 3; i++) {
+      give(s, i, s.deck[s.deck.length - 1]);
+      const r = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1]));
+      const d = ok(r.state, { type: "draw", player: i, from: "deck" });
+      events.push(...r.events, ...d.events);
+      s = d.state;
+    }
+    const div = events.filter((e) => e.kind === "dividend");
+    assert.ok(div.some((e) => e.kind === "dividend" && e.company === "HUL"));
+    assert.ok(!div.some((e) => e.kind === "dividend" && e.company === "ZOM"));
+    assert.equal(s.chairmen.ZOM, 0);
+  });
+
+  test("with the IPO switched off, round 4 starts with turns", () => {
+    const s = midGame({ round: 3 });
+    s.config.ipo = false;
+    let t = s;
+    for (let i = 0; i < 3; i++) {
+      give(t, i, t.deck[t.deck.length - 1]);
+      t = ok(t, play(i, t.players[i].hand[t.players[i].hand.length - 1])).state;
+      t = ok(t, { type: "draw", player: i, from: "deck" }).state;
+    }
+    assert.equal(t.phase.kind, "turn");
   });
 });
 

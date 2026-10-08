@@ -22,6 +22,11 @@ export interface GameConfig {
    * ever moves a price down, so it can never push a short past its cap at the end of a round.
    */
   driftMode?: "down" | "toStart";
+  /** Zomato lists through an IPO at the start of round 4. On unless set to false. */
+  ipo?: boolean;
+  /** Play-test variants for the IPO: the price band and the most shares one player may bid for. */
+  ipoBand?: number[];
+  ipoMaxBid?: number;
 }
 
 export interface Player {
@@ -42,6 +47,13 @@ export interface ShortToken {
 export interface CompanyState {
   priceIndex: number;
   bankrupt: boolean;
+  /** False until a company that lists through the IPO has listed. */
+  listed: boolean;
+}
+
+export interface IpoBid {
+  qty: number; // 0 to IPO_MAX_BID
+  price: number; // one of IPO_BAND
 }
 
 export interface OpeningSubmission {
@@ -52,6 +64,7 @@ export interface OpeningSubmission {
 export type Phase =
   | { kind: "opening"; submissions: (OpeningSubmission | null)[] }
   | { kind: "openingDraw"; next: Seat }
+  | { kind: "ipo"; bids: (IpoBid | null)[] }
   | { kind: "turn"; player: Seat; turnInRound: number; actionsUsed: number; step: "trade" | "draw" }
   | { kind: "ended" };
 
@@ -98,11 +111,14 @@ export type Action =
   | { type: "draw"; player: Seat; from: "market"; slot: number }
   | { type: "trade"; player: Seat; kind: TradeKind; company: CompanyId; qty: number; shortIds?: number[] }
   | { type: "playNews"; player: Seat; card: number }
+  | { type: "ipoBid"; player: Seat; qty: number; price: number }
   | { type: "forcedSell"; player: Seat; company: CompanyId; qty: number };
 
 export type GameEvent = { text: string } & (
   | { kind: "setup" }
   | { kind: "openingAllocation"; company: CompanyId; requested: number[]; allocated: number[] }
+  | { kind: "ipoOpen"; company: CompanyId }
+  | { kind: "ipoListing"; company: CompanyId; bids: IpoBid[]; allocated: number[]; listingPrice: number; afterPop: number }
   | { kind: "price"; company: CompanyId; from: number; to: number; steps: number; cause: "threshold" | "news" | "opening" | "drift" }
   | { kind: "ceiling"; company: CompanyId }
   | { kind: "trade"; player: Seat; trade: TradeKind | "forcedSell"; company: CompanyId; prices: number[]; total: number }

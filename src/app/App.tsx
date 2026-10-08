@@ -20,6 +20,10 @@ import {
   previewTrade,
   price,
   startPrice,
+  IPO_ROUND,
+  ipoBandOf,
+  ipoEnabled,
+  ipoMaxBidOf,
   type Action,
   type CompanyId,
   type GameConfig,
@@ -56,13 +60,14 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
   const [rounds, setRounds] = useState<GameLength>(9);
   const [seed, setSeed] = useState(() => String(Math.floor(Math.random() * 1e9)));
   const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("handover");
+  const [ipo, setIpo] = useState(true);
   const [error, setError] = useState("");
 
   function start() {
     const players = names.slice(0, count).map((n, i) => n.trim() || `Player ${i + 1}`);
     if (new Set(players).size !== players.length) return setError("Give every player a different name.");
     const startPrices = START_LAYOUTS[layout].prices;
-    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}) });
+    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}), ...(ipo ? {} : { ipo: false }) });
   }
 
   function load(file: File) {
@@ -125,9 +130,13 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
             ))}
           </div>
           <span className="muted small">
-            {COMPANY_IDS.map((c) => `${COMPANIES[c].short} ₹${START_LAYOUTS[layout].prices?.[c] ?? COMPANIES[c].startPrice}`).join(" · ")}
+            {COMPANY_IDS.filter((c) => !COMPANIES[c].ipo).map((c) => `${COMPANIES[c].short} ₹${START_LAYOUTS[layout].prices?.[c] ?? COMPANIES[c].startPrice}`).join(" · ")}
           </span>
         </div>
+        <label className="check">
+          <input type="checkbox" id="ipo" checked={ipo} onChange={(e) => setIpo(e.target.checked)} />
+          Zomato IPO at the start of round {IPO_ROUND}
+        </label>
         <label>
           Seed
           <input value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/[^0-9-]/g, ""))} />
@@ -254,8 +263,8 @@ function RoundTracker({ s }: { s: GameState }) {
       {Array.from({ length: 12 }, (_, i) => i + 1).map((r) => (
         <li
           key={r}
-          className={[r === s.round ? "now" : r < s.round ? "past" : "", r > n ? "unused" : "", (DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "div" : "", r === n ? "final" : ""].join(" ")}
-          title={`${(DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "Dividend round. " : ""}${r === n ? "Final round." : ""}`}
+          className={[r === s.round ? "now" : r < s.round ? "past" : "", r > n ? "unused" : "", (DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "div" : "", r === n ? "final" : "", r === IPO_ROUND && ipoEnabled(s.config) ? "ipo" : ""].join(" ")}
+          title={`${(DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "Dividend round. " : ""}${r === IPO_ROUND && ipoEnabled(s.config) ? "Zomato IPO at the start. " : ""}${r === n ? "Final round." : ""}`}
         >
           {r}
         </li>
@@ -275,29 +284,31 @@ function band(p: number): string {
 
 function Board({ s }: { s: GameState }) {
   const spaces = [...TRACK.keys()].reverse();
+  const tracks = COMPANY_IDS.filter((c) => !COMPANIES[c].ipo || ipoEnabled(s.config));
   return (
     <div className="board-scroll">
-    <section className="board" aria-label="Price tracks">
-      {COMPANY_IDS.map((c) => {
+    <section className="board" aria-label="Price tracks" style={{ ["--tracks" as string]: tracks.length }}>
+      {tracks.map((c) => {
         const co = COMPANIES[c];
         const st = s.companies[c];
         const out = outstanding(s, c);
         const ch = s.chairmen[c];
         const shorts = openShorts(s, c);
         return (
-          <div key={c} className="track" style={{ ["--co" as string]: co.colour }}>
+          <div key={c} className={`track ${st.listed ? "" : "unlisted"}`} style={{ ["--co" as string]: co.colour }}>
             <div className="track-head">
               <div className="co-name">{co.short}</div>
               <div className="muted small">{co.sector}</div>
               {co.doubleDividend && <div className="tag">Double dividend</div>}
+              {co.noDividend && <div className="tag">No dividend</div>}
             </div>
             <ol className="spaces">
               {spaces.map((i) => {
                 const p = TRACK[i];
-                const here = st.priceIndex === i;
+                const here = st.listed && st.priceIndex === i;
                 const tokens = shorts.filter((t) => t.openIndex === i);
                 return (
-                  <li key={i} className={`space ${band(p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${p === startPrice(s.config, c) ? "start" : ""}`}>
+                  <li key={i} className={`space ${band(p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${!co.ipo && p === startPrice(s.config, c) ? "start" : ""}`}>
                     <span className="val">{i === 0 ? "BUST" : p}</span>
                     {tokens.map((t) => (
                       <span key={t.id} className="short-token" title={`${s.players[t.owner].name}'s short, opened at ${rs(p)}${capIndex(t.openIndex) === null ? ", no cap" : `, closes at ${rs(TRACK[capIndex(t.openIndex)!])}`}`}>
@@ -310,7 +321,7 @@ function Board({ s }: { s: GameState }) {
               })}
             </ol>
             <div className="track-foot">
-              <div className="big">{st.bankrupt ? "Bankrupt" : rs(price(s, c))}</div>
+              <div className="big">{!st.listed ? `IPO R${IPO_ROUND}` : st.bankrupt ? "Bankrupt" : rs(price(s, c))}</div>
               <div title="Shares held by players minus open shorts">
                 Outstanding <b>{out}</b>
               </div>
@@ -330,6 +341,7 @@ function Board({ s }: { s: GameState }) {
       <div className="legend small muted">
         Dividend bands: <span className="sw b0" /> below ₹120 · <span className="sw b1" /> ₹120–200 ₹10 · <span className="sw b2" /> ₹225–350 ₹20 ·{" "}
         <span className="sw b3" /> ₹400–500 ₹30 (HUL, HDFC Bank double). Chairman (6+ shares) gets {CHAIRMAN_MULTIPLIER}× the per-share dividend.
+        {ipoEnabled(s.config) && ` Zomato lists by sealed bids at the start of round ${IPO_ROUND} and pays no dividend.`}
       </div>
     </section>
     </div>
@@ -431,7 +443,7 @@ function Log({ events }: { events: GameEvent[] }) {
 // ─── Private: the active player's controls ──────────────────────────────────────────────
 
 function PassDevice({ s, seat, onReady }: { s: GameState; seat: Seat; onReady: () => void }) {
-  const why = s.debt ? `${s.players[seat].name} must sell shares to pay a forced close.` : s.phase.kind === "opening" ? "Write your secret opening orders." : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards." : "Your turn.";
+  const why = s.debt ? `${s.players[seat].name} must sell shares to pay a forced close.` : s.phase.kind === "opening" ? "Write your secret opening orders." : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards." : s.phase.kind === "ipo" ? "Place your secret Zomato IPO bid." : "Your turn.";
   return (
     <section className="panel pass">
       <h2>Pass the device to {s.players[seat].name}</h2>
@@ -448,6 +460,7 @@ function Private({ s, seat, play, flash, clear }: { s: GameState; seat: Seat; pl
   let body: ReactNode;
   if (s.debt) body = <ForcedSale s={s} seat={seat} play={play} />;
   else if (s.phase.kind === "opening") body = <Opening s={s} seat={seat} play={play} />;
+  else if (s.phase.kind === "ipo") body = <IpoBidForm s={s} seat={seat} play={play} />;
   else if (s.phase.kind === "openingDraw" || (s.phase.kind === "turn" && s.phase.step === "draw")) body = <Draw s={s} seat={seat} play={play} />;
   else if (s.phase.kind === "turn") body = <Turn s={s} seat={seat} play={play} />;
   return (
@@ -470,12 +483,13 @@ function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action
   const [orders, setOrders] = useState<Partial<Holdings>>({});
   const [pick, setPick] = useState<number | null>(null);
   const total = Object.values(orders).reduce((a, b) => a + (b ?? 0), 0);
-  const cost = COMPANY_IDS.reduce((n, c) => n + (orders[c] ?? 0) * price(s, c), 0);
+  const listed = COMPANY_IDS.filter((c) => s.companies[c].listed);
+  const cost = listed.reduce((n, c) => n + (orders[c] ?? 0) * price(s, c), 0);
   return (
     <>
       <p className="small">Round 0 — buy up to {OPENING_MAX_SHARES} shares in total at the starting prices (if a company is oversubscribed, shares are shared out in seat order), and place one news card face-down. Everything is revealed together.</p>
       <div className="orders">
-        {COMPANY_IDS.map((c) => (
+        {listed.map((c) => (
           <div key={c} style={{ ["--co" as string]: COMPANIES[c].colour }} className="order">
             <span>
               {COMPANIES[c].short} <span className="muted">{rs(price(s, c))}</span>
@@ -510,6 +524,53 @@ function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action
   );
 }
 
+function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
+  const band = ipoBandOf(s.config);
+  const max = ipoMaxBidOf(s.config);
+  const cash = s.players[seat].cash;
+  const [qty, setQty] = useState(0);
+  const [bid, setBid] = useState(band[0]);
+  const cost = qty * bid;
+  return (
+    <>
+      <h3>Zomato IPO — your sealed bid</h3>
+      <p className="small">
+        Bid for 0–{max} shares at one price. All bids are revealed together. The listing price is the highest price at which the shares bid at that
+        price or more reach 12 (the lowest price if they never do). Bids above it are filled in full, bids at it share what is left one at a time clockwise
+        from the start player, and bids below it get nothing. Everyone pays the listing price, then the price rises one step per 3, 6, 9 and 12 shares sold.
+        Zomato pays no dividend and cannot be shorted until round {IPO_ROUND + 1}.
+      </p>
+      <div className="field">
+        Shares
+        <div className="seg" role="group" aria-label="Shares to bid for">
+          {Array.from({ length: max + 1 }, (_, n) => (
+            <button key={n} className={n === qty ? "on" : ""} onClick={() => setQty(n)}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        Price per share
+        <div className="seg" role="group" aria-label="Bid price">
+          {band.map((p) => (
+            <button key={p} className={p === bid ? "on" : ""} disabled={qty === 0} onClick={() => setBid(p)}>
+              {rs(p)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="small">
+        {qty === 0 ? "No bid." : `Up to ${rs(cost)} if filled in full; you pay the listing price, which may be lower.`}
+        {cost > cash && <span className="error"> You have {rs(cash)}.</span>}
+      </p>
+      <button className="primary" disabled={cost > cash} onClick={() => play({ type: "ipoBid", player: seat, qty, price: qty ? bid : 0 })}>
+        Seal my bid
+      </button>
+    </>
+  );
+}
+
 function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
   const ph = s.phase as Extract<GameState["phase"], { kind: "turn" }>;
   const p = s.players[seat];
@@ -533,7 +594,7 @@ function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
             ))}
           </div>
           <div className="seg wrap">
-            {COMPANY_IDS.map((c) => (
+            {COMPANY_IDS.filter((c) => s.companies[c].listed).map((c) => (
               <button key={c} className={c === company ? "on" : ""} style={{ ["--co" as string]: COMPANIES[c].colour }} onClick={() => setCompany(c)}>
                 {COMPANIES[c].short}
               </button>

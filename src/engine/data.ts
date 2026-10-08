@@ -28,7 +28,7 @@ export const DIVIDEND_ROUNDS = [3, 6, 9, 12] as const;
 export const GAME_LENGTHS = [6, 9, 12] as const;
 export type GameLength = (typeof GAME_LENGTHS)[number];
 
-export const COMPANY_IDS = ["HUL", "HDFC", "INFY", "ONGC", "DLF", "SUN"] as const;
+export const COMPANY_IDS = ["HUL", "HDFC", "INFY", "ONGC", "DLF", "SUN", "ZOM"] as const;
 export type CompanyId = (typeof COMPANY_IDS)[number];
 
 export interface Company {
@@ -39,6 +39,10 @@ export interface Company {
   startPrice: number;
   doubleDividend: boolean;
   colour: string;
+  /** Lists mid-game through the IPO instead of starting on the board. */
+  ipo?: boolean;
+  /** Pays no dividend at any price (a growth stock). */
+  noDividend?: boolean;
 }
 
 export const COMPANIES: Record<CompanyId, Company> = {
@@ -48,7 +52,18 @@ export const COMPANIES: Record<CompanyId, Company> = {
   ONGC: { id: "ONGC", name: "ONGC", short: "ONGC", sector: "Energy", startPrice: 100, doubleDividend: false, colour: "#d4691e" },
   DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 80, doubleDividend: false, colour: "#b8860b" },
   SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 60, doubleDividend: false, colour: "#d23f6b" },
+  // startPrice is only a placeholder: the IPO's listing price is set by the bids.
+  ZOM: { id: "ZOM", name: "Zomato", short: "Zomato", sector: "New-age tech", startPrice: 100, doubleDividend: false, colour: "#5b8c1a", ipo: true, noDividend: true },
 };
+
+/** The IPO: Zomato lists at the start of this round, sold by sealed bids. */
+export const IPO_COMPANY: CompanyId = "ZOM";
+export const IPO_ROUND = 4;
+// Simulated 9 Oct 2026: ₹90–120 with 4 shares a bid was undersubscribed in 85% of 4-player
+// games and always listed at the floor. ₹60–90 with 6 fills the book far more often and leaves
+// the least free money on the first day.
+export const IPO_BAND = [60, 70, 80, 90] as const;
+export const IPO_MAX_BID = 6;
 
 export function indexOfPrice(price: number): number {
   const i = TRACK.indexOf(price as (typeof TRACK)[number]);
@@ -65,6 +80,7 @@ export function baseDividend(price: number): number {
 }
 
 export function dividendPerShare(company: CompanyId, price: number): number {
+  if (COMPANIES[company].noDividend) return 0;
   return baseDividend(price) * (COMPANIES[company].doubleDividend ? 2 : 1);
 }
 
@@ -77,6 +93,8 @@ export interface NewsCard {
   effects: Partial<Record<CompanyId, number>>;
 }
 
+// Market-wide cards name every company, Zomato included: a move on a company that is not
+// listed yet (or is bankrupt) is ignored by the engine.
 const ALL = (n: number): Record<CompanyId, number> =>
   Object.fromEntries(COMPANY_IDS.map((c) => [c, n])) as Record<CompanyId, number>;
 
@@ -140,8 +158,26 @@ export const NEWS_CARDS: NewsCard[] = [
   { id: 50, type: "double", title: "Petrochemical prices crash", effects: { ONGC: -1, SUN: 2 } },
 ];
 
+/**
+ * Shuffled into the draw deck when Zomato lists. Four of its own, plus two mirrored pairs that
+ * tie it to the existing board, so the new company is not an island. Each pair nets to zero for
+ * every company it names, so the deck stays balanced.
+ */
+export const IPO_CARDS: NewsCard[] = [
+  { id: 51, type: "positive", title: "Expands to 100 new cities", effects: { ZOM: 2 } },
+  { id: 52, type: "positive", title: "First profitable quarter", effects: { ZOM: 3 } },
+  { id: 53, type: "negative", title: "Food safety fine", effects: { ZOM: -2 } },
+  { id: 54, type: "negative", title: "Promoter sells a big stake", effects: { ZOM: -3 } },
+  { id: 55, type: "double", title: "Fuel prices cut", effects: { ZOM: 2, ONGC: -1 } },
+  { id: 56, type: "double", title: "Fuel prices hiked", effects: { ZOM: -2, ONGC: 1 } },
+  { id: 57, type: "double", title: "Quick commerce boom", effects: { ZOM: 2, DLF: -1 } },
+  { id: 58, type: "double", title: "Dining out returns", effects: { ZOM: -2, DLF: 1 } },
+];
+
+export const ALL_CARDS: NewsCard[] = [...NEWS_CARDS, ...IPO_CARDS];
+
 export function card(id: number): NewsCard {
-  const c = NEWS_CARDS[id - 1];
+  const c = ALL_CARDS[id - 1];
   if (!c || c.id !== id) throw new Error(`No news card #${id}`);
   return c;
 }

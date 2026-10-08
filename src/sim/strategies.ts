@@ -6,8 +6,12 @@
  */
 import {
   COMPANY_IDS,
+  IPO_COMPANY,
+  ipoBandOf,
+  ipoMaxBidOf,
   OPENING_MAX_SHARES,
   card,
+  isLive,
   openShorts,
   price,
   type Action,
@@ -25,6 +29,19 @@ export interface Strategy {
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────────────────
+
+/** Companies that can be traded now. */
+const live = (s: GameState) => COMPANY_IDS.filter((c) => isLive(s, c));
+
+/** An IPO bid the seat can afford: the most shares up to `qty` at `price`. */
+/** `level` 0–1 picks a price from the band, low to high; `qty` is capped by the game's limit and cash. */
+function ipoBid(s: GameState, seat: Seat, qty: number, level: number): Action {
+  const band = [...ipoBandOf(s.config)].sort((a, b) => a - b);
+  const price = band[Math.min(band.length - 1, Math.round(level * (band.length - 1)))];
+  const cash = s.players[seat].cash;
+  const q = Math.max(0, Math.min(qty, ipoMaxBidOf(s.config), Math.floor(cash / price)));
+  return { type: "ipoBid", player: seat, qty: q, price };
+}
 
 /** Net steps the cards in a hand would move each company. */
 export function handBias(hand: number[]): Record<CompanyId, number> {
@@ -83,12 +100,14 @@ export const randomPlayer: Strategy = {
     if (ph.kind === "opening") {
       const orders: Partial<Holdings> = {};
       const n = rng.int(OPENING_MAX_SHARES + 1);
+      const open = live(s);
       for (let i = 0; i < n; i++) {
-        const c = COMPANY_IDS[rng.int(COMPANY_IDS.length)];
+        const c = open[rng.int(open.length)];
         orders[c] = (orders[c] ?? 0) + 1;
       }
       return [{ type: "openingOrder", player: seat, orders, card: p.hand[rng.int(p.hand.length)] }];
     }
+    if (ph.kind === "ipo") return [ipoBid(s, seat, rng.int(ipoMaxBidOf(s.config) + 1), rng.next())];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return rng.shuffle(drawChoices(s, seat, false));
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];
@@ -108,16 +127,18 @@ export const favourPlayer: Strategy = {
   candidates(s, seat) {
     const p = s.players[seat];
     const bias = handBias(p.hand);
-    const ranked = [...COMPANY_IDS].sort((a, b) => bias[b] - bias[a]);
+    const ranked = live(s).sort((a, b) => bias[b] - bias[a]);
     if (s.debt) return forcedSells(s, seat, [...ranked].reverse());
     const ph = s.phase;
     if (ph.kind === "opening") {
-      const top = ranked.filter((c) => bias[c] > 0);
+      const top = ranked.filter((c) => bias[c] > 0 && s.companies[c].listed);
       const picks = top.length ? top.slice(0, 2) : [ranked[0]];
       const orders: Partial<Holdings> = {};
       picks.forEach((c, i) => (orders[c] = picks.length === 1 ? 6 : i === 0 ? 3 : 3));
       return [{ type: "openingOrder", player: seat, orders, card: bestCard(s, seat, orders) }];
     }
+    // The IPO pops on a full book, so it bids for the lot, and pays up when its hand likes Zomato.
+    if (ph.kind === "ipo") return [ipoBid(s, seat, ipoMaxBidOf(s.config), bias[IPO_COMPANY] > 0 ? 1 : 0.67)];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];
@@ -155,6 +176,8 @@ export const dividendPlayer: Strategy = {
       const orders = { HUL: 3, HDFC: 3 };
       return [{ type: "openingOrder", player: seat, orders, card: bestCard(s, seat, orders) }];
     }
+    // Zomato pays no dividend: a small bid at the bottom of the band, for the pop only.
+    if (ph.kind === "ipo") return [ipoBid(s, seat, 2, 0)];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];

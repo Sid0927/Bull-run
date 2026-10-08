@@ -68,6 +68,9 @@ export interface BatchOptions {
   startingCash?: number;
   driftAtOrBelow?: number;
   driftMode?: "down" | "toStart";
+  ipo?: boolean;
+  ipoBand?: number[];
+  ipoMaxBid?: number;
 }
 
 export interface Report {
@@ -81,6 +84,17 @@ export interface Report {
   chairmen: Record<CompanyId, { roundsWithChairmanPct: number; gamesWithChairmanPct: number; byStrategy: Record<string, number> }> & {};
   shorts: { openedPerGame: number; coveredPerGame: number; forcedPerGame: number; closedByBankruptcyPerGame: number; debtsPerGame: number; lastResortPerGame: number; gamesWithLastResortPct: number; shortDividendShortfalls: number };
   cashByRound: { round: number; avgCash: number }[];
+  ipo: {
+    games: number;
+    listingDistribution: Record<number, number>;
+    avgListing: number;
+    avgAfterPop: number;
+    avgAllotted: number;
+    undersubscribedPct: number;
+    /** Of games with a single biggest allottee, how often that player won. */
+    biggestAllotteeWinPct: number;
+    avgZomatoFinal: number;
+  };
   avgActionsPerGame: number;
 }
 
@@ -106,12 +120,13 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   let roundEnds = 0;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
+  const ipo = { games: 0, listing: 0, after: 0, allotted: 0, under: 0, dist: {} as Record<number, number>, bigGames: 0, bigWins: 0, zomFinal: 0 };
   let worthAll = 0, worthWin = 0, worthLast = 0, spreadSum = 0, spreadMax = 0, actionsSum = 0;
 
   for (let g = 0; g < opts.games; g++) {
     // Cycle the strategy list to fill the table, then shuffle seats so seat and strategy are not confounded.
     const lineup = seatRng.shuffle(Array.from({ length: opts.players }, (_, i) => strategies[i % strategies.length]));
-    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode };
+    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode, ipo: opts.ipo, ipoBand: opts.ipoBand, ipoMaxBid: opts.ipoMaxBid };
     const game = playGame(config, lineup);
     const st = game.state.standings!;
     const winners = st.filter((x) => x.rank === 1);
@@ -150,6 +165,23 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         case "lastResort": sh.lastResort++; lastResortHere = true; break;
         case "shortfall": sh.shortfalls++; break;
         case "trade": if (e.trade === "cover") sh.covered += e.prices.length; break;
+        case "ipoListing": {
+          ipo.games++;
+          ipo.listing += e.listingPrice;
+          ipo.after += e.afterPop;
+          const total = e.allocated.reduce((a, b) => a + b, 0);
+          ipo.allotted += total;
+          if (total < 12) ipo.under++;
+          ipo.dist[e.listingPrice] = (ipo.dist[e.listingPrice] ?? 0) + 1;
+          const max = Math.max(...e.allocated);
+          const tops = e.allocated.map((n, i) => (n === max ? i : -1)).filter((i) => i >= 0);
+          if (max > 0 && tops.length === 1) {
+            ipo.bigGames++;
+            if (st.find((x) => x.seat === tops[0])!.rank === 1) ipo.bigWins++;
+          }
+          ipo.zomFinal += TRACK[game.state.companies.ZOM.priceIndex];
+          break;
+        }
         case "roundEnd":
           roundEnds++;
           (cash[e.round] ??= { sum: 0, n: 0 });
@@ -210,5 +242,15 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     },
     cashByRound: cash.map((x, round) => (x ? { round, avgCash: Math.round(x.sum / x.n) } : null)).filter((x): x is { round: number; avgCash: number } => x !== null),
     avgActionsPerGame: Math.round(actionsSum / G),
+    ipo: {
+      games: ipo.games,
+      listingDistribution: ipo.dist,
+      avgListing: Math.round(ipo.listing / Math.max(1, ipo.games)),
+      avgAfterPop: Math.round(ipo.after / Math.max(1, ipo.games)),
+      avgAllotted: Math.round((10 * ipo.allotted) / Math.max(1, ipo.games)) / 10,
+      undersubscribedPct: Math.round((1000 * ipo.under) / Math.max(1, ipo.games)) / 10,
+      biggestAllotteeWinPct: Math.round((1000 * ipo.bigWins) / Math.max(1, ipo.bigGames)) / 10,
+      avgZomatoFinal: Math.round(ipo.zomFinal / Math.max(1, ipo.games)),
+    },
   };
 }

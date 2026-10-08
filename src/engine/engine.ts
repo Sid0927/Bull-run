@@ -12,6 +12,11 @@ import {
   COMPANY_IDS,
   DIVIDEND_ROUNDS,
   GAME_LENGTHS,
+  IPO_BAND,
+  IPO_CARDS,
+  IPO_COMPANY,
+  IPO_MAX_BID,
+  IPO_ROUND,
   HAND_SIZE,
   MARKET_SIZE,
   MAX_QTY_PER_ACTION,
@@ -37,6 +42,7 @@ import type {
   GameEvent,
   GameState,
   Holdings,
+  IpoBid,
   Result,
   Seat,
   ShortToken,
@@ -95,6 +101,23 @@ export function netWorth(s: GameState, seat: Seat): Omit<Standing, "rank"> {
   return { seat, name: p.name, cash: p.cash, sharesValue, shortsCost, netWorth: p.cash + sharesValue - shortsCost };
 }
 
+/** Listed and not bankrupt: the companies that can be traded and moved by news right now. */
+export function isLive(s: GameState, c: CompanyId): boolean {
+  return s.companies[c].listed && !s.companies[c].bankrupt;
+}
+
+export function ipoEnabled(config: GameConfig): boolean {
+  return config.ipo !== false;
+}
+
+export function ipoBandOf(config: GameConfig): readonly number[] {
+  return config.ipoBand ?? IPO_BAND;
+}
+
+export function ipoMaxBidOf(config: GameConfig): number {
+  return config.ipoMaxBid ?? IPO_MAX_BID;
+}
+
 /** Whose input the game is waiting for, or null when it has ended. */
 export function actor(s: GameState): Seat | null {
   if (s.debt) return s.debt.player;
@@ -105,6 +128,10 @@ export function actor(s: GameState): Seat | null {
     }
     case "openingDraw":
       return s.phase.next;
+    case "ipo": {
+      const i = s.phase.bids.findIndex((x) => x === null);
+      return i < 0 ? null : i;
+    }
     case "turn":
       return s.phase.player;
     case "ended":
@@ -145,7 +172,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
     phase: { kind: "opening", submissions: players.map(() => null) },
     players,
     companies: Object.fromEntries(
-      COMPANY_IDS.map((c) => [c, { priceIndex: indexOfPrice(startPrice(config, c)), bankrupt: false }]),
+      COMPANY_IDS.map((c) => [c, { priceIndex: indexOfPrice(startPrice(config, c)), bankrupt: false, listed: !COMPANIES[c].ipo }]),
     ) as GameState["companies"],
     chairmen: Object.fromEntries(COMPANY_IDS.map((c) => [c, null])) as GameState["chairmen"],
     shorts: [],
@@ -197,6 +224,8 @@ function reduce(ctx: Ctx, a: Action) {
       return trade(ctx, a.player, a.kind, a.company, a.qty, a.shortIds);
     case "playNews":
       return playNews(ctx, a.player, a.card);
+    case "ipoBid":
+      return ipoBid(ctx, a.player, a.qty, a.price);
     case "forcedSell":
       throw new IllegalAction("There is nothing to pay off.");
   }
@@ -206,7 +235,7 @@ function reduce(ctx: Ctx, a: Action) {
 
 function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "news" | "opening" | "drift", why: string) {
   const co = ctx.s.companies[c];
-  if (co.bankrupt || steps === 0) return;
+  if (co.bankrupt || !co.listed || steps === 0) return;
   const from = co.priceIndex;
   const to = Math.max(0, Math.min(TOP, from + steps));
   if (to === from) {
@@ -229,7 +258,7 @@ function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "
 
 function bankrupt(ctx: Ctx, c: CompanyId) {
   const { s } = ctx;
-  s.companies[c] = { priceIndex: 0, bankrupt: true };
+  s.companies[c] = { priceIndex: 0, bankrupt: true, listed: true };
   ctx.events.push({ kind: "bankrupt", company: c, text: `${cname(c)} is bankrupt: all its shares go back to the bank and are worthless` });
   for (const p of s.players) p.shares[c] = 0;
   for (const t of openShorts(s, c)) {
@@ -248,7 +277,7 @@ function bankrupt(ctx: Ctx, c: CompanyId) {
 }
 
 function relist(ctx: Ctx, c: CompanyId) {
-  ctx.s.companies[c] = { priceIndex: RELIST_INDEX, bankrupt: false };
+  ctx.s.companies[c] = { priceIndex: RELIST_INDEX, bankrupt: false, listed: true };
   ctx.events.push({ kind: "relist", company: c, text: `${cname(c)} re-lists at ${fmt(TRACK[RELIST_INDEX])} with all 12 shares in the bank` });
 }
 
@@ -370,6 +399,7 @@ function checkTrade(s: GameState, seat: Seat, kind: TradeKind, c: CompanyId, qty
   }
   if (!COMPANY_IDS.includes(c)) throw new IllegalAction("No such company.");
   if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_ACTION) throw new IllegalAction("An action is 1 to 3 shares or short tokens.");
+  if (!s.companies[c].listed) throw new IllegalAction(`${cname(c)} is not listed yet: it lists through the IPO at the start of round ${IPO_ROUND}.`);
   if (s.companies[c].bankrupt) throw new IllegalAction(`${cname(c)} is bankrupt and cannot be traded until it re-lists.`);
   const p = s.players[seat];
   switch (kind) {
@@ -381,6 +411,7 @@ function checkTrade(s: GameState, seat: Seat, kind: TradeKind, c: CompanyId, qty
       break;
     case "short":
       if (p.shortBanned) throw new IllegalAction("You may not open shorts for the rest of the game (last-resort rule).");
+      if (COMPANIES[c].ipo && s.round <= IPO_ROUND) throw new IllegalAction(`${cname(c)} cannot be shorted in its listing round; shorts open from round ${IPO_ROUND + 1}.`);
       if (SHORTS_PER_COMPANY - openShorts(s, c).length < qty)
         throw new IllegalAction(`Only ${SHORTS_PER_COMPANY - openShorts(s, c).length} ${cname(c)} short tokens are left.`);
       break;
@@ -483,7 +514,7 @@ function settle(ctx: Ctx) {
 }
 
 function sellableShares(s: GameState, seat: Seat): number {
-  return COMPANY_IDS.reduce((n, c) => n + (s.companies[c].bankrupt ? 0 : s.players[seat].shares[c]), 0);
+  return COMPANY_IDS.reduce((n, c) => n + (isLive(s, c) ? s.players[seat].shares[c] : 0), 0);
 }
 
 function charge(ctx: Ctx, seat: Seat, amount: number, reason: string) {
@@ -560,7 +591,7 @@ function playNews(ctx: Ctx, seat: Seat, id: number) {
   s.phase.step = "draw";
   for (const c of COMPANY_IDS) {
     const steps = nc.effects[c] ?? 0;
-    if (!steps) continue;
+    if (!steps || !s.companies[c].listed) continue;
     if (s.companies[c].bankrupt) {
       ctx.events.push({ kind: "ceiling", company: c, text: `${cname(c)} ${signed(steps)} ignored: bankrupt until it re-lists` });
       continue;
@@ -634,6 +665,7 @@ function openingOrder(ctx: Ctx, seat: Seat, orders: Partial<Holdings>, cardId: n
   const clean: Partial<Holdings> = {};
   for (const [k, v] of Object.entries(orders ?? {})) {
     if (!COMPANY_IDS.includes(k as CompanyId)) throw new IllegalAction(`No company ${k}.`);
+    if (v && !s.companies[k as CompanyId].listed) throw new IllegalAction(`${cname(k as CompanyId)} is not listed until round ${IPO_ROUND}.`);
     if (!Number.isInteger(v) || v! < 0) throw new IllegalAction("Orders are whole numbers of shares.");
     if (v) clean[k as CompanyId] = v;
     total += v!;
@@ -715,7 +747,95 @@ function beginRound(ctx: Ctx, r: number) {
   s.round = r;
   ctx.events.push({ kind: "roundStart", round: r, text: `Round ${r} of ${s.config.rounds}` });
   for (const c of COMPANY_IDS) if (s.companies[c].bankrupt) relist(ctx, c);
-  s.phase = { kind: "turn", player: s.startPlayer!, turnInRound: 0, actionsUsed: 0, step: "trade" };
+  if (r === IPO_ROUND && ipoEnabled(s.config) && !s.companies[IPO_COMPANY].listed) {
+    s.phase = { kind: "ipo", bids: s.players.map(() => null) };
+    ctx.events.push({
+      kind: "ipoOpen",
+      company: IPO_COMPANY,
+      text: `${cname(IPO_COMPANY)} IPO: bids open. Up to ${ipoMaxBidOf(s.config)} shares each at ${ipoBandOf(s.config).map(fmt).join(", ")}`,
+    });
+    return;
+  }
+  startTurns(ctx);
+}
+
+function startTurns(ctx: Ctx) {
+  ctx.s.phase = { kind: "turn", player: ctx.s.startPlayer!, turnInRound: 0, actionsUsed: 0, step: "trade" };
+}
+
+// ─── The IPO ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The book: the listing price is the highest band price at which the shares bid at that price
+ * or higher reach 12 (the lowest band if they never do). Bids above it are filled in full; bids
+ * at it share what is left one at a time, clockwise from `from`; bids below get nothing.
+ */
+export function ipoBook(bids: IpoBid[], from: Seat, priceBand: readonly number[] = IPO_BAND): { listingPrice: number; allocated: number[] } {
+  const band = [...priceBand].sort((a, b) => b - a);
+  let listingPrice = band[band.length - 1];
+  for (const p of band) {
+    if (bids.reduce((n, b) => n + (b.qty > 0 && b.price >= p ? b.qty : 0), 0) >= SHARES_PER_COMPANY) {
+      listingPrice = p;
+      break;
+    }
+  }
+  const allocated = bids.map((b) => (b.qty > 0 && b.price > listingPrice ? b.qty : 0));
+  let left = SHARES_PER_COMPANY - allocated.reduce((a, b) => a + b, 0);
+  const n = bids.length;
+  const want = bids.map((b) => (b.qty > 0 && b.price === listingPrice ? b.qty : 0));
+  while (left > 0 && want.some((w, i) => allocated[i] < w)) {
+    for (let k = 0; k < n && left > 0; k++) {
+      const i = (from + k) % n;
+      if (allocated[i] < want[i]) {
+        allocated[i]++;
+        left--;
+      }
+    }
+  }
+  return { listingPrice, allocated };
+}
+
+function ipoBid(ctx: Ctx, seat: Seat, qty: number, bidPrice: number) {
+  const s = ctx.s;
+  if (s.phase.kind !== "ipo") throw new IllegalAction("There is no IPO open.");
+  if (s.phase.bids[seat]) throw new IllegalAction("You have already placed your IPO bid.");
+  const max = ipoMaxBidOf(s.config), band = ipoBandOf(s.config);
+  if (!Number.isInteger(qty) || qty < 0 || qty > max) throw new IllegalAction(`Bid for 0 to ${max} shares.`);
+  if (qty > 0 && !band.includes(bidPrice)) throw new IllegalAction(`Bid at ${band.map(fmt).join(", ")}.`);
+  if (qty * bidPrice > s.players[seat].cash) throw new IllegalAction(`That bid could cost ${fmt(qty * bidPrice)} and you have ${fmt(s.players[seat].cash)}.`);
+  s.phase.bids[seat] = { qty, price: qty > 0 ? bidPrice : 0 };
+  if (s.phase.bids.every((b) => b !== null)) resolveIpo(ctx);
+}
+
+function resolveIpo(ctx: Ctx) {
+  const s = ctx.s;
+  const c = IPO_COMPANY;
+  const bids = (s.phase as Extract<GameState["phase"], { kind: "ipo" }>).bids.map((b) => b!);
+  const { listingPrice, allocated } = ipoBook(bids, s.startPlayer ?? 0, ipoBandOf(s.config));
+  allocated.forEach((n, i) => {
+    s.players[i].shares[c] += n;
+    s.players[i].cash -= n * listingPrice;
+  });
+  s.companies[c] = { priceIndex: indexOfPrice(listingPrice), bankrupt: false, listed: true };
+  const total = allocated.reduce((a, b) => a + b, 0);
+  const reached = THRESHOLDS.filter((t) => total >= t).length;
+  const afterPop = TRACK[Math.min(TOP, indexOfPrice(listingPrice) + reached)];
+  const bidText = bids.map((b, i) => `${s.players[i].name} ${b.qty ? `${b.qty} @ ${fmt(b.price)}` : "no bid"}`).join(", ");
+  const gotText = allocated.map((n, i) => (n ? `${s.players[i].name} ${n}` : null)).filter(Boolean).join(", ") || "nobody";
+  ctx.events.push({
+    kind: "ipoListing",
+    company: c,
+    bids,
+    allocated,
+    listingPrice,
+    afterPop,
+    text: `${cname(c)} IPO. Bids: ${bidText}. Lists at ${fmt(listingPrice)}; allotted ${gotText}${total < SHARES_PER_COMPANY ? ` (${SHARES_PER_COMPANY - total} stay in the bank)` : ""}`,
+  });
+  if (reached) movePrice(ctx, c, reached, "opening", `first-day pop: ${total} shares outstanding (${reached} threshold${reached > 1 ? "s" : ""})`);
+  s.deck = ctx.rng.shuffle([...s.deck, ...IPO_CARDS.map((k) => k.id)]);
+  ctx.events.push({ kind: "reshuffle", cards: s.deck.length, text: `${IPO_CARDS.length} ${cname(c)} news cards are shuffled into the deck` });
+  syncChairmen(ctx);
+  startTurns(ctx);
 }
 
 function nextTurn(ctx: Ctx) {
@@ -735,7 +855,7 @@ function endRound(ctx: Ctx) {
   if (s.config.driftAtOrBelow !== undefined) {
     for (const c of COMPANY_IDS) {
       const n = outstanding(s, c);
-      if (s.companies[c].bankrupt || n > s.config.driftAtOrBelow) continue;
+      if (!isLive(s, c) || n > s.config.driftAtOrBelow) continue;
       const toStart = s.config.driftMode === "toStart";
       const home = indexOfPrice(startPrice(s.config, c));
       const step = toStart && s.companies[c].priceIndex <= home ? 0 : -1;
