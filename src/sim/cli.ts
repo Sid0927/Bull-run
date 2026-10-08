@@ -2,7 +2,7 @@
  * npm run sim -- --games 1000 --players 4 --rounds 9 --strategies random,favour,dividend --seed 1 [--json report.json]
  */
 import { writeFileSync } from "node:fs";
-import { COMPANIES, COMPANY_IDS, GAME_LENGTHS, type GameLength } from "../engine/index.ts";
+import { COMPANIES, COMPANY_IDS, GAME_LENGTHS, type CompanyId, type GameLength } from "../engine/index.ts";
 import { runBatch, type Report } from "./run.ts";
 
 function arg(name: string, fallback: string): string {
@@ -16,7 +16,20 @@ const opts = {
   rounds: Number(arg("rounds", "9")) as GameLength,
   strategies: arg("strategies", "random,favour,dividend").split(","),
   seed: Number(arg("seed", "1")),
+  startPrices: parseStarts(arg("start", "")),
 };
+
+/** --start SUN=150,INFY=120 */
+function parseStarts(s: string): Partial<Record<CompanyId, number>> | undefined {
+  if (!s) return undefined;
+  const out: Partial<Record<CompanyId, number>> = {};
+  for (const part of s.split(",")) {
+    const [k, v] = part.split("=");
+    if (!COMPANY_IDS.includes(k as CompanyId)) throw new Error(`--start: no company ${k}. Use ${COMPANY_IDS.join(", ")}`);
+    out[k as CompanyId] = Number(v);
+  }
+  return out;
+}
 if (!(opts.players >= 3 && opts.players <= 5)) throw new Error("--players must be 3 to 5");
 if (!GAME_LENGTHS.includes(opts.rounds)) throw new Error("--rounds must be 6, 9 or 12");
 
@@ -46,10 +59,10 @@ function print(r: Report, ms: number) {
   console.log(`  average ${rs(r.netWorth.avgAll)} · winner ${rs(r.netWorth.avgWinner)} · last ${rs(r.netWorth.avgLast)} · spread avg ${rs(r.netWorth.avgSpread)}, max ${rs(r.netWorth.maxSpread)}`);
 
   console.log("\nCompanies");
-  console.log(line(["company", "start", "avg end", "median", "bankrupt %", "failures", "hit ₹500 %", "chair rnds %", "chair games %"], [11, 6, 8, 7, 11, 9, 11, 13, 14]));
+  console.log(line(["company", "start", "avg end", "median", "max swing", "below start %", "bankrupt %", "failures", "hit ₹500 %", "chair rnds %", "chair games %"], [11, 6, 8, 7, 10, 14, 11, 9, 11, 13, 14]));
   for (const c of COMPANY_IDS) {
     const x = r.companies[c], ch = r.chairmen[c];
-    console.log(line([COMPANIES[c].short, COMPANIES[c].startPrice, x.avgFinal, x.medianFinal, x.bankruptGamesPct, x.bankruptcies, x.reached500GamesPct, ch.roundsWithChairmanPct, ch.gamesWithChairmanPct], [11, 6, 8, 7, 11, 9, 11, 13, 14]));
+    console.log(line([COMPANIES[c].short, x.start, x.avgFinal, x.medianFinal, x.avgSwing, x.endedBelowStartPct, x.bankruptGamesPct, x.bankruptcies, x.reached500GamesPct, ch.roundsWithChairmanPct, ch.gamesWithChairmanPct], [11, 6, 8, 7, 10, 14, 11, 9, 11, 13, 14]));
   }
   console.log("\nChairman round-ends held, by strategy");
   for (const c of COMPANY_IDS) {

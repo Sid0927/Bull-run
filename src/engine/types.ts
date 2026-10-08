@@ -7,6 +7,8 @@ export interface GameConfig {
   players: string[]; // seat order, fixed for the whole game
   rounds: GameLength; // rounds of turns after the opening (round 0)
   seed: number;
+  /** Play-test variant: override some starting prices (each must be a track space). */
+  startPrices?: Partial<Record<CompanyId, number>>;
 }
 
 export interface Player {

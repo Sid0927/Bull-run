@@ -114,9 +114,17 @@ export function actor(s: GameState): Seat | null {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────────────────
 
+export function startPrice(config: GameConfig, c: CompanyId): number {
+  return config.startPrices?.[c] ?? COMPANIES[c].startPrice;
+}
+
 export function newGame(config: GameConfig): { state: GameState; events: GameEvent[] } {
   if (config.players.length < 3 || config.players.length > 5) throw new IllegalAction("Bull Run is for 3–5 players.");
   if (!GAME_LENGTHS.includes(config.rounds)) throw new IllegalAction("The game length must be 6, 9 or 12 rounds.");
+  for (const [c, p] of Object.entries(config.startPrices ?? {})) {
+    if (!COMPANY_IDS.includes(c as CompanyId)) throw new IllegalAction(`No company ${c}.`);
+    if (!(TRACK as readonly number[]).includes(p!) || p === 0) throw new IllegalAction(`${c} cannot start at ₹${p}: not a space on the track.`);
+  }
   const rng = new Rng(config.seed);
   const deck = rng.shuffle(NEWS_CARDS.map((c) => c.id));
   const players = config.players.map((name) => ({
@@ -137,7 +145,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
     phase: { kind: "opening", submissions: players.map(() => null) },
     players,
     companies: Object.fromEntries(
-      COMPANY_IDS.map((c) => [c, { priceIndex: indexOfPrice(COMPANIES[c].startPrice), bankrupt: false }]),
+      COMPANY_IDS.map((c) => [c, { priceIndex: indexOfPrice(startPrice(config, c)), bankrupt: false }]),
     ) as GameState["companies"],
     chairmen: Object.fromEntries(COMPANY_IDS.map((c) => [c, null])) as GameState["chairmen"],
     shorts: [],

@@ -1,5 +1,6 @@
 /** Plays games with computer players and collects balance statistics. */
 import {
+  COMPANIES,
   COMPANY_IDS,
   TRACK,
   actor,
@@ -63,6 +64,7 @@ export interface BatchOptions {
   rounds: GameLength;
   strategies: string[];
   seed: number;
+  startPrices?: Partial<Record<CompanyId, number>>;
 }
 
 export interface Report {
@@ -71,7 +73,7 @@ export interface Report {
   netWorth: { avgAll: number; avgWinner: number; avgLast: number; avgSpread: number; maxSpread: number };
   companies: Record<
     CompanyId,
-    { avgFinal: number; medianFinal: number; finalDistribution: Record<number, number>; bankruptGamesPct: number; bankruptcies: number; reached500GamesPct: number }
+    { start: number; avgSwing: number; endedBelowStartPct: number; avgFinal: number; medianFinal: number; finalDistribution: Record<number, number>; bankruptGamesPct: number; bankruptcies: number; reached500GamesPct: number }
   >;
   chairmen: Record<CompanyId, { roundsWithChairmanPct: number; gamesWithChairmanPct: number; byStrategy: Record<string, number> }> & {};
   shorts: { openedPerGame: number; coveredPerGame: number; forcedPerGame: number; closedByBankruptcyPerGame: number; debtsPerGame: number; lastResortPerGame: number; gamesWithLastResortPct: number; shortDividendShortfalls: number };
@@ -96,6 +98,8 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     CompanyId,
     { rounds: number; games: number; byStrategy: Record<string, number> }
   >;
+  // Average of the largest distance from the starting price reached in each game.
+  const swing = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   let roundEnds = 0;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
@@ -104,7 +108,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   for (let g = 0; g < opts.games; g++) {
     // Cycle the strategy list to fill the table, then shuffle seats so seat and strategy are not confounded.
     const lineup = seatRng.shuffle(Array.from({ length: opts.players }, (_, i) => strategies[i % strategies.length]));
-    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0 };
+    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices };
     const game = playGame(config, lineup);
     const st = game.state.standings!;
     const winners = st.filter((x) => x.rank === 1);
@@ -127,10 +131,16 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
 
     const bankruptHere = new Set<CompanyId>(), topHere = new Set<CompanyId>(), chairHere = new Set<CompanyId>();
     let lastResortHere = false;
+    const maxDev = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
     for (const e of game.events) {
       switch (e.kind) {
         case "bankrupt": bankrupt[e.company].events++; bankruptHere.add(e.company); break;
-        case "price": if (e.to === 500) topHere.add(e.company); break;
+        case "price": {
+          if (e.to === 500) topHere.add(e.company);
+          const start = opts.startPrices?.[e.company] ?? COMPANIES[e.company].startPrice;
+          maxDev[e.company] = Math.max(maxDev[e.company], Math.abs(e.to - start));
+          break;
+        }
         case "shortOpened": sh.opened++; break;
         case "shortClosed": if (e.how === "cover") sh.covered++; else if (e.how === "forced") sh.forced++; else sh.bankrupt++; break;
         case "debt": sh.debts++; break;
@@ -153,6 +163,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
           break;
       }
     }
+    for (const c of COMPANY_IDS) swing[c] += maxDev[c];
     bankruptHere.forEach((c) => bankrupt[c].games++);
     topHere.forEach((c) => top[c]++);
     chairHere.forEach((c) => chair[c].games++);
@@ -177,7 +188,8 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         const xs = [...finals[c]].sort((a, b) => a - b);
         const dist: Record<number, number> = {};
         for (const x of xs) dist[x] = (dist[x] ?? 0) + 1;
-        return [c, { avgFinal: Math.round(xs.reduce((a, b) => a + b, 0) / G), medianFinal: xs[Math.floor(G / 2)], finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
+        const start = opts.startPrices?.[c] ?? COMPANIES[c].startPrice;
+        return [c, { start, avgSwing: Math.round(swing[c] / G), endedBelowStartPct: pct(xs.filter((x) => x < start).length), avgFinal: Math.round(xs.reduce((a, b) => a + b, 0) / G), medianFinal: xs[Math.floor(G / 2)], finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
       }),
     ) as Report["companies"],
     chairmen: Object.fromEntries(
