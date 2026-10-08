@@ -18,6 +18,7 @@ import {
   outstanding,
   previewTrade,
   price,
+  startPrice,
   type Action,
   type CompanyId,
   type GameConfig,
@@ -42,17 +43,25 @@ export function App() {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────────────────
 
+/** Starting-price variants to play-test. "Tiered" is the simulator's suggestion (Oct 2026). */
+const START_LAYOUTS = {
+  handover: { label: "Handover", prices: undefined },
+  tiered: { label: "Tiered (volatile start high)", prices: { SUN: 120, INFY: 120, ONGC: 100, DLF: 100, HUL: 80, HDFC: 80 } as Partial<Record<CompanyId, number>> },
+} as const;
+
 function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: (r: GameRecord) => void }) {
   const [count, setCount] = useState(4);
   const [names, setNames] = useState(["", "", "", "", ""]);
   const [rounds, setRounds] = useState<GameLength>(9);
   const [seed, setSeed] = useState(() => String(Math.floor(Math.random() * 1e9)));
+  const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("handover");
   const [error, setError] = useState("");
 
   function start() {
     const players = names.slice(0, count).map((n, i) => n.trim() || `Player ${i + 1}`);
     if (new Set(players).size !== players.length) return setError("Give every player a different name.");
-    onStart({ players, rounds, seed: Number(seed) | 0 });
+    const startPrices = START_LAYOUTS[layout].prices;
+    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}) });
   }
 
   function load(file: File) {
@@ -97,6 +106,19 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
             ))}
           </div>
         </div>
+        <div className="field">
+          Starting prices
+          <div className="seg" role="group" aria-label="Starting prices">
+            {(Object.keys(START_LAYOUTS) as (keyof typeof START_LAYOUTS)[]).map((k) => (
+              <button key={k} className={k === layout ? "on" : ""} onClick={() => setLayout(k)}>
+                {START_LAYOUTS[k].label}
+              </button>
+            ))}
+          </div>
+          <span className="muted small">
+            {COMPANY_IDS.map((c) => `${COMPANIES[c].short} ₹${START_LAYOUTS[layout].prices?.[c] ?? COMPANIES[c].startPrice}`).join(" · ")}
+          </span>
+        </div>
         <label>
           Seed
           <input value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/[^0-9-]/g, ""))} />
@@ -107,10 +129,26 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
             Start game
           </button>
           <label className="file">
-            Load a game record…
+            Load a record file…
             <input type="file" accept="application/json" onChange={(e) => e.target.files?.[0] && load(e.target.files[0])} />
           </label>
         </div>
+        <label>
+          Or paste a game record
+          <textarea
+            id="paste-record"
+            rows={2}
+            onChange={(e) => {
+              const t = e.target.value.trim();
+              if (!t) return;
+              try {
+                onLoad(JSON.parse(t) as GameRecord);
+              } catch (err) {
+                setError(`That is not a Bull Run game record: ${(err as Error).message}`);
+              }
+            }}
+          />
+        </label>
       </section>
       <p className="muted small">One device, passed round the table. Cash and hands are shown only to the player whose turn it is.</p>
     </main>
@@ -136,13 +174,14 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
     setFlash(err ?? "");
   }
 
-  function download() {
-    const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `bull-run-seed-${record.config.seed}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const [quitting, setQuitting] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
+  const recordText = JSON.stringify(record);
+  function copyRecord() {
+    navigator.clipboard?.writeText(recordText).then(
+      () => setFlash("Game record copied. Paste it on the setup screen to replay this game."),
+      () => setShowRecord(true),
+    ) ?? setShowRecord(true);
   }
 
   return (
@@ -151,15 +190,31 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
         <strong className="brand">Bull Run</strong>
         <RoundTracker s={s} />
         <div className="tools">
-          <button onClick={download} title="Seed and action log; loading it replays the game exactly">
-            Save record
+          <button onClick={copyRecord} title="Seed and action log; loading it replays the game exactly">
+            Copy record
           </button>
           <button onClick={undo} disabled={record.actions.length === 0} title="Take back the last action (play-test only)">
             Undo
           </button>
-          <button onClick={() => confirm("Abandon this game?") && quit()}>Quit</button>
+          {quitting ? (
+            <>
+              <button className="danger" onClick={quit}>
+                Abandon game
+              </button>
+              <button onClick={() => setQuitting(false)}>Keep playing</button>
+            </>
+          ) : (
+            <button onClick={() => setQuitting(true)}>Quit</button>
+          )}
         </div>
       </header>
+      {showRecord && (
+        <div className="record-box">
+          <label htmlFor="record-text">Game record — select all and copy it</label>
+          <textarea id="record-text" readOnly value={recordText} onFocus={(e) => e.target.select()} />
+          <button onClick={() => setShowRecord(false)}>Close</button>
+        </div>
+      )}
 
       <div className="layout">
         <Board s={s} />
@@ -212,6 +267,7 @@ function band(p: number): string {
 function Board({ s }: { s: GameState }) {
   const spaces = [...TRACK.keys()].reverse();
   return (
+    <div className="board-scroll">
     <section className="board" aria-label="Price tracks">
       {COMPANY_IDS.map((c) => {
         const co = COMPANIES[c];
@@ -232,7 +288,7 @@ function Board({ s }: { s: GameState }) {
                 const here = st.priceIndex === i;
                 const tokens = shorts.filter((t) => t.openIndex === i);
                 return (
-                  <li key={i} className={`space ${band(p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${p === co.startPrice ? "start" : ""}`}>
+                  <li key={i} className={`space ${band(p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${p === startPrice(s.config, c) ? "start" : ""}`}>
                     <span className="val">{i === 0 ? "BUST" : p}</span>
                     {tokens.map((t) => (
                       <span key={t.id} className="short-token" title={`${s.players[t.owner].name}'s short, opened at ${rs(p)}${capIndex(t.openIndex) === null ? ", no cap" : `, closes at ${rs(TRACK[capIndex(t.openIndex)!])}`}`}>
@@ -267,6 +323,7 @@ function Board({ s }: { s: GameState }) {
         <span className="sw b3" /> ₹400–500 ₹30 (HUL, HDFC Bank double). Chairman (6+ shares) gets 5× the per-share dividend.
       </div>
     </section>
+    </div>
   );
 }
 
