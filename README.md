@@ -61,6 +61,7 @@ were settled (8 Oct 2026).
 Changes after the first simulations (8 Oct 2026):
 
 - **Chairman bonus is 3× the per-share dividend** (was 5×).
+- **Starting cash is ₹1,200** (was ₹1,500): closer finishes and fewer automatic chairmanships in simulation.
 - **5 players: 9 rounds is recommended.** 12 is still allowed; the setup screen says so.
 - Play-test variants, off by default, available in the simulator (`--start`, `--cash`,
   `--drift`, `--drift-mode`) and partly in the app: a tiered starting-price layout, starting

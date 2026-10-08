@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   COMPANY_IDS,
+  STARTING_CASH,
   NEWS_CARDS,
   RELIST_INDEX,
   TRACK,
@@ -128,7 +129,7 @@ describe("thresholds", () => {
     assert.deepEqual(pv.ok && pv.preview.prices, [140, 150, 150]);
     const a = ok(s, buy(0, "INFY", 3));
     const b = ok(a.state, buy(0, "INFY", 1));
-    assert.equal(1500 - b.state.players[0].cash, 590);
+    assert.equal(STARTING_CASH - b.state.players[0].cash, 590);
     assert.equal(price(b.state, "INFY"), 150);
     assert.ok(a.events.some((e) => e.text.includes("Infosys +1: 6th share outstanding crossed a threshold")));
   });
@@ -169,11 +170,11 @@ describe("thresholds", () => {
     const r = ok(s, short(0, "DLF", 1)); // 6 → 5
     assert.equal(outstanding(r.state, "DLF"), 5);
     assert.equal(price(r.state, "DLF"), 70);
-    assert.equal(r.state.players[0].cash, 1570);
+    assert.equal(r.state.players[0].cash, STARTING_CASH + 70);
     assert.equal(r.state.shorts[0].openIndex, indexOfPrice(70));
     const c = ok(r.state, cover(0, "DLF", 1)); // 5 → 6
     assert.equal(price(c.state, "DLF"), 80);
-    assert.equal(c.state.players[0].cash, 1570 - 80);
+    assert.equal(c.state.players[0].cash, STARTING_CASH + 70 - 80);
     assert.equal(c.state.shorts.length, 0);
   });
 
@@ -205,7 +206,7 @@ describe("ceiling", () => {
     r.state.players[1].shares.HUL = 2;
     const b = ok(r.state, buy(0, "HUL", 1)); // 3rd share crosses at the ceiling: no move
     assert.equal(price(b.state, "HUL"), 500);
-    assert.equal(b.state.players[0].cash, 1000);
+    assert.equal(b.state.players[0].cash, STARTING_CASH - 500);
   });
 });
 
@@ -263,7 +264,7 @@ describe("bankruptcy", () => {
     s.players[0].shares.DLF = 3;
     const r = ok(s, sell(0, "DLF", 1));
     assert.equal(r.state.companies.DLF.bankrupt, true);
-    assert.equal(r.state.players[0].cash, 1500);
+    assert.equal(r.state.players[0].cash, STARTING_CASH);
   });
 });
 
@@ -289,7 +290,7 @@ describe("short selling", () => {
     give(s, 0, AI_VIRAL);
     const r = ok(s, play(0, AI_VIRAL)); // 140 → 200
     assert.equal(r.state.shorts.length, 0);
-    assert.equal(r.state.players[1].cash, 1500 - 150);
+    assert.equal(r.state.players[1].cash, STARTING_CASH - 150);
     // The forced close counts as a buy: -1 → 0 crosses nothing, so the price stays at 200.
     assert.equal(price(r.state, "INFY"), 200);
   });
@@ -304,8 +305,8 @@ describe("short selling", () => {
     const r = ok(s, play(0, byTitle("Gas price revised upward")));
     // Bilal's short closes at 140; count 5 → 6 crosses a threshold → 150; Chitra's caps at 150.
     assert.equal(r.state.shorts.length, 0);
-    assert.equal(r.state.players[1].cash, 1500 - 140);
-    assert.equal(r.state.players[2].cash, 1500 - 150);
+    assert.equal(r.state.players[1].cash, STARTING_CASH - 140);
+    assert.equal(r.state.players[2].cash, STARTING_CASH - 150);
     assert.equal(price(r.state, "ONGC"), 150);
     const forced = r.events.filter((e) => e.kind === "shortClosed" && e.how === "forced");
     assert.equal(forced.length, 2);
@@ -436,9 +437,9 @@ describe("dividends", () => {
     const r = endRound(s);
     const div = r.events.filter((e) => e.kind === "dividend" && e.paid.length > 0);
     assert.deepEqual(div.map((e) => e.kind === "dividend" && [e.company, e.perShare]), [["HUL", 40], ["INFY", 10]]);
-    assert.equal(r.state.players[0].cash, 1500 + 7 * 40 + 3 * 40);
-    assert.equal(r.state.players[1].cash, 1500 + 2 * 10);
-    assert.equal(r.state.players[2].cash, 1500 - 40);
+    assert.equal(r.state.players[0].cash, STARTING_CASH + 7 * 40 + 3 * 40);
+    assert.equal(r.state.players[1].cash, STARTING_CASH + 2 * 10);
+    assert.equal(r.state.players[2].cash, STARTING_CASH - 40);
   });
 
   test("no dividend at the end of round 2", () => {
@@ -517,8 +518,8 @@ describe("the opening (round 0)", () => {
     }
     // Infosys: 22 wanted → 3,3,2,2,0... seat order one at a time: A3 B3 C2 D2? (4 asked) → 3,3,3,3 needs 12; E asked 0.
     assert.deepEqual(s.players.map((p) => p.shares.INFY), [3, 3, 3, 3, 0]);
-    assert.equal(s.players[0].cash, 1500 - 3 * 100);
-    assert.equal(s.players[3].cash, 1500 - 3 * 100 - 2 * 150);
+    assert.equal(s.players[0].cash, STARTING_CASH - 3 * 100);
+    assert.equal(s.players[3].cash, STARTING_CASH - 3 * 100 - 2 * 150);
     // Infosys: 12 outstanding → +4 steps (100 → 140); news +2 −2 +2 −2 = 0 → stays 140.
     assert.equal(price(s, "INFY"), 140);
     // HUL: 2 outstanding → no threshold; news +2 +1 −2 = +1 → 175.
