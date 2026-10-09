@@ -6,7 +6,7 @@ import { GameScreen } from "./GameScreen.tsx";
 import { BullLogo } from "./logos.tsx";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
-import { Avatar, AvatarStack, CandleBackdrop, Icon, TickerTape } from "./ui.tsx";
+import { Avatar, AvatarStack, Icon, TickerTape } from "./ui.tsx";
 
 type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" };
 
@@ -160,7 +160,6 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
   return (
     <main className="login">
       <TickerTape />
-      <CandleBackdrop />
       <div className="login-glow" aria-hidden="true" />
       <div className="login-theme">
         <ThemeToggle />

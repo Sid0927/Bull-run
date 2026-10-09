@@ -746,3 +746,45 @@ button.confirm-sell:not(:disabled), button.confirm-short:not(:disabled) { backgr
   .tabbar button { height: 54px; min-height: 54px; }
   .dock { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* ── Background v2: clean light, soft colour washes, no grid ─────── */
+:root {
+  --bg: #f5f6f2;
+  --panel: #ffffff;
+  --panel-2: #f3f5f1;
+  --glass: rgb(255 255 255 / 0.78);
+  --line: #e2e6df;
+  --line-strong: #c9d0c6;
+  --muted: #5f6a63;
+  --wash-1: rgb(19 160 102 / 0.14);
+  --wash-2: rgb(240 180 60 / 0.14);
+  --wash-3: rgb(42 120 214 / 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #060a09; --panel: #0e1412; --panel-2: #141c19; --glass: rgb(14 20 18 / 0.78); --line: #1e2925; --line-strong: #2f3e38; --muted: #8b9991; --wash-1: rgb(52 199 123 / 0.16); --wash-2: rgb(240 180 60 / 0.08); --wash-3: rgb(57 135 229 / 0.07); }
+}
+:root[data-theme="dark"] { --bg: #060a09; --panel: #0e1412; --panel-2: #141c19; --glass: rgb(14 20 18 / 0.78); --line: #1e2925; --line-strong: #2f3e38; --muted: #8b9991; --wash-1: rgb(52 199 123 / 0.16); --wash-2: rgb(240 180 60 / 0.08); --wash-3: rgb(57 135 229 / 0.07); }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(60rem 36rem at 0% -10%, var(--wash-1), transparent 70%),
+    radial-gradient(50rem 30rem at 100% 0%, var(--wash-2), transparent 70%),
+    radial-gradient(60rem 40rem at 50% 110%, var(--wash-3), transparent 70%);
+  background-size: auto;
+  background-attachment: fixed;
+}
+
+/* Sign-in: a proper trading-floor scene instead of a blur. */
+.login { background: linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--accent) 7%, transparent)); }
+.login-glow { inset: auto; top: -12rem; left: 50%; width: 46rem; height: 30rem; transform: translateX(-50%); filter: none; background: radial-gradient(closest-side, var(--wash-1), transparent); }
+.candles { height: 42%; bottom: 44px; opacity: 0.32; -webkit-mask-image: linear-gradient(180deg, transparent, #000 45%); mask-image: linear-gradient(180deg, transparent, #000 45%); }
+.lobby-hero { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel) 65%); }
+.hero-fill { fill: color-mix(in srgb, var(--accent) 9%, transparent); }
+.candles { display: none; }
+.hero-art { width: 38%; max-width: 260px; opacity: 0.55; right: 0; bottom: 0; }
+@media (max-width: 560px) { .hero-art { width: 36%; opacity: 0.4; } }
+@media (max-width: 560px) { .hero-art { display: none; } }
+:root { --seg-on: #ffffff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --seg-on: #25332e; } }
+:root[data-theme="dark"] { --seg-on: #25332e; }
+.seg-fill button.on { background: var(--seg-on); }

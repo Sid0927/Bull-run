@@ -1,5 +1,5 @@
 /** Small visual pieces shared across screens: avatars, icons, the scrolling tape and the backdrop. */
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { COMPANIES, COMPANY_IDS, TRACK, type CompanyId } from "../engine/index.ts";
 import { CompanyBadge } from "./logos.tsx";
 
@@ -100,34 +100,6 @@ export function TickerTape({ reverse = false }: { reverse?: boolean }) {
     <div className={`tape ${reverse ? "reverse" : ""}`} aria-hidden="true">
       <div className="tape-track">{[row("a"), row("b")]}</div>
     </div>
-  );
-}
-
-/** A rising candlestick chart drawn faintly behind the sign-in card. */
-export function CandleBackdrop() {
-  const candles: ReactNode[] = [];
-  let level = 70;
-  for (let i = 0; i < 34; i++) {
-    const drift = Math.sin(i * 1.7) * 9 + Math.cos(i * 0.6) * 6 + 2.4;
-    const open = level;
-    const close = level + drift;
-    const hi = Math.max(open, close) + 4 + ((i * 7) % 6);
-    const lo = Math.min(open, close) - 4 - ((i * 5) % 5);
-    level = close;
-    const up = close >= open;
-    const x = 12 + i * 18;
-    const y = (v: number) => 300 - v * 1.8;
-    candles.push(
-      <g key={i} className={up ? "c-up" : "c-down"} style={{ ["--i" as string]: i } as CSSProperties}>
-        <line x1={x} x2={x} y1={y(hi)} y2={y(lo)} />
-        <rect x={x - 5} width={10} y={y(Math.max(open, close))} height={Math.max(2, Math.abs(close - open) * 1.8)} rx={1.5} />
-      </g>,
-    );
-  }
-  return (
-    <svg className="candles" viewBox="0 0 630 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-      {candles}
-    </svg>
   );
 }
 
