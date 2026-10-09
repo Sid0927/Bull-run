@@ -1,0 +1,10 @@
+{
+  "name": "Bull Run",
+  "short_name": "Bull Run",
+  "description": "The Indian stock market game for 3–5 players.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0a7d4f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

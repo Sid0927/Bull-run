@@ -63,7 +63,6 @@ const SECTIONS = [
   ["ipo", "The Zomato IPO"],
   ["bankruptcy", "Bankruptcy"],
   ["end", "End of the game"],
-  ["test", "Test rules"],
   ["cards", "The news cards"],
 ] as const;
 
@@ -342,21 +341,6 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <p>The game ends after the last round's dividends.</p>
           <p className="formula">Net worth = cash + shares × current price − cost to buy back open shorts at the current price</p>
           <p>The highest net worth wins. A tie goes to the player with more cash; if that is tied too, the win is shared.</p>
-        </section>
-
-        <section id="test">
-          <h2>Test rules</h2>
-          <p>Optional rules being play-tested. Agree before the game which, if any, you are using; the app has a switch for each.</p>
-          <ul>
-            <li>
-              <b>News one lap later.</b> Instead of revealing your news card, place it face-down. It takes effect at the start of your next turn, before you trade.
-              Everyone else gets a full lap to read your trades and react. Cards still face-down when the game ends are discarded.
-            </li>
-            <li>
-              <b>Bigger dividends.</b> ₹10 at ₹50–100, ₹20 at ₹110–200, ₹30 at ₹225–350, ₹40 at ₹400–500 (HUL and HDFC Bank double), with {rs(1000)} starting cash
-              instead of {rs(STARTING_CASH)}.
-            </li>
-          </ul>
         </section>
 
         <section id="cards">

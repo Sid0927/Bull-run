@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:single": "vite build && node scripts/single-file.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\" \"server/**/*.test.ts\"",
     "sim": "node --import tsx src/sim/cli.ts",
-    "sim:starts": "node --import tsx src/sim/compare-starts.ts"
+    "sim:starts": "node --import tsx src/sim/compare-starts.ts",
+    "server": "tsx watch server/index.ts",
+    "start": "tsx server/index.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
@@ -27,5 +28,8 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tsx": "^4.23.15"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
