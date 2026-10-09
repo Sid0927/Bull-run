@@ -64,6 +64,9 @@ export function Change({ d }: { d: number | null }) {
 }
 
 /** Rupee effect of a card on a seat's position at today's prices (ignores caps and thresholds). */
+/** Whether this is the last round, when a face-down card is never revealed. */
+export const lastRound = (s: GameState) => s.round >= s.config.rounds;
+
 export function cardImpact(s: GameState, seat: Seat, id: number): number {
   let v = 0;
   for (const [c, steps] of Object.entries(card(id).effects) as [CompanyId, number][]) {
@@ -352,7 +355,7 @@ export function NewsCardView({ id, children, impact, picked }: { id: number; chi
       </div>
       {impact !== undefined && (
         <div className={`impact ${impact > 0 ? "up" : impact < 0 ? "down" : "flat"}`} title="Effect on your holdings and shorts at today's prices">
-          For you now {impact === 0 ? "±₹0" : signedRs(impact)}
+          For you today {impact === 0 ? "±₹0" : signedRs(impact)}
         </div>
       )}
       {picked && (
@@ -387,7 +390,7 @@ export function Log({ events }: { events: GameEvent[] }) {
 
 // ─── Private: the active player's controls ──────────────────────────────────────────────
 
-export function Private({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
+export function Private({ s, seat, play, busy }: { s: GameState; seat: Seat; play: (a: Action) => void; busy?: boolean }) {
   const p = s.players[seat];
   let body: ReactNode;
   if (s.debt) body = <ForcedSale s={s} seat={seat} play={play} />;
@@ -398,7 +401,10 @@ export function Private({ s, seat, play }: { s: GameState; seat: Seat; play: (a:
   return (
     <section className="panel private">
       <DeskHead s={s} seat={seat} />
-      {body}
+      {/* A disabled fieldset turns off every control inside it while a move is on its way. */}
+      <fieldset className="desk-controls" disabled={busy} aria-busy={busy}>
+        {body}
+      </fieldset>
       {s.phase.kind === "turn" && !s.debt && <MyPosition s={s} seat={seat} />}
     </section>
   );
@@ -633,7 +639,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
         <span className="step-no">2</span>
         <div>
           <b>Play a news card</b>
-          <span className="muted small">{s.config.delayedNews !== false ? "Required. It goes face-down and takes effect at the start of your next turn." : "Required. It applies at once."}</span>
+          <span className="muted small">{s.config.delayedNews === false ? "Required. It applies at once." : lastRound(s) ? "Required. It goes face-down, but this is the final round: the game ends before it is revealed." : "Required. It goes face-down and takes effect at the start of your next turn."}</span>
         </div>
       </div>
       <div className="cards">
@@ -682,7 +688,7 @@ export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
       </div>
       {s.pendingNews[seat] !== null && (
         <>
-          <h3>Your face-down card <span className="muted small">(takes effect at the start of your next turn)</span></h3>
+          <h3>Your face-down card <span className="muted small">({lastRound(s) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span></h3>
           <div className="cards">
             <NewsCardView id={s.pendingNews[seat]!} />
           </div>

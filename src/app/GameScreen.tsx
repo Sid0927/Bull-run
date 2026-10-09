@@ -6,7 +6,7 @@ import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { Board, Change, DeskHead, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { Board, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
 
 type Tab = "play" | "board" | "players" | "cards" | "log";
@@ -18,6 +18,8 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState<Tab>("play");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setBusy(false), [u]);
 
   useEffect(() => {
     setU(null);
@@ -91,9 +93,16 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   if (!s || !hist) return <WaitingRoom u={u} me={me} onError={setError} error={error} />;
 
   const names = (seats: Seat[]) => seats.map((x) => s.players[x].name).join(", ");
+  // One move at a time: the controls stay off until the server has answered and sent the new state,
+  // so a double tap can't spend both actions on the same trade.
   const play = (a: Action) => {
+    if (busy) return;
     setToast("");
-    api.act(id, a).catch((e) => setToast((e as Error).message));
+    setBusy(true);
+    api.act(id, a).catch((e) => {
+      setToast((e as Error).message);
+      setBusy(false);
+    });
   };
 
   let status: string;
@@ -103,6 +112,8 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     status = s.debt ? "You must sell shares to pay" : s.phase.kind === "opening" ? "Write your opening orders" : s.phase.kind === "ipo" ? "Place your IPO bid" : "Your move";
     sub = s.debt ? "" : s.phase.kind === "turn" ? (s.phase.step === "draw" ? "Draw a card to finish your turn" : "Trade, then play a news card") : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards" : "";
   } else if (s.phase.kind === "opening" || s.phase.kind === "ipo") status = `Waiting for ${names(u.waiting)}`;
+  else if (s.debt) status = `${names(u.waiting)} is selling shares to pay`;
+  else if (s.phase.kind === "openingDraw" || (s.phase.kind === "turn" && s.phase.step === "draw")) status = `${names(u.waiting)} is drawing a card`;
   else status = `${names(u.waiting)} is trading`;
 
   const action =
@@ -114,7 +125,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         <p className="muted">You are not a player in this game.</p>
       </section>
     ) : myMove ? (
-      <Private s={s} seat={mySeat} play={play} />
+      <Private s={s} seat={mySeat} play={play} busy={busy} />
     ) : (
       <Waiting s={s} seat={mySeat} who={names(u.waiting)} />
     );
@@ -201,7 +212,9 @@ function Waiting({ s, seat, who }: { s: GameState; seat: Seat; who: string }) {
       <DeskHead s={s} seat={seat} note={`Waiting for ${who}`} />
       {s.pendingNews[seat] !== null && s.pendingNews[seat] !== undefined && (
         <>
-          <h3>Your face-down card</h3>
+          <h3>
+            Your face-down card <span className="muted small">({lastRound(s) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span>
+          </h3>
           <div className="cards">
             <NewsCardView id={s.pendingNews[seat]!} />
           </div>

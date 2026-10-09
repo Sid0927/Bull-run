@@ -187,6 +187,8 @@ CREATE TABLE IF NOT EXISTS games (
 );
 -- Games created before rule sets were recorded were all played under rule set 1.
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
+-- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
+UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 CREATE TABLE IF NOT EXISTS game_players (
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id),

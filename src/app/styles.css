@@ -815,3 +815,5 @@ body {
 .rules .lede { font-size: 18px; line-height: 1.5; }
 .ipo-rules { margin: 4px 0 12px; padding: 12px 14px 12px 30px; display: grid; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); }
 .seg:not(.seg-fill) button { min-width: 44px; }
+.desk-controls { border: 0; margin: 0; padding: 0; min-width: 0; }
+.desk-controls[disabled] { opacity: 0.7; transition: opacity 0.15s; }

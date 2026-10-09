@@ -44,6 +44,9 @@ export function eventsFor(events: GameEvent[], seat: Seat | null, ended = false)
 }
 
 /** An action rebuilt from only the fields its type has, so nothing else is applied or stored. */
+/** The IPO company was called ZOM before it became Oracle Group; a tab opened before the rename still sends it. */
+const companyOf = (x: unknown) => (x === "ZOM" ? "ORG" : typeof x === "string" ? x : "");
+
 export function cleanAction(raw: unknown, seat: Seat): Action | null {
   if (!raw || typeof raw !== "object") return null;
   const a = raw as Record<string, unknown>;
@@ -58,7 +61,7 @@ export function cleanAction(raw: unknown, seat: Seat): Action | null {
     case "draw":
       return a.from === "market" ? { type: "draw", player: seat, from: "market", slot: int(a.slot) } : { type: "draw", player: seat, from: "deck" };
     case "trade": {
-      const t: Record<string, unknown> = { type: "trade", player: seat, kind: str(a.kind), company: str(a.company), qty: int(a.qty) };
+      const t: Record<string, unknown> = { type: "trade", player: seat, kind: str(a.kind), company: companyOf(a.company), qty: int(a.qty) };
       if (Array.isArray(a.shortIds)) t.shortIds = a.shortIds.slice(0, 3).map(int);
       return t as unknown as Action;
     }
@@ -67,7 +70,7 @@ export function cleanAction(raw: unknown, seat: Seat): Action | null {
     case "ipoBid":
       return { type: "ipoBid", player: seat, qty: int(a.qty), price: int(a.price) };
     case "forcedSell":
-      return { type: "forcedSell", player: seat, company: str(a.company) as never, qty: int(a.qty) };
+      return { type: "forcedSell", player: seat, company: companyOf(a.company) as never, qty: int(a.qty) };
     default:
       return null;
   }
