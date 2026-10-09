@@ -6,20 +6,28 @@ import type { GameUpdate, GameSummary } from "../src/shared/api.ts";
 import { STRATEGIES } from "../src/sim/strategies.ts";
 import { Rng } from "../src/engine/rng.ts";
 import { createApp, ensureAdmin } from "./app.ts";
-import { MemoryStore } from "./store.ts";
+import { MemoryStore, PgStore, type Store } from "./store.ts";
+
+// TEST_DATABASE_URL runs the same tests against a real (empty) Postgres database.
+const pgUrl = process.env.TEST_DATABASE_URL;
 
 let base = "";
 let close: () => void;
 
+let store: Store;
 before(async () => {
-  const store = new MemoryStore();
+  store = pgUrl ? new PgStore(pgUrl) : new MemoryStore();
+  await store.init();
   await ensureAdmin(store, "boss", "boss-password", () => {});
   const { server } = createApp({ store });
   await new Promise<void>((r) => server.listen(0, r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => server.close();
 });
-after(() => close());
+after(async () => {
+  close();
+  await store.close();
+});
 
 class Client {
   cookie = "";

@@ -36,6 +36,7 @@ export interface Seated {
 
 export interface Store {
   init(): Promise<void>;
+  close(): Promise<void>;
   userByName(username: string): Promise<User | null>;
   userById(id: number): Promise<User | null>;
   listUsers(): Promise<User[]>;
@@ -68,6 +69,7 @@ export class MemoryStore implements Store {
   private log = new Map<number, Action[]>();
 
   async init() {}
+  async close() {}
   async userByName(username: string) {
     return this.users.find((u) => u.username.toLowerCase() === username.toLowerCase()) ?? null;
   }
@@ -226,6 +228,9 @@ export class PgStore implements Store {
   }
   async init() {
     await this.pool.query(SCHEMA);
+  }
+  async close() {
+    await this.pool.end();
   }
   async userByName(username: string) {
     const [r] = await this.q("SELECT * FROM users WHERE lower(username) = lower($1)", [username]);

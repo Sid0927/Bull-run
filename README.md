@@ -7,21 +7,57 @@ software used to test its rules before printing:
    next state and an event log, or an error explaining why the action is illegal. All
    randomness comes from a seed kept in the state, so a game is its config plus its action
    list and replays exactly (`replay()`).
-2. **Play-test app** (`src/app`) — a hot-seat browser game for one device passed round the
-   table. Cash and hands are shown only after the active player confirms it is them.
+2. **Online game** (`server`, `src/app`) — a Node server that runs the engine, keeps accounts and
+   games in Postgres, and sends each phone only its own player's view; and the phone-first app.
 3. **Simulator** (`src/sim`) — plays thousands of games with computer players and reports
    balance statistics.
 
 The app and the simulator call the same engine, so they cannot disagree about a rule.
 
-## Play it
+## Play it online
 
-- **Website:** every push to `main` builds the game and publishes it with GitHub Pages
-  (`.github/workflows/pages.yml`), at `https://sid0927.github.io/Bull-run/` once Pages is switched
-  on: repository **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a
-  private repository needs a paid GitHub plan; otherwise make the repository public.
-- **Rules:** the instructions book is in the game (**Rules** in the header, or **How to play** on the
-  setup screen, or open the site with `#rules`). Every number in it is read from the engine.
+Bull Run is an online game: each player uses their own phone, signs in with an account the admin
+gives them, and joins a game with a 5-letter code. The server runs the rules and sends each phone
+only what that player may see.
+
+### Putting it online (Render + Neon, free tiers)
+
+1. **Database (Neon).** Sign up at neon.tech, create a project, and copy its **connection string**
+   (it starts `postgresql://` and ends `?sslmode=require`).
+2. **Server (Render).** Sign up at render.com with your GitHub account, then **New → Blueprint** and
+   pick this repository. Render reads `render.yaml` and asks for three values:
+   - `DATABASE_URL`: the Neon connection string;
+   - `ADMIN_USERNAME` and `ADMIN_PASSWORD`: the admin account created on first start (password at
+     least 6 characters).
+   Press **Apply**. The first build takes a few minutes; the game is then at the
+   `https://bull-run-….onrender.com` address Render shows.
+3. **Sign in as the admin**, open **Admin** from the menu under your name, and create an account
+   for each player. Give each player their username and password; they can change the password from
+   their lobby.
+
+Every push to `main` redeploys automatically. On Render's free plan the server sleeps after about
+15 minutes without visitors and the first visit after that takes 30–60 seconds; games are kept in
+the database, so nothing is lost while it sleeps.
+
+### How a game runs
+
+- Any player creates a game (6, 9 or 12 rounds; up to 3, 4 or 5 players) and shares its code.
+- Others join with the code; the creator starts it once at least 3 have joined.
+- When it is your move, your phone buzzes and the game shows **Your move**. In the opening and the
+  IPO, everyone acts at once and sees only their own orders or bids.
+- The rules are fixed (the standard rules in the rulebook). The rulebook is in the game:
+  **Rules** in the header or the tab bar.
+- The admin can see every game, abandon one, reset any player's password, or switch an account off.
+
+### Running it on your own computer
+
+```bash
+npm install
+npm run build
+npm start            # http://localhost:3000, admin / admin123, nothing saved without DATABASE_URL
+```
+
+For development, `npm run server` (API with reload) and `npm run dev` (app on :5173) together.
 
 ## Commands
 
@@ -41,8 +77,8 @@ sells and shorts what it will push down) and `dividend` (builds HUL and HDFC Ban
 chairmanship, never shorts). The `--strategies` list is cycled to fill the table and the seats
 are shuffled every game, so seat and strategy are not confounded.
 
-In the app, **Save record** downloads the seed and action log; loading it on the setup screen
-replays the game exactly. **Undo** takes back the last action (for play-testing only).
+The server keeps every game as its seed and action log, so any game can be replayed exactly with
+`replay()` from the database.
 
 ## Rule decisions
 

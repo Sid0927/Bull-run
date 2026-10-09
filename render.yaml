@@ -1,0 +1,21 @@
+# Render Blueprint: New → Blueprint → pick this repository. Render asks for the three secrets below.
+services:
+  - type: web
+    name: bull-run
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false # Neon connection string
+      - key: ADMIN_USERNAME
+        sync: false # the admin account created on first start
+      - key: ADMIN_PASSWORD
+        sync: false
