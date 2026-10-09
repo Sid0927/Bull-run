@@ -36,6 +36,8 @@ export interface GameConfig {
   chairmanMultiplier?: number;
   /** Play-test variant: a different dividend table (before the HUL/HDFC Bank doubling). */
   dividendBands?: { from: number; pays: number }[];
+  /** Play-test variant: the IPO company pays dividends like any other (default: it pays none). */
+  ipoPaysDividend?: boolean;
 }
 
 export interface Player {

@@ -98,8 +98,8 @@ export const DIVIDEND_BANDS: DividendBands = [
   { from: 120, pays: 10 },
 ];
 
-export function dividendPerShare(company: CompanyId, price: number, bands?: DividendBands): number {
-  if (COMPANIES[company].noDividend || price <= 0) return 0;
+export function dividendPerShare(company: CompanyId, price: number, bands?: DividendBands, ignoreNoDividend = false): number {
+  if ((COMPANIES[company].noDividend && !ignoreNoDividend) || price <= 0) return 0;
   if (bands) {
     const band = [...bands].sort((a, b) => b.from - a.from).find((b) => price >= b.from);
     return (band?.pays ?? 0) * (COMPANIES[company].doubleDividend ? 2 : 1);

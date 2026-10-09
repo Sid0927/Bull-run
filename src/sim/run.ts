@@ -74,6 +74,7 @@ export interface BatchOptions {
   delayedNews?: boolean;
   chairmanMultiplier?: number;
   dividendBands?: { from: number; pays: number }[];
+  ipoPaysDividend?: boolean;
 }
 
 export interface Report {
@@ -143,7 +144,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   for (let g = 0; g < opts.games; g++) {
     // Cycle the strategy list to fill the table, then shuffle seats so seat and strategy are not confounded.
     const lineup = seatRng.shuffle(Array.from({ length: opts.players }, (_, i) => strategies[i % strategies.length]));
-    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode, ipo: opts.ipo, ipoBand: opts.ipoBand, ipoMaxBid: opts.ipoMaxBid, delayedNews: opts.delayedNews, chairmanMultiplier: opts.chairmanMultiplier, dividendBands: opts.dividendBands };
+    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode, ipo: opts.ipo, ipoBand: opts.ipoBand, ipoMaxBid: opts.ipoMaxBid, delayedNews: opts.delayedNews, chairmanMultiplier: opts.chairmanMultiplier, dividendBands: opts.dividendBands, ipoPaysDividend: opts.ipoPaysDividend };
     const game = playGame(config, lineup);
     const st = game.state.standings!;
     const winners = st.filter((x) => x.rank === 1);
