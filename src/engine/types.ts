@@ -42,6 +42,9 @@ export interface ShortToken {
   owner: Seat;
   company: CompanyId;
   openIndex: number; // track index of the space it was opened on
+  /** Set the moment a price move reaches the cap: the token must be forced closed even if a
+   *  later sale (while someone pays a debt) takes the price back below it. */
+  capped?: boolean;
 }
 
 export interface CompanyState {
@@ -101,6 +104,8 @@ export interface GameState {
   startPlayer: Seat | null;
   debt: Debt | null;
   standings: Standing[] | null;
+  /** Where each company started: its start price, or its listing price once it has listed. */
+  homeIndex: Record<CompanyId, number>;
 }
 
 export type TradeKind = "buy" | "sell" | "short" | "cover";

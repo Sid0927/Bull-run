@@ -376,6 +376,25 @@ describe("short selling", () => {
     assert.equal(r.state.shorts[0].company, "DLF");
   });
 
+  test("a short that reached its cap is still closed if a forced sale pulls the price back under it", () => {
+    const s = midGame();
+    setPrice(s, "INFY", 140);
+    s.players[1].shares.INFY = 5;
+    s.players[1].cash = 50;
+    addShort(s, 1, "INFY", 100); // cap ₹150
+    addShort(s, 2, "INFY", 100); // cap ₹150
+    give(s, 0, byTitle("Government digital contract won")); // Infosys +1 → ₹150
+    const r = ok(s, play(0, byTitle("Government digital contract won")));
+    assert.equal(r.state.debt?.player, 1); // Bilal closes first and cannot pay
+    const a = ok(r.state, { type: "forcedSell", player: 1, company: "INFY", qty: 2 });
+    // His sale dropped the price below the cap…
+    assert.ok(a.events.some((e) => e.kind === "price" && e.company === "INFY" && e.from === 150 && e.to === 140));
+    // …but Chitra's short had already hit it, so it closes (and that +1 lifts the price back to ₹150).
+    assert.equal(a.state.shorts.length, 0);
+    assert.equal(price(a.state, "INFY"), 150);
+    assert.equal(a.state.players[2].cash, STARTING_CASH - 150);
+  });
+
   test("a player may hold and short the same company, and use both actions on it", () => {
     const s = midGame();
     s.players[0].shares.ONGC = 2;
@@ -450,6 +469,20 @@ describe("dividends", () => {
     assert.equal(r.state.players[2].cash, STARTING_CASH - 40);
   });
 
+  test("short sellers pay after every dividend is paid out, whatever order the companies are in", () => {
+    const s = midGame({ round: 3 });
+    const quiet = ALL_CARDS.filter((k) => !k.effects.HUL && !k.effects.SUN).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    setPrice(s, "HUL", 150); // ₹10, doubled: the short owes ₹20
+    setPrice(s, "SUN", 150); // ₹10 a share
+    addShort(s, 1, "HUL", 150);
+    s.players[1].cash = 0;
+    s.players[1].shares.SUN = 3;
+    const r = endRound(s);
+    assert.equal(r.state.players[1].cash, 30 - 20);
+    assert.ok(!r.events.some((e) => e.kind === "shortfall"));
+  });
+
   test("no dividend at the end of round 2", () => {
     const s = midGame({ round: 2 });
     s.players[0].shares.HUL = 3;
@@ -489,6 +522,29 @@ describe("play-test variants", () => {
     }
     assert.equal(price(s, "ONGC"), 90);
     assert.equal(price(s, "DLF"), 100);
+  });
+
+  test("drift back to start uses the IPO company's listing price", () => {
+    let s = midGame();
+    s.config.driftAtOrBelow = 0;
+    s.config.driftMode = "toStart";
+    s.companies.ZOM = { priceIndex: indexOfPrice(90), bankrupt: false, listed: true };
+    s.homeIndex.ZOM = indexOfPrice(60);
+    s.deck.push(...IPO_CARDS.map((k) => k.id));
+    const quiet = ALL_CARDS.filter((k) => !k.effects.ZOM).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    for (let i = 0; i < 3; i++) {
+      give(s, i, s.deck[s.deck.length - 1]);
+      s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
+      s = ok(s, { type: "draw", player: i, from: "deck" }).state;
+    }
+    assert.equal(price(s, "ZOM"), 80);
+  });
+
+  test("bad variant settings are refused, not crashed on", () => {
+    assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, ipoBand: [65, 75] }), /price track/);
+    assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, ipoBand: [] }), /price track/);
+    assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: -5 }), /Starting cash/);
   });
 
   test("starting cash can be set", () => {
@@ -667,6 +723,12 @@ describe("the opening (round 0)", () => {
     assert.equal(s.round, 1);
     assert.ok(s.players.every((p) => p.hand.length === 4));
     assert.equal(s.phase.kind === "turn" && s.phase.player, s.startPlayer);
+  });
+
+  test("opening orders must be affordable", () => {
+    const { state: s } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 4, startingCash: 500 });
+    illegal(s, { type: "openingOrder", player: 0, orders: { HUL: 4 }, card: s.players[0].hand[0] }, /could cost ₹600/);
+    ok(s, { type: "openingOrder", player: 0, orders: { HUL: 3 }, card: s.players[0].hand[0] });
   });
 
   test("orders are capped at 6 shares, from your own hand", () => {

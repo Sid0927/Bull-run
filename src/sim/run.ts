@@ -98,6 +98,13 @@ export interface Report {
   avgActionsPerGame: number;
 }
 
+/** Middle value of a sorted list; the mean of the two middle values for an even count. */
+function median(sorted: number[]): number {
+  if (!sorted.length) return 0;
+  const m = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[m] : Math.round((sorted[m - 1] + sorted[m]) / 2);
+}
+
 export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void): Report {
   const strategies = opts.strategies.map((n) => {
     const s = STRATEGIES[n];
@@ -121,6 +128,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   const startSum = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   const belowStart = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   let roundEnds = 0;
+  const listedRoundEnds = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
   const ipo = { games: 0, listing: 0, after: 0, allotted: 0, under: 0, dist: {} as Record<number, number>, bigGames: 0, bigWins: 0, zomFinal: 0 };
@@ -148,10 +156,12 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     spreadSum += Math.max(...nw) - Math.min(...nw);
     spreadMax = Math.max(spreadMax, Math.max(...nw) - Math.min(...nw));
     actionsSum += game.actions.length;
-    for (const c of COMPANY_IDS) finals[c].push(TRACK[game.state.companies[c].priceIndex]);
+    // A company that never listed (the IPO switched off) has no final price to report.
+    for (const c of COMPANY_IDS) if (game.state.companies[c].listed) finals[c].push(TRACK[game.state.companies[c].priceIndex]);
 
     const bankruptHere = new Set<CompanyId>(), topHere = new Set<CompanyId>(), chairHere = new Set<CompanyId>();
     let lastResortHere = false;
+    const listedNow = new Set<CompanyId>();
     const maxDev = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
     // Each company's own starting point this game: its start price, or the IPO listing price.
     const startOf = Object.fromEntries(COMPANY_IDS.map((c) => [c, opts.startPrices?.[c] ?? COMPANIES[c].startPrice])) as Record<CompanyId, number>;
@@ -170,6 +180,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         case "shortfall": sh.shortfalls++; break;
         case "trade": if (e.trade === "cover") sh.covered += e.prices.length; break;
         case "ipoListing": {
+          listedNow.add(e.company);
           startOf[e.company] = e.listingPrice;
           ipo.games++;
           ipo.listing += e.listingPrice;
@@ -189,6 +200,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         }
         case "roundEnd":
           roundEnds++;
+          for (const c of COMPANY_IDS) if (!COMPANIES[c].ipo || listedNow.has(c)) listedRoundEnds[c]++;
           (cash[e.round] ??= { sum: 0, n: 0 });
           cash[e.round].sum += e.cash.reduce((a, b) => a + b, 0);
           cash[e.round].n += e.cash.length;
@@ -238,11 +250,11 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         // The IPO company's start is its average listing price; games where it never listed are left out.
         const n = Math.max(1, listedGames[c]);
         const start = Math.round(startSum[c] / n);
-        return [c, { start, avgSwing: Math.round(swing[c] / G), endedBelowStartPct: Math.round((1000 * belowStart[c]) / n) / 10, avgFinal: Math.round(xs.reduce((a, b) => a + b, 0) / G), medianFinal: xs[Math.floor(G / 2)], finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
+        return [c, { start, avgSwing: Math.round(swing[c] / G), endedBelowStartPct: Math.round((1000 * belowStart[c]) / n) / 10, avgFinal: xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0, medianFinal: median(xs), finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
       }),
     ) as Report["companies"],
     chairmen: Object.fromEntries(
-      COMPANY_IDS.map((c) => [c, { roundsWithChairmanPct: Math.round((1000 * chair[c].rounds) / Math.max(1, roundEnds)) / 10, gamesWithChairmanPct: pct(chair[c].games), byStrategy: chair[c].byStrategy }]),
+      COMPANY_IDS.map((c) => [c, { roundsWithChairmanPct: Math.round((1000 * chair[c].rounds) / Math.max(1, listedRoundEnds[c])) / 10, gamesWithChairmanPct: pct(chair[c].games), byStrategy: chair[c].byStrategy }]),
     ) as Report["chairmen"],
     shorts: {
       openedPerGame: r1(sh.opened / G),

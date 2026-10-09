@@ -30,6 +30,17 @@ export interface Strategy {
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────────────────
 
+/** Trim opening orders, dearest share first, until the seat can pay for them all. */
+function affordable(s: GameState, seat: Seat, orders: Partial<Holdings>): Partial<Holdings> {
+  const out = { ...orders };
+  const cost = () => Object.entries(out).reduce((n, [c, q]) => n + (q ?? 0) * price(s, c as CompanyId), 0);
+  while (cost() > s.players[seat].cash) {
+    const dearest = (Object.keys(out) as CompanyId[]).filter((c) => (out[c] ?? 0) > 0).sort((a, b) => price(s, b) - price(s, a))[0];
+    out[dearest] = (out[dearest] ?? 0) - 1;
+  }
+  return out;
+}
+
 /** Companies that can be traded now. */
 const live = (s: GameState) => COMPANY_IDS.filter((c) => isLive(s, c));
 
@@ -105,7 +116,7 @@ export const randomPlayer: Strategy = {
         const c = open[rng.int(open.length)];
         orders[c] = (orders[c] ?? 0) + 1;
       }
-      return [{ type: "openingOrder", player: seat, orders, card: p.hand[rng.int(p.hand.length)] }];
+      return [{ type: "openingOrder", player: seat, orders: affordable(s, seat, orders), card: p.hand[rng.int(p.hand.length)] }];
     }
     if (ph.kind === "ipo") return [ipoBid(s, seat, rng.int(ipoMaxBidOf(s.config) + 1), rng.next())];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return rng.shuffle(drawChoices(s, seat, false));
@@ -113,7 +124,7 @@ export const randomPlayer: Strategy = {
     const out: Action[] = [];
     if (ph.actionsUsed < 2 && rng.next() < 0.6) {
       const kinds: TradeKind[] = ["buy", "sell", "short", "cover"];
-      for (let i = 0; i < 12; i++) out.push(trade(seat, kinds[rng.int(4)], COMPANY_IDS[rng.int(6)], 1 + rng.int(3)));
+      for (let i = 0; i < 12; i++) out.push(trade(seat, kinds[rng.int(4)], COMPANY_IDS[rng.int(COMPANY_IDS.length)], 1 + rng.int(3)));
     }
     out.push(playNews(s, seat, p.hand[rng.int(p.hand.length)]));
     return out;
@@ -135,7 +146,7 @@ export const favourPlayer: Strategy = {
       const picks = top.length ? top.slice(0, 2) : [ranked[0]];
       const orders: Partial<Holdings> = {};
       picks.forEach((c, i) => (orders[c] = picks.length === 1 ? 6 : i === 0 ? 3 : 3));
-      return [{ type: "openingOrder", player: seat, orders, card: bestCard(s, seat, orders) }];
+      return [{ type: "openingOrder", player: seat, orders: affordable(s, seat, orders), card: bestCard(s, seat, orders) }];
     }
     // The IPO pops on a full book, so it bids for the lot, and pays up when its hand likes Zomato.
     if (ph.kind === "ipo") return [ipoBid(s, seat, ipoMaxBidOf(s.config), bias[IPO_COMPANY] > 0 ? 1 : 0.67)];
@@ -174,7 +185,7 @@ export const dividendPlayer: Strategy = {
     const ph = s.phase;
     if (ph.kind === "opening") {
       const orders = { HUL: 3, HDFC: 3 };
-      return [{ type: "openingOrder", player: seat, orders, card: bestCard(s, seat, orders) }];
+      return [{ type: "openingOrder", player: seat, orders: affordable(s, seat, orders), card: bestCard(s, seat, orders) }];
     }
     // Zomato pays no dividend: a small bid at the bottom of the band, for the pop only.
     if (ph.kind === "ipo") return [ipoBid(s, seat, 2, 0)];

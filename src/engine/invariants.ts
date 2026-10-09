@@ -21,6 +21,7 @@ export function invariantErrors(s: GameState): string[] {
     if (co.bankrupt && shorts) errs.push(`${c} is bankrupt but has open shorts`);
     if (!s.debt) {
       for (const t of openShorts(s, c)) {
+        if (t.capped) errs.push(`${c} short ${t.id} reached its cap but was never closed`);
         const cap = capIndex(t.openIndex);
         if (cap !== null && co.priceIndex >= cap) errs.push(`${c} short ${t.id} is past its cap but still open`);
       }

@@ -148,6 +148,10 @@ export function startPrice(config: GameConfig, c: CompanyId): number {
 export function newGame(config: GameConfig): { state: GameState; events: GameEvent[] } {
   if (config.players.length < 3 || config.players.length > 5) throw new IllegalAction("Bull Run is for 3–5 players.");
   if (!GAME_LENGTHS.includes(config.rounds)) throw new IllegalAction("The game length must be 6, 9 or 12 rounds.");
+  if (config.startingCash !== undefined && !(Number.isInteger(config.startingCash) && config.startingCash > 0)) throw new IllegalAction("Starting cash must be a whole number above 0.");
+  if (config.ipoBand !== undefined && (config.ipoBand.length === 0 || !config.ipoBand.every((p) => p > 0 && (TRACK as readonly number[]).includes(p))))
+    throw new IllegalAction("The IPO band must be one or more spaces on the price track above ₹0.");
+  if (config.ipoMaxBid !== undefined && !(Number.isInteger(config.ipoMaxBid) && config.ipoMaxBid >= 0)) throw new IllegalAction("The IPO bid limit must be a whole number.");
   for (const [c, p] of Object.entries(config.startPrices ?? {})) {
     if (!COMPANY_IDS.includes(c as CompanyId)) throw new IllegalAction(`No company ${c}.`);
     if (!(TRACK as readonly number[]).includes(p!) || p === 0) throw new IllegalAction(`${c} cannot start at ₹${p}: not a space on the track.`);
@@ -183,6 +187,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
     startPlayer: null,
     debt: null,
     standings: null,
+    homeIndex: Object.fromEntries(COMPANY_IDS.map((c) => [c, indexOfPrice(startPrice(config, c))])) as Record<CompanyId, number>,
   };
   return {
     state,
@@ -254,6 +259,15 @@ function movePrice(ctx: Ctx, c: CompanyId, steps: number, cause: "threshold" | "
     text: `${cname(c)} ${signed(to - from)}${cause === "threshold" || cause === "drift" ? ": " : " from "}${why} — ${fmt(TRACK[from])} → ${fmt(TRACK[to])}${capped}`,
   });
   if (to === 0) bankrupt(ctx, c);
+  else if (to > from) markCapped(ctx.s, c);
+}
+
+/** Flag every short on `c` whose cap the price has now reached. */
+function markCapped(s: GameState, c: CompanyId) {
+  for (const t of s.shorts) {
+    const cap = capIndex(t.openIndex);
+    if (t.company === c && cap !== null && s.companies[c].priceIndex >= cap) t.capped = true;
+  }
 }
 
 function bankrupt(ctx: Ctx, c: CompanyId) {
@@ -371,6 +385,7 @@ export interface TradePreview {
 
 /** Run a trade's share-by-share arithmetic on a copy, without checking cash. */
 export function previewTrade(s: GameState, a: Extract<Action, { type: "trade" }>): { ok: true; preview: TradePreview } | { ok: false; error: string } {
+  if (!Number.isInteger(a.player) || a.player < 0 || a.player >= s.players.length) return { ok: false, error: "No such player." };
   const ctx: Ctx = { s: structuredClone(s), rng: new Rng(s.rng), events: [] };
   try {
     checkTrade(ctx.s, a.player, a.kind, a.company, a.qty, a.shortIds, false);
@@ -488,11 +503,9 @@ function settle(ctx: Ctx) {
   while (!s.debt) {
     const n = s.players.length;
     const from = s.phase.kind === "turn" ? s.phase.player : 0;
+    // A token is due once a move reached its cap, whatever the price has done since.
     const due = s.shorts
-      .filter((t) => {
-        const cap = capIndex(t.openIndex);
-        return cap !== null && !s.companies[t.company].bankrupt && s.companies[t.company].priceIndex >= cap;
-      })
+      .filter((t) => t.capped && !s.companies[t.company].bankrupt)
       // Agreed order: clockwise from the player whose turn it is, then oldest token first.
       .sort((a, b) => (a.owner - from + n) % n - (b.owner - from + n) % n || a.id - b.id);
     const t = due[0];
@@ -671,6 +684,8 @@ function openingOrder(ctx: Ctx, seat: Seat, orders: Partial<Holdings>, cardId: n
     total += v!;
   }
   if (total > OPENING_MAX_SHARES) throw new IllegalAction("Opening orders are for up to 6 shares in total.");
+  const cost = Object.entries(clean).reduce((n, [c, q]) => n + q! * price(s, c as CompanyId), 0);
+  if (cost > s.players[seat].cash) throw new IllegalAction(`Those orders could cost ${fmt(cost)} and you have ${fmt(s.players[seat].cash)}.`);
   const p = s.players[seat];
   if (!p.hand.includes(cardId)) throw new IllegalAction("Place a news card from your own hand.");
   p.hand = p.hand.filter((x) => x !== cardId);
@@ -817,6 +832,7 @@ function resolveIpo(ctx: Ctx) {
     s.players[i].cash -= n * listingPrice;
   });
   s.companies[c] = { priceIndex: indexOfPrice(listingPrice), bankrupt: false, listed: true };
+  s.homeIndex[c] = indexOfPrice(listingPrice);
   const total = allocated.reduce((a, b) => a + b, 0);
   const reached = THRESHOLDS.filter((t) => total >= t).length;
   const afterPop = TRACK[Math.min(TOP, indexOfPrice(listingPrice) + reached)];
@@ -857,7 +873,7 @@ function endRound(ctx: Ctx) {
       const n = outstanding(s, c);
       if (!isLive(s, c) || n > s.config.driftAtOrBelow) continue;
       const toStart = s.config.driftMode === "toStart";
-      const home = indexOfPrice(startPrice(s.config, c));
+      const home = s.homeIndex[c];
       const step = toStart && s.companies[c].priceIndex <= home ? 0 : -1;
       if (step) movePrice(ctx, c, step, "drift", `no buyers: ${n} outstanding at the end of the round`);
     }
@@ -876,8 +892,11 @@ function endRound(ctx: Ctx) {
 
 function payDividends(ctx: Ctx) {
   const s = ctx.s;
+  // Everything paid out first, for every company, then the short sellers pay: a short seller's
+  // ability to pay must not depend on the order the companies are listed in.
+  const ledger: { c: CompanyId; d: number; paid: { player: Seat; amount: number; why: "shares" | "chairman" | "short" }[] }[] = [];
   for (const c of COMPANY_IDS) {
-    if (s.companies[c].bankrupt) continue;
+    if (!isLive(s, c)) continue;
     const d = dividendPerShare(c, price(s, c));
     if (d === 0) continue;
     const paid: { player: Seat; amount: number; why: "shares" | "chairman" | "short" }[] = [];
@@ -892,6 +911,9 @@ function payDividends(ctx: Ctx) {
       s.players[ch].cash += CHAIRMAN_MULTIPLIER * d;
       paid.push({ player: ch, amount: CHAIRMAN_MULTIPLIER * d, why: "chairman" });
     }
+    ledger.push({ c, d, paid });
+  }
+  for (const { c, d, paid } of ledger) {
     for (const t of openShorts(s, c)) {
       const p = s.players[t.owner];
       const pay = Math.min(p.cash, d);
@@ -907,6 +929,8 @@ function payDividends(ctx: Ctx) {
         });
       }
     }
+  }
+  for (const { c, d, paid } of ledger) {
     const parts = paid.map((x) =>
       x.why === "short" ? `${s.players[x.player].name} pays ${fmt(-x.amount)} (short)` : `${s.players[x.player].name} ${fmt(x.amount)}${x.why === "chairman" ? " (chairman)" : ""}`,
     );
