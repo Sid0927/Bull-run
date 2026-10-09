@@ -152,6 +152,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   if (config.startingCash !== undefined && !(Number.isInteger(config.startingCash) && config.startingCash > 0)) throw new IllegalAction("Starting cash must be a whole number above 0.");
   if (config.ipoBand !== undefined && (config.ipoBand.length === 0 || !config.ipoBand.every((p) => p > 0 && (TRACK as readonly number[]).includes(p))))
     throw new IllegalAction("The IPO band must be one or more spaces on the price track above ₹0.");
+  if (config.chairmanMultiplier !== undefined && !(Number.isInteger(config.chairmanMultiplier) && config.chairmanMultiplier >= 0)) throw new IllegalAction("The chairman multiplier must be a whole number.");
   if (config.ipoMaxBid !== undefined && !(Number.isInteger(config.ipoMaxBid) && config.ipoMaxBid >= 0)) throw new IllegalAction("The IPO bid limit must be a whole number.");
   for (const [c, p] of Object.entries(config.startPrices ?? {})) {
     if (!COMPANY_IDS.includes(c as CompanyId)) throw new IllegalAction(`No company ${c}.`);
@@ -938,8 +939,8 @@ function payDividends(ctx: Ctx) {
     });
     const ch = s.chairmen[c];
     if (ch !== null) {
-      s.players[ch].cash += CHAIRMAN_MULTIPLIER * d;
-      paid.push({ player: ch, amount: CHAIRMAN_MULTIPLIER * d, why: "chairman" });
+      s.players[ch].cash += (s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER) * d;
+      paid.push({ player: ch, amount: (s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER) * d, why: "chairman" });
     }
     ledger.push({ c, d, paid });
   }

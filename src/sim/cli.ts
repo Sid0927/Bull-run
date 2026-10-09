@@ -22,6 +22,7 @@ const opts = {
   driftMode: arg("drift-mode", "down") as "down" | "toStart",
   ipo: !process.argv.includes("--no-ipo"),
   delayedNews: process.argv.includes("--delayed-news"),
+  chairmanMultiplier: arg("chairman", "") ? Number(arg("chairman", "")) : undefined,
 };
 
 /** --start SUN=150,INFY=120 */

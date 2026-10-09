@@ -72,6 +72,7 @@ export interface BatchOptions {
   ipoBand?: number[];
   ipoMaxBid?: number;
   delayedNews?: boolean;
+  chairmanMultiplier?: number;
 }
 
 export interface Report {
@@ -85,6 +86,8 @@ export interface Report {
   chairmen: Record<CompanyId, { roundsWithChairmanPct: number; gamesWithChairmanPct: number; byStrategy: Record<string, number> }> & {};
   shorts: { openedPerGame: number; coveredPerGame: number; forcedPerGame: number; closedByBankruptcyPerGame: number; debtsPerGame: number; lastResortPerGame: number; gamesWithLastResortPct: number; shortDividendShortfalls: number };
   cashByRound: { round: number; avgCash: number }[];
+  /** Rupees paid out per game, by kind; and the share of the winner's net worth that was chairman bonus. */
+  income: { dividendsPerGame: number; chairmanPerGame: number; chairmanShareOfWinnerPct: number };
   ipo: {
     games: number;
     listingDistribution: Record<number, number>;
@@ -129,6 +132,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   const startSum = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   const belowStart = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   let roundEnds = 0;
+  let divPaid = 0, chairPaid = 0, winnerChairShare = 0;
   const listedRoundEnds = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
@@ -138,7 +142,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   for (let g = 0; g < opts.games; g++) {
     // Cycle the strategy list to fill the table, then shuffle seats so seat and strategy are not confounded.
     const lineup = seatRng.shuffle(Array.from({ length: opts.players }, (_, i) => strategies[i % strategies.length]));
-    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode, ipo: opts.ipo, ipoBand: opts.ipoBand, ipoMaxBid: opts.ipoMaxBid, delayedNews: opts.delayedNews };
+    const config: GameConfig = { players: lineup.map((s, i) => `${s.name}-${i + 1}`), rounds: opts.rounds, seed: (opts.seed * 100003 + g) | 0, startPrices: opts.startPrices, startingCash: opts.startingCash, driftAtOrBelow: opts.driftAtOrBelow, driftMode: opts.driftMode, ipo: opts.ipo, ipoBand: opts.ipoBand, ipoMaxBid: opts.ipoMaxBid, delayedNews: opts.delayedNews, chairmanMultiplier: opts.chairmanMultiplier };
     const game = playGame(config, lineup);
     const st = game.state.standings!;
     const winners = st.filter((x) => x.rank === 1);
@@ -163,6 +167,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     const bankruptHere = new Set<CompanyId>(), topHere = new Set<CompanyId>(), chairHere = new Set<CompanyId>();
     let lastResortHere = false;
     const listedNow = new Set<CompanyId>();
+    let winnerBonus = 0;
     const maxDev = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
     // Each company's own starting point this game: its start price, or the IPO listing price.
     const startOf = Object.fromEntries(COMPANY_IDS.map((c) => [c, opts.startPrices?.[c] ?? COMPANIES[c].startPrice])) as Record<CompanyId, number>;
@@ -199,6 +204,15 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
           ipo.zomFinal += TRACK[game.state.companies.ZOM.priceIndex];
           break;
         }
+        case "dividend":
+          for (const x of e.paid) {
+            if (x.why === "shares") divPaid += x.amount;
+            if (x.why === "chairman") {
+              chairPaid += x.amount;
+              if (st.find((y) => y.seat === x.player)!.rank === 1) winnerBonus += x.amount;
+            }
+          }
+          break;
         case "roundEnd":
           roundEnds++;
           for (const c of COMPANY_IDS) if (!COMPANIES[c].ipo || listedNow.has(c)) listedRoundEnds[c]++;
@@ -216,6 +230,8 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
           break;
       }
     }
+    const tops = st.filter((x) => x.rank === 1);
+    winnerChairShare += winnerBonus / tops.length / Math.max(1, tops[0].netWorth);
     for (const c of COMPANY_IDS) {
       swing[c] += maxDev[c];
       if (game.state.companies[c].listed) {
@@ -269,6 +285,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     },
     cashByRound: cash.map((x, round) => (x ? { round, avgCash: Math.round(x.sum / x.n) } : null)).filter((x): x is { round: number; avgCash: number } => x !== null),
     avgActionsPerGame: Math.round(actionsSum / G),
+    income: { dividendsPerGame: Math.round(divPaid / G), chairmanPerGame: Math.round(chairPaid / G), chairmanShareOfWinnerPct: Math.round((1000 * winnerChairShare) / G) / 10 },
     ipo: {
       games: ipo.games,
       listingDistribution: ipo.dist,

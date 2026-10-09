@@ -32,6 +32,8 @@ export interface GameConfig {
    * at the start of its owner's next turn. Cards still face-down when the game ends are discarded.
    */
   delayedNews?: boolean;
+  /** Play-test variant: the chairman's bonus as a multiple of the per-share dividend (default 3). */
+  chairmanMultiplier?: number;
 }
 
 export interface Player {
