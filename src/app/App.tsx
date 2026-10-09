@@ -413,6 +413,7 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
         id="join-code"
         value={value}
         inputMode="text"
+        autoCorrect="off"
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
@@ -552,7 +553,11 @@ function ChangePassword() {
           New password <span className="muted small">(at least 6 characters)</span>
           <input id="new-pw" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={6} />
         </label>
-        {msg && <p className={msg.ok ? "notice" : "error"}>{msg.text}</p>}
+        {msg && (
+          <p className={msg.ok ? "notice" : "error"} role={msg.ok ? "status" : "alert"}>
+            {msg.text}
+          </p>
+        )}
         <div className="row">
           <button className="primary">Save</button>
           <button type="button" onClick={() => setOpen(false)}>
@@ -587,6 +592,7 @@ function Admin({ me }: { me: Me }) {
     load();
     // Keep the games, accounts and sign-ins current while the page is open.
     const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       api.allGames().then(setGames, () => {});
       api.users().then(setUsers, () => {});
       api.logins().then(setLogins, () => {});

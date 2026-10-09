@@ -14,10 +14,25 @@ function read(): Theme {
   }
 }
 
+const BARS = { light: "#f5f6f2", dark: "#060a09" };
+
 function applyTheme(t: Theme) {
   const root = document.documentElement;
   if (t === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", t);
+  // The phone's status bar follows a chosen theme too, not only the phone's own setting.
+  for (const m of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    const own = m.dataset.media ?? m.getAttribute("media") ?? "";
+    m.dataset.media = own;
+    if (t === "system") m.setAttribute("media", own);
+    else {
+      m.removeAttribute("media");
+      m.content = BARS[t];
+    }
+  }
+  if (t === "system") {
+    for (const m of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) m.content = m.dataset.media?.includes("dark") ? BARS.dark : BARS.light;
+  }
 }
 
 /** Call once before the first render so the page never flashes the wrong theme. */

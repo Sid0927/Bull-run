@@ -93,7 +93,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           const id = a?.getAttribute("href");
           if (id?.startsWith("#") && !id.startsWith("#/")) {
             e.preventDefault();
-            document.getElementById(id.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+            document.getElementById(id.slice(1))?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
           }
         }}
       >

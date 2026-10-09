@@ -876,3 +876,56 @@ body {
 .lobby-hero > div:first-child { min-width: 0; }
 .page-title { overflow-wrap: anywhere; }
 .rules-table.narrow { min-width: min(22rem, 100%); }
+
+/* ── Phones and accessibility, second pass ────────────────────────── */
+.desk-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desk-head, .desk-who { min-width: 0; }
+/* No double-tap zoom on controls tapped quickly in a row. */
+button, .button, .pickable, .tabbar, a, input, label { touch-action: manipulation; }
+/* Comfortable touch targets. */
+.icon-btn { min-height: 44px; width: 44px; }
+.me-btn { min-height: 44px; }
+.seg button, .stepper button, .card .play, .ghost-link, .float .peek, .filter-seg button, .toc a { min-height: 44px; }
+.toc a { display: inline-flex; align-items: center; }
+.check-row input { width: 24px; height: 24px; min-height: 24px; }
+/* Text that sits on gold or on the light red reads in dark ink, in either theme. */
+.rank.r1, .p1 .podium-block { color: #1d1300; }
+.p2 .podium-block, .p3 .podium-block { color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.45); }
+:root { --gold-text: #8a5a00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --gold-text: var(--gold); } }
+:root[data-theme="dark"] { --gold-text: var(--gold); }
+.pill-playing, .card.market .card-type, .chair, .game-facts .icon, .end-head > .icon, .rail-mark { color: var(--gold-text); }
+.tag { color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
+.ticket-label { font-size: 10px; opacity: 0.85; }
+.status-line.mine { background: linear-gradient(110deg, var(--accent), color-mix(in srgb, var(--accent) 80%, var(--accent-2)), var(--accent)); background-size: 200% 100%; }
+.status-sub { opacity: 1; }
+button.primary, .button.primary { background: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.danger, :root:not([data-theme="light"]) .kinds button.on.kind-sell, :root:not([data-theme="light"]) .kinds button.on.kind-short,
+  :root:not([data-theme="light"]) button.confirm-sell:not(:disabled), :root:not([data-theme="light"]) button.confirm-short:not(:disabled) { color: #2b0805; }
+}
+:root[data-theme="dark"] button.danger, :root[data-theme="dark"] .kinds button.on.kind-sell, :root[data-theme="dark"] .kinds button.on.kind-short,
+:root[data-theme="dark"] button.confirm-sell:not(:disabled), :root[data-theme="dark"] button.confirm-short:not(:disabled) { color: #2b0805; }
+/* Notches in landscape. */
+.topbar { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.page { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.layout, .game-head { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+@media (max-width: 1100px) { .tabbar { left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); } }
+/* The colour washes stay put on every phone (iOS ignores background-attachment: fixed). */
+body { background-image: none; }
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(60rem 36rem at 0% -10%, var(--wash-1), transparent 70%),
+    radial-gradient(50rem 30rem at 100% 0%, var(--wash-2), transparent 70%),
+    radial-gradient(60rem 40rem at 50% 110%, var(--wash-3), transparent 70%);
+}
+.splash, .login { min-height: 100dvh; }
+/* Lifts and sheens only where there is a real pointer, or they stick after a tap. */
+@media (hover: none) {
+  .card:hover, .game-item:hover { transform: none; box-shadow: var(--shadow-sm); }
+  .game-item:hover .go { transform: none; }
+  .shine:hover::after { transform: translateX(-120%); transition: none; }
+}
+.card .play { white-space: nowrap; }
+.impact { white-space: nowrap; }

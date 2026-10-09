@@ -144,6 +144,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
 
   return (
     <div className={`game tab-${tab}`}>
+      <h1 className="sr-only">Game {u.game.code}</h1>
       <div className="game-head">
         <RoundTracker s={s} />
         <div className={`status-line ${myMove ? "mine" : ""} ${s.phase.kind === "ended" ? "over" : ""}`} role="status">
@@ -172,8 +173,8 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         </div>
       )}
       {toast && (
-        <button className="toast" role="alert" onClick={() => setToast("")}>
-          {toast} <span className="muted small">(tap to close)</span>
+        <button className="toast" onClick={() => setToast("")}>
+          <span role="alert">{toast}</span> <span className="muted small">(tap to close)</span>
         </button>
       )}
       <Ticker s={s} hist={hist} />
@@ -320,8 +321,9 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }
-    } catch {
-      /* cancelled */
+    } catch (e) {
+      // Cancelling the share sheet is fine; anything else means nothing was shared or copied.
+      if ((e as Error)?.name !== "AbortError") onError(`Couldn't share or copy. The code is ${g.code}.`);
     }
   };
   const act = (f: () => Promise<unknown>, after?: () => void) => {
@@ -369,7 +371,11 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
           })}
         </div>
 
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
         {isCreator || me.isAdmin ? (
           <>
             <button className="primary big" disabled={need > 0 || busy} onClick={() => act(() => api.start(g.id))}>

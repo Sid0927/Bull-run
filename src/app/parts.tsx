@@ -371,8 +371,8 @@ export function NewsCardView({ id, children, impact, picked }: { id: number; chi
         )}
       </div>
       {impact !== undefined && (
-        <div className={`impact ${impact > 0 ? "up" : impact < 0 ? "down" : "flat"}`} title="Effect on your holdings and shorts at today's prices">
-          For you today {impact === 0 ? "±₹0" : signedRs(impact)}
+        <div className={`impact ${impact > 0 ? "up" : impact < 0 ? "down" : "flat"}`} title="What this card would do to your shares and shorts at today's prices (it takes effect later)">
+          For you {impact === 0 ? "±₹0" : signedRs(impact)}
         </div>
       )}
       {picked && (
@@ -677,7 +677,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
             <button className="play primary" onClick={() => play({ type: "playNews", player: seat, card: id })}>
-              {s.config.delayedNews !== false ? "Place face-down" : "Play this card"}
+              {s.config.delayedNews !== false ? "Place card" : "Play card"}
             </button>
           </NewsCardView>
         ))}

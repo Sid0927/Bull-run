@@ -102,9 +102,10 @@ export function follow(
     };
   };
   open();
-  // Coming back to the tab is the moment a phone's connection is most likely stale.
+  // Coming back to the tab is the moment a phone's connection is most likely stale: a locked
+  // iPhone often leaves it looking open but dead. Reconnecting is cheap (only missed events come).
   const onVisible = () => {
-    if (document.visibilityState === "visible" && es?.readyState !== EventSource.OPEN) open();
+    if (document.visibilityState === "visible") open();
   };
   document.addEventListener("visibilitychange", onVisible);
   return () => {
