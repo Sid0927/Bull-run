@@ -222,10 +222,13 @@ export const followerPlayer: Strategy = {
     const p = s.players[seat];
     const n = s.players.length;
     const prev = (seat - 1 + n) % n;
-    const theirs = s.tape.filter((t) => t.seat === prev && t.round >= s.round - 1);
+    // The previous seat's latest turn: this round, unless this seat starts the round.
+    const theirRound = seat === s.startPlayer ? s.round - 1 : s.round;
+    const theirs = s.tape.filter((t) => t.seat === prev && t.round === theirRound);
     const out: Action[] = [];
     if (ph.actionsUsed < 2) {
-      for (const t of [...theirs].reverse()) {
+      // Copy their trades in the order they made them, one per action already taken.
+      for (const t of theirs.slice(ph.actionsUsed)) {
         if (t.kind === "buy") for (let q = Math.min(3, t.qty); q >= 1; q--) if (p.cash - q * price(s, t.company) * 1.2 > 100) out.push(trade(seat, "buy", t.company, q));
         if (t.kind === "short" || t.kind === "sell") {
           if (p.shares[t.company]) out.push(trade(seat, "sell", t.company, Math.min(3, p.shares[t.company])));
@@ -233,9 +236,8 @@ export const followerPlayer: Strategy = {
         }
       }
     }
-    if (out.length === 0) return favourPlayer.candidates(s, seat, rng);
-    out.push(playNews(s, seat, bestCard(s, seat)));
-    return out;
+    // If nothing can be copied (or every copy is refused), trade as the card-led player would.
+    return [...out, ...favourPlayer.candidates(s, seat, rng)];
   },
 };
 

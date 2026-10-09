@@ -483,7 +483,9 @@ function trade(ctx: Ctx, seat: Seat, kind: TradeKind, c: CompanyId, qty: number,
   const prices = runTrade(ctx, seat, kind, c, qty, shortIds);
   const total = prices.reduce((x, y) => x + y, 0);
   const verb = { buy: "buys", sell: "sells", short: "shorts", cover: "covers" }[kind];
-  const noun = kind === "short" || kind === "cover" ? `short${qty === 1 ? "" : "s"}` : `share${qty === 1 ? "" : "s"}`;
+  // A sale or short that bankrupts the company stops part-way: report what actually traded.
+  const done = prices.length;
+  const noun = kind === "short" || kind === "cover" ? `short${done === 1 ? "" : "s"}` : `share${done === 1 ? "" : "s"}`;
   ctx.events.push({
     kind: "trade",
     player: seat,
@@ -491,10 +493,13 @@ function trade(ctx: Ctx, seat: Seat, kind: TradeKind, c: CompanyId, qty: number,
     company: c,
     prices,
     total,
-    text: `${s.players[seat].name} ${verb} ${qty} ${cname(c)} ${noun} at ${prices.map(fmt).join(", ") || "nothing"} — ${kind === "buy" || kind === "cover" ? "pays" : "receives"} ${fmt(total)}`,
+    text:
+      done === 0
+        ? `${s.players[seat].name} tries to ${kind} ${cname(c)}, but the first share takes it to ₹0: nothing trades`
+        : `${s.players[seat].name} ${verb} ${done} ${cname(c)} ${noun} at ${prices.map(fmt).join(", ")} — ${kind === "buy" || kind === "cover" ? "pays" : "receives"} ${fmt(total)}`,
   });
   if (s.phase.kind === "turn") s.phase.actionsUsed += 1;
-  s.tape = [...s.tape, { seat, round: s.round, kind, company: c, qty }].slice(-12);
+  if (done > 0) s.tape = [...s.tape, { seat, round: s.round, kind, company: c, qty: done }].slice(-12);
   syncChairmen(ctx);
   settle(ctx);
 }

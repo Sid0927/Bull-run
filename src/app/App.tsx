@@ -223,12 +223,16 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
   const who = actor(s);
   const [viewer, setViewer] = useState<Seat | null>(null);
   const [flash, setFlash] = useState("");
+  const [quitting, setQuitting] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
   const shown = who !== null && viewer === who;
   const hist = useMemo(() => priceHistory(s, events), [s, events]);
 
-  // A new actor hides everything private until they say it is them.
+  // A new actor hides everything private until they say it is them, and nothing on screen from
+  // the previous player's turn (a message, a half-made quit) is carried over to them.
   useEffect(() => {
     if (who !== viewer) setViewer(null);
+    setQuitting(false);
   }, [who]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function play(a: Action) {
@@ -236,9 +240,9 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
     setFlash(err ?? "");
   }
 
-  const [quitting, setQuitting] = useState(false);
-  const [showRecord, setShowRecord] = useState(false);
   const recordText = JSON.stringify(record);
+  // The record holds sealed opening orders and IPO bids, and its seed reveals every hand.
+  const sealing = s.phase.kind === "opening" || s.phase.kind === "ipo";
   function copyRecord() {
     navigator.clipboard?.writeText(recordText).then(
       () => setFlash("Game record copied. Paste it on the setup screen to replay this game."),
@@ -254,10 +258,21 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
         </span>
         <RoundTracker s={s} />
         <div className="tools">
-          <button onClick={copyRecord} title="Seed and action log; loading it replays the game exactly">
+          <button
+            onClick={copyRecord}
+            disabled={sealing}
+            title={sealing ? "Not while orders or bids are sealed: the record would reveal them" : "Seed and action log; loading it replays the game exactly"}
+          >
             Copy record
           </button>
-          <button onClick={undo} disabled={record.actions.length === 0} title="Take back the last action (play-test only)">
+          <button
+            onClick={() => {
+              setFlash("");
+              undo();
+            }}
+            disabled={record.actions.length === 0}
+            title="Take back the last action (play-test only)"
+          >
             Undo
           </button>
           {quitting ? (
@@ -361,7 +376,7 @@ function Sparkline({ points, now, label }: { points: PricePoint[]; now: number |
       <path d={d} fill="none" stroke="var(--co)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {pts.map((p, i) => (
         <circle key={i} cx={X(p.round)} cy={Y(p.price)} r="7" fill="transparent">
-          <title>{`${p.round % 1 ? "Now" : p.round === 0 ? "Start" : `End of round ${p.round}`}: ${rs(p.price)}`}</title>
+          <title>{`${p.label ?? (p.round % 1 ? "Now" : `End of round ${p.round}`)}: ${rs(p.price)}`}</title>
         </circle>
       ))}
       <circle cx={X(last.round)} cy={Y(last.price)} r="3.5" fill="var(--co)" stroke="var(--panel)" strokeWidth="2" />
