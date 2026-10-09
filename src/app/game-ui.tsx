@@ -14,7 +14,7 @@ export function Hud({ s, status, sub, mine, mySeat, waitingOn }: { s: GameState;
   const isDiv = (DIVIDEND_ROUNDS as readonly number[]).includes(s.round) && s.round <= s.config.rounds;
   const notes = [
     s.round === 0 && !ended ? "Opening" : null,
-    !ended && s.round > 0 && s.round === IPO_ROUND && ipoEnabled(s.config) ? "Oracle IPO this round" : null,
+    !ended && s.round > 0 && s.round === IPO_ROUND && ipoEnabled(s.config) ? "Oracle IPO this round — its news cards join the deck" : null,
     !ended && s.round > 0 && isDiv ? "Dividends after this round" : null,
     !ended && s.round === s.config.rounds ? "Final round" : null,
   ].filter(Boolean);

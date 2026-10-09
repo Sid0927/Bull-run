@@ -81,9 +81,9 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
           `${co(e.company)} listed at ${rs(e.listingPrice)}${e.afterPop !== e.listingPrice ? ` and rose to ${rs(e.afterPop)}` : ""}`,
         );
         e.allocated.forEach((n, p) => n && (cur as unknown as Summary).lines.push(`${name(p)} got ${n} share${n === 1 ? "" : "s"}`));
+        // Left open so the first-day pop and the news cards joining the deck land in it too.
         (cur as unknown as Summary).done = true;
         (cur as unknown as Summary).last = i;
-        close();
         return;
       case "startPlayer":
         if (cur) {
@@ -192,6 +192,9 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
           c.lines.push(e.from === "market" && e.card > 0 ? `${name(e.player)} took “${card(e.card).title}”` : `${name(e.player)} drew from the deck`);
           c.done = true;
         }
+        return;
+      case "reshuffle":
+        if (c.kind === "ipo") c.lines.push(e.text.replace("are shuffled", "were shuffled"));
         return;
       case "roundEnd":
         if (c.kind === "dividends") c.done = true;

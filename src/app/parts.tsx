@@ -30,6 +30,8 @@ import {
   price,
   startPrice,
   IPO_ROUND,
+  IPO_CARDS,
+  IPO_COMPANY,
   ipoBandOf,
   ipoEnabled,
   ipoMaxBidOf,
@@ -780,7 +782,10 @@ export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
         <span className="step-no">{s.phase.kind === "openingDraw" ? <Icon name="plus" size={16} /> : 3}</span>
         <div>
           <b>{s.phase.kind === "openingDraw" ? "Draw back up to 4" : "Draw a card"}</b>
-          <span className="muted small">Tap a face-up card to take it, or the deck to draw one unseen.</span>
+          <span className="muted small">
+            Tap a face-up card to take it, or the deck to draw one unseen.
+            {s.companies[IPO_COMPANY].listed && ` Since round ${IPO_ROUND} the deck also holds the ${IPO_CARDS.length} Oracle news cards.`}
+          </span>
         </div>
       </div>
       <div className="cards carousel">
@@ -811,7 +816,9 @@ export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
             <div className="deck-face" aria-hidden="true">
               <span>?</span>
             </div>
-            <div className="deck-count small">{s.deck.length || s.discard.length} cards in the deck</div>
+            <div className="deck-count small">
+              {s.deck.length || s.discard.length} cards in the deck{s.companies[IPO_COMPANY].listed ? " · Oracle news inside" : ""}
+            </div>
           </div>
         </div>
       </div>
