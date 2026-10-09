@@ -311,6 +311,9 @@ function Lobby({ me }: { me: Me }) {
             {games === null ? "Checking the floor…" : yours.length ? `${yours.length} ${yours.length === 1 ? "game is" : "games are"} waiting on your move.` : "The market is open. Start a game or join one."}
           </p>
         </div>
+        <button className="hero-practice" onClick={() => startPractice(me.username, rounds, maxPlayers)}>
+          <Icon name="robot" size={18} /> Practice game
+        </button>
         <div className="hero-art" aria-hidden="true">
           <svg viewBox="0 0 120 60">
             <path d="M2 52 L22 40 L36 46 L56 24 L70 32 L92 10 L118 4" className="hero-line" />

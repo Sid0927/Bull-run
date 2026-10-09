@@ -1043,3 +1043,4 @@ body::before {
 .latest-wrap { justify-items: stretch; } .latest-wrap > .sum { width: 100%; box-sizing: border-box; } .latest-label { justify-self: start; }
 .practice-chip a { margin-left: auto; color: inherit; }
 .practice-btn { width: 100%; margin-top: 8px; display: inline-flex; justify-content: center; gap: 8px; }
+.hero-practice { position: relative; z-index: 1; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px; font-weight: 600; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
