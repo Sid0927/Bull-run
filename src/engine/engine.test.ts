@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   ALL_CARDS,
+  HANDOVER_START_PRICES,
   dividendPerShare,
   IPO_CARDS,
   ipoBook,
@@ -337,6 +338,7 @@ describe("short selling", () => {
     addShort(s, 1, "INFY", 100);
     s.players[1].cash = 50;
     s.players[1].shares.HUL = 2;
+    setPrice(s, "HUL", 150);
     give(s, 0, AI_VIRAL, HUL_UP);
     const r = ok(s, play(0, AI_VIRAL));
     assert.equal(r.state.debt?.player, 1);
@@ -742,7 +744,8 @@ describe("the opening (round 0)", () => {
   });
 
   test("simultaneous orders, starting price, threshold steps, then summed news, then draw back up", () => {
-    let { state: s } = newGame({ players: ["A", "B", "C", "D", "E"], rounds: 9, seed: 3 });
+    // Worked with the handover's original starting prices.
+    let { state: s } = newGame({ players: ["A", "B", "C", "D", "E"], rounds: 9, seed: 3, startPrices: { ...HANDOVER_START_PRICES } });
     // Pick each player's card so the news total is known.
     const cards = [US_CLIENT, VISA, BULL_RUN, HUL_UP, CRASH];
     s.players.forEach((p, i) => {
@@ -779,7 +782,7 @@ describe("the opening (round 0)", () => {
   });
 
   test("opening orders must be affordable", () => {
-    const { state: s } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 4, startingCash: 500 });
+    const { state: s } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 4, startingCash: 500, startPrices: { ...HANDOVER_START_PRICES } });
     illegal(s, { type: "openingOrder", player: 0, orders: { HUL: 4 }, card: s.players[0].hand[0] }, /could cost ₹600/);
     ok(s, { type: "openingOrder", player: 0, orders: { HUL: 3 }, card: s.players[0].hand[0] });
   });

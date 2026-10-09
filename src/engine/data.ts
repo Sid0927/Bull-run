@@ -46,13 +46,20 @@ export interface Company {
   noDividend?: boolean;
 }
 
+/**
+ * Starting prices are tiered (fixed 9 Oct 2026): the companies whose cards swing hardest start
+ * highest, so Sun Pharma no longer starts 6 steps from bankruptcy. The handover's were HUL 150,
+ * HDFC Bank 120, Infosys 100, ONGC 100, DLF 80, Sun Pharma 60.
+ */
+export const HANDOVER_START_PRICES = { HUL: 150, HDFC: 120, INFY: 100, ONGC: 100, DLF: 80, SUN: 60 } as const;
+
 export const COMPANIES: Record<CompanyId, Company> = {
-  HUL: { id: "HUL", name: "Hindustan Unilever", short: "HUL", sector: "FMCG", startPrice: 150, doubleDividend: true, colour: "#2a78d6" },
-  HDFC: { id: "HDFC", name: "HDFC Bank", short: "HDFC Bank", sector: "Banking", startPrice: 120, doubleDividend: true, colour: "#eb6834" },
-  INFY: { id: "INFY", name: "Infosys", short: "Infosys", sector: "Tech", startPrice: 100, doubleDividend: false, colour: "#1baf7a" },
+  HUL: { id: "HUL", name: "Hindustan Unilever", short: "HUL", sector: "FMCG", startPrice: 80, doubleDividend: true, colour: "#2a78d6" },
+  HDFC: { id: "HDFC", name: "HDFC Bank", short: "HDFC Bank", sector: "Banking", startPrice: 80, doubleDividend: true, colour: "#eb6834" },
+  INFY: { id: "INFY", name: "Infosys", short: "Infosys", sector: "Tech", startPrice: 120, doubleDividend: false, colour: "#1baf7a" },
   ONGC: { id: "ONGC", name: "ONGC", short: "ONGC", sector: "Energy", startPrice: 100, doubleDividend: false, colour: "#eda100" },
-  DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 80, doubleDividend: false, colour: "#e87ba4" },
-  SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 60, doubleDividend: false, colour: "#008300" },
+  DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 100, doubleDividend: false, colour: "#e87ba4" },
+  SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 120, doubleDividend: false, colour: "#008300" },
   // startPrice is only a placeholder: the IPO's listing price is set by the bids.
   ZOM: { id: "ZOM", name: "Zomato", short: "Zomato", sector: "New-age tech", startPrice: 100, doubleDividend: false, colour: "#4a3aa7", ipo: true, noDividend: true },
 };

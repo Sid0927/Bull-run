@@ -5,6 +5,7 @@ import {
   COMPANY_IDS,
   DIVIDEND_ROUNDS,
   GAME_LENGTHS,
+  HANDOVER_START_PRICES,
   OPENING_MAX_SHARES,
   THRESHOLDS,
   TOP,
@@ -77,10 +78,10 @@ export function App() {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────────────────
 
-/** Starting-price variants to play-test. "Tiered" is the simulator's suggestion (Oct 2026). */
+/** Starting prices: tiered is the rule; the handover's original prices stay available to compare. */
 const START_LAYOUTS = {
-  handover: { label: "Handover", prices: undefined },
-  tiered: { label: "Tiered (volatile start high)", prices: { SUN: 120, INFY: 120, ONGC: 100, DLF: 100, HUL: 80, HDFC: 80 } as Partial<Record<CompanyId, number>> },
+  tiered: { label: "Tiered (standard)", prices: undefined },
+  handover: { label: "Handover original", prices: { ...HANDOVER_START_PRICES } as Partial<Record<CompanyId, number>> },
 } as const;
 
 function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: (r: GameRecord) => void }) {
@@ -88,7 +89,7 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
   const [names, setNames] = useState(["", "", "", "", ""]);
   const [rounds, setRounds] = useState<GameLength>(9);
   const [seed, setSeed] = useState(() => String(Math.floor(Math.random() * 1e9)));
-  const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("handover");
+  const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("tiered");
   const [ipo, setIpo] = useState(true);
   const [delayed, setDelayed] = useState(false);
   const [error, setError] = useState("");
