@@ -32,8 +32,8 @@
   --b2: #cbe3c5;
   --b3: #a8d0a2;
   --b4: #82bb7f;
-  --co-HUL: #2a78d6; --co-HDFC: #eb6834; --co-INFY: #1baf7a; --co-ONGC: #eda100; --co-DLF: #e87ba4; --co-SUN: #008300; --co-ZOM: #4a3aa7;
-  --co-ink-HUL: #ffffff; --co-ink-HDFC: #1b1206; --co-ink-INFY: #06170f; --co-ink-ONGC: #1b1300; --co-ink-DLF: #22070f; --co-ink-SUN: #ffffff; --co-ink-ZOM: #ffffff;
+  --co-HUL: #2a78d6; --co-HDFC: #eb6834; --co-INFY: #1baf7a; --co-ONGC: #eda100; --co-DLF: #e87ba4; --co-SUN: #008300; --co-ORG: #3d9a3d;
+  --co-ink-HUL: #ffffff; --co-ink-HDFC: #1b1206; --co-ink-INFY: #06170f; --co-ink-ONGC: #1b1300; --co-ink-DLF: #22070f; --co-ink-SUN: #ffffff; --co-ink-ORG: #ffffff;
   --up: #0a7d4f;
   --down: #b3261e;
   --radius: 16px;
@@ -53,8 +53,8 @@
     --paper: #141c19; --paper-edge: #26332e;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4); --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -14px rgb(0 0 0 / 0.7); --shadow-lg: 0 24px 60px -20px rgb(0 0 0 / 0.8);
     --b0: #121a17; --b1: #13281d; --b2: #183524; --b3: #1d462d; --b4: #245a38;
-    --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ZOM: #9085e9;
-    --co-ink-ZOM: #0d0a24; --up: #34c77b; --down: #ff6b60;
+    --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ORG: #4cae4c;
+    --co-ink-ORG: #04140a; --up: #34c77b; --down: #ff6b60;
     color-scheme: dark;
   }
 }
@@ -66,8 +66,8 @@
   --paper: #141c19; --paper-edge: #26332e;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4); --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -14px rgb(0 0 0 / 0.7); --shadow-lg: 0 24px 60px -20px rgb(0 0 0 / 0.8);
   --b0: #121a17; --b1: #13281d; --b2: #183524; --b3: #1d462d; --b4: #245a38;
-  --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ZOM: #9085e9;
-  --co-ink-ZOM: #0d0a24; --up: #34c77b; --down: #ff6b60;
+  --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ORG: #4cae4c;
+  --co-ink-ORG: #04140a; --up: #34c77b; --down: #ff6b60;
   color-scheme: dark;
 }
 

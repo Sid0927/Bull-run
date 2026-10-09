@@ -106,7 +106,7 @@ describe("news deck", () => {
 
   test("every company's up and down steps balance, before and after the IPO cards join", () => {
     for (const c of COMPANY_IDS) {
-      if (c === "ZOM") continue; // only Bull run and Market crash name it before it lists, and they cancel
+      if (c === "ORG") continue; // only Bull run and Market crash name it before it lists, and they cancel
       const net = NEWS_CARDS.reduce((n, k) => n + (k.effects[c] ?? 0), 0);
       assert.equal(net, 0, `${c} is net ${net}`);
     }
@@ -531,17 +531,17 @@ describe("play-test variants", () => {
     let s = midGame();
     s.config.driftAtOrBelow = 0;
     s.config.driftMode = "toStart";
-    s.companies.ZOM = { priceIndex: indexOfPrice(90), bankrupt: false, listed: true };
-    s.homeIndex.ZOM = indexOfPrice(60);
+    s.companies.ORG = { priceIndex: indexOfPrice(90), bankrupt: false, listed: true };
+    s.homeIndex.ORG = indexOfPrice(60);
     s.deck.push(...IPO_CARDS.map((k) => k.id));
-    const quiet = ALL_CARDS.filter((k) => !k.effects.ZOM).map((k) => k.id);
+    const quiet = ALL_CARDS.filter((k) => !k.effects.ORG).map((k) => k.id);
     s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
     for (let i = 0; i < 3; i++) {
       give(s, i, s.deck[s.deck.length - 1]);
       s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
       s = ok(s, { type: "draw", player: i, from: "deck" }).state;
     }
-    assert.equal(price(s, "ZOM"), 80);
+    assert.equal(price(s, "ORG"), 80);
   });
 
   test("bad variant settings are refused, not crashed on", () => {
@@ -598,7 +598,7 @@ describe("play-test variants", () => {
     assert.equal(dividendPerShare("INFY", 110, bands), 20);
     assert.equal(dividendPerShare("ONGC", 350, bands), 30);
     assert.equal(dividendPerShare("HUL", 400, bands), 80);
-    assert.equal(dividendPerShare("ZOM", 400, bands), 0);
+    assert.equal(dividendPerShare("ORG", 400, bands), 0);
     assert.equal(dividendPerShare("SUN", 0, bands), 0);
   });
 
@@ -610,7 +610,7 @@ describe("play-test variants", () => {
 
 // ─── The IPO ────────────────────────────────────────────────────────────────────────────
 
-describe("Zomato IPO", () => {
+describe("Oracle Group IPO", () => {
   const bid = (qty: number, price: number) => ({ qty, price });
 
   test("example 1: competitive book lists at ₹80, the cut-off bidders are rationed clockwise from the start player", () => {
@@ -632,8 +632,8 @@ describe("Zomato IPO", () => {
     assert.deepEqual(r.allocated, [3, 3, 3, 0]);
   });
 
-  function listZomato(s: GameState, at: number) {
-    s.companies.ZOM = { priceIndex: indexOfPrice(at), bankrupt: false, listed: true };
+  function listOracle(s: GameState, at: number) {
+    s.companies.ORG = { priceIndex: indexOfPrice(at), bankrupt: false, listed: true };
     s.deck.push(...IPO_CARDS.map((k) => k.id));
   }
 
@@ -661,11 +661,11 @@ describe("Zomato IPO", () => {
     bids.forEach(([q, p], i) => {
       s = ok(s, { type: "ipoBid", player: i, qty: q, price: p }).state;
     });
-    assert.equal(s.companies.ZOM.listed, true);
-    assert.equal(price(s, "ZOM"), 120); // ₹80 + 4 thresholds
-    assert.deepEqual(s.players.map((p) => p.shares.ZOM), [6, 2, 2, 2]);
+    assert.equal(s.companies.ORG.listed, true);
+    assert.equal(price(s, "ORG"), 120); // ₹80 + 4 thresholds
+    assert.deepEqual(s.players.map((p) => p.shares.ORG), [6, 2, 2, 2]);
     assert.equal(s.players[0].cash, STARTING_CASH - 480);
-    assert.equal(s.chairmen.ZOM, 0);
+    assert.equal(s.chairmen.ORG, 0);
     assert.equal(s.deck.length, deckBefore + IPO_CARDS.length);
     const ph = s.phase as GameState["phase"];
     assert.equal(ph.kind === "turn" && ph.player, 1);
@@ -681,11 +681,11 @@ describe("Zomato IPO", () => {
 
   test("before listing it cannot be traded and market-wide news passes it by", () => {
     const s = midGame();
-    illegal(s, buy(0, "ZOM", 1), /not listed/);
+    illegal(s, buy(0, "ORG", 1), /not listed/);
     give(s, 0, BULL_RUN);
     const r = ok(s, play(0, BULL_RUN));
-    assert.equal(r.state.companies.ZOM.listed, false);
-    assert.ok(!r.events.some((e) => e.kind === "price" && e.company === "ZOM"));
+    assert.equal(r.state.companies.ORG.listed, false);
+    assert.ok(!r.events.some((e) => e.kind === "price" && e.company === "ORG"));
   });
 
   test("in a 3-player game a bid may be for up to 8 shares", () => {
@@ -697,21 +697,21 @@ describe("Zomato IPO", () => {
 
   test("no shorting in its listing round; allowed from round 5", () => {
     const s = midGame({ round: 4 });
-    listZomato(s, 150);
-    illegal(s, short(0, "ZOM", 1), /listing round/);
+    listOracle(s, 150);
+    illegal(s, short(0, "ORG", 1), /listing round/);
     s.round = 5;
-    ok(s, short(0, "ZOM", 1));
+    ok(s, short(0, "ORG", 1));
   });
 
-  test("Zomato pays no dividend", () => {
+  test("Oracle Group pays no dividend", () => {
     let s = midGame({ round: 6 });
-    listZomato(s, 400);
-    s.players[0].shares.ZOM = 7;
-    s.chairmen.ZOM = 0;
+    listOracle(s, 400);
+    s.players[0].shares.ORG = 7;
+    s.chairmen.ORG = 0;
     s.players[1].shares.HUL = 1; // a company that does pay, to show the payout ran
     setPrice(s, "HUL", 200);
     const events: GameEvent[] = [];
-    const quiet = ALL_CARDS.filter((k) => !k.effects.ZOM && !k.effects.HUL).map((k) => k.id);
+    const quiet = ALL_CARDS.filter((k) => !k.effects.ORG && !k.effects.HUL).map((k) => k.id);
     s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
     for (let i = 0; i < 3; i++) {
       give(s, i, s.deck[s.deck.length - 1]);
@@ -722,8 +722,8 @@ describe("Zomato IPO", () => {
     }
     const div = events.filter((e) => e.kind === "dividend");
     assert.ok(div.some((e) => e.kind === "dividend" && e.company === "HUL"));
-    assert.ok(!div.some((e) => e.kind === "dividend" && e.company === "ZOM"));
-    assert.equal(s.chairmen.ZOM, 0);
+    assert.ok(!div.some((e) => e.kind === "dividend" && e.company === "ORG"));
+    assert.equal(s.chairmen.ORG, 0);
   });
 
   test("with the IPO switched off, round 4 starts with turns", () => {

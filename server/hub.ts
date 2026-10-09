@@ -63,7 +63,8 @@ export class Hub {
     const seed = game.seed;
     const p = (async () => {
       const seated = await this.store.seated(game.id);
-      const actions = await this.store.actions(game.id);
+      // The IPO company was called ZOM before it became Oracle Group (ORG); old saved moves still say ZOM.
+      const actions = (await this.store.actions(game.id)).map((x) => ("company" in x && (x.company as string) === "ZOM" ? { ...x, company: "ORG" as const } : x));
       const r = replay({ config: { players: seated.map((x) => x.username), rounds: game.rounds, seed }, actions });
       const live = this.live.get(game.id) ?? { state: r.state, events: r.events, seq: actions.length };
       this.live.set(game.id, live);

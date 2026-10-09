@@ -22,7 +22,7 @@ export interface GameConfig {
    * ever moves a price down, so it can never push a short past its cap at the end of a round.
    */
   driftMode?: "down" | "toStart";
-  /** Zomato lists through an IPO at the start of round 4. On unless set to false. */
+  /** Oracle Group lists through an IPO at the start of round 4. On unless set to false. */
   ipo?: boolean;
   /** Play-test variants for the IPO: the price band and the most shares one player may bid for. */
   ipoBand?: number[];

@@ -99,7 +99,7 @@ export interface Report {
     undersubscribedPct: number;
     /** Of games with a single biggest allottee, how often that player won. */
     biggestAllotteeWinPct: number;
-    avgZomatoFinal: number;
+    avgOracleFinal: number;
   };
   avgActionsPerGame: number;
 }
@@ -138,7 +138,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   const listedRoundEnds = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
-  const ipo = { games: 0, listing: 0, after: 0, allotted: 0, under: 0, dist: {} as Record<number, number>, bigGames: 0, bigWins: 0, zomFinal: 0 };
+  const ipo = { games: 0, listing: 0, after: 0, allotted: 0, under: 0, dist: {} as Record<number, number>, bigGames: 0, bigWins: 0, orgFinal: 0 };
   let worthAll = 0, worthWin = 0, worthLast = 0, spreadSum = 0, spreadMax = 0, actionsSum = 0;
 
   for (let g = 0; g < opts.games; g++) {
@@ -204,7 +204,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
             ipo.bigGames++;
             if (st.find((x) => x.seat === tops[0])!.rank === 1) ipo.bigWins++;
           }
-          ipo.zomFinal += TRACK[game.state.companies.ZOM.priceIndex];
+          ipo.orgFinal += TRACK[game.state.companies.ORG.priceIndex];
           break;
         }
         case "dividend":
@@ -298,7 +298,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
       avgAllotted: Math.round((10 * ipo.allotted) / Math.max(1, ipo.games)) / 10,
       undersubscribedPct: Math.round((1000 * ipo.under) / Math.max(1, ipo.games)) / 10,
       biggestAllotteeWinPct: Math.round((1000 * ipo.bigWins) / Math.max(1, ipo.bigGames)) / 10,
-      avgZomatoFinal: Math.round(ipo.zomFinal / Math.max(1, ipo.games)),
+      avgOracleFinal: Math.round(ipo.orgFinal / Math.max(1, ipo.games)),
     },
   };
 }

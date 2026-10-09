@@ -93,9 +93,9 @@ function print(r: Report, ms: number) {
   console.log("  " + r.cashByRound.map((x) => `R${x.round} ${rs(x.avgCash)}`).join("  "));
   if (r.ipo.games) {
     const ip = r.ipo;
-    console.log("\nZomato IPO");
+    console.log("\nOracle Group IPO");
     console.log(`  lists at ${rs(ip.avgListing)} on average (${Object.entries(ip.listingDistribution).map(([p, n]) => `₹${p}: ${n}`).join(", ")}), ${rs(ip.avgAfterPop)} after the first-day pop`);
-    console.log(`  ${ip.avgAllotted} of 12 shares allotted · undersubscribed in ${ip.undersubscribedPct}% · biggest allottee wins ${ip.biggestAllotteeWinPct}% · ends at ${rs(ip.avgZomatoFinal)} on average`);
+    console.log(`  ${ip.avgAllotted} of 12 shares allotted · undersubscribed in ${ip.undersubscribedPct}% · biggest allottee wins ${ip.biggestAllotteeWinPct}% · ends at ${rs(ip.avgOracleFinal)} on average`);
   }
   console.log(`\n${r.avgActionsPerGame} actions per game on average.`);
 }

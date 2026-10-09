@@ -1,6 +1,6 @@
 /**
- * The instructions book. Every number is read from the rules engine, so the book cannot drift
- * from the game it describes.
+ * The instructions book. Most numbers are read from the rules engine; the worked examples and a few
+ * figures in the prose are written by hand and must be checked whenever the rules change.
  */
 import {
   ACTIONS_PER_TURN,
@@ -60,7 +60,7 @@ const SECTIONS = [
   ["prices", "How trading moves prices"],
   ["shorts", "Short selling"],
   ["dividends", "Dividends and chairmen"],
-  ["ipo", "The Zomato IPO"],
+  ["ipo", "The Oracle Group IPO"],
   ["bankruptcy", "Bankruptcy"],
   ["end", "End of the game"],
   ["cards", "The news cards"],
@@ -179,17 +179,18 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             </table>
           </div>
           <p>
-            HUL and HDFC Bank are steady: their news moves them only one step at a time (Market crash is the one exception), and they pay double dividends.
-            Infosys and Sun Pharma swing hardest, by up to three steps, which is why they start highest. Zomato is a growth stock: it pays no dividend at all.
+            HUL and HDFC Bank are steady: their news moves them only one step at a time, except the two market-wide cards, Bull run (+2) and Market crash (−2).
+            They also pay double dividends. Infosys and Sun Pharma swing hardest of the starting six, by up to three steps, which is why they start highest.
+            Oracle Group, which lists later, also moves by up to three steps, and it pays no dividend at all.
           </p>
-          <p className="muted small">The badges are the game's own artwork, not the companies' logos.</p>
+          <p className="muted small">The badges are the game's own artwork, not the companies' logos, except Oracle Group's, which is its own mark.</p>
         </section>
 
         <section id="setup">
           <h2>How a game starts</h2>
           <ul>
             <li>Choose the length: {GAME_LENGTHS.join(", ")} rounds after the opening. Nine is recommended; with five players twelve runs long.</li>
-            <li>Every company starts at the price in the table above. Zomato's track stays empty until round {IPO_ROUND}.</li>
+            <li>Every company starts at the price in the table above. Oracle Group's track stays empty until round {IPO_ROUND}.</li>
             <li>Everyone gets {rs(STARTING_CASH)} and {HAND_SIZE} news cards from a shuffled deck of {NEWS_CARDS.length}.</li>
             <li>
               {MARKET_SIZE} more cards are laid face-up: this is the <b>market</b>. Whenever a card is taken from it, the gap is filled from the deck.
@@ -203,7 +204,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <p>Everyone acts at once.</p>
           <ol>
             <li>
-              Secretly write buy orders for up to {OPENING_MAX_SHARES} shares in total, across any companies, and place one news card from your hand face-down. You
+              Secretly write buy orders for up to {OPENING_MAX_SHARES} shares in total, across any listed companies, and place one news card from your hand face-down. You
               must be able to pay for everything you order. No short selling in the opening.
             </li>
             <li>
@@ -244,7 +245,8 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <h2>How trading moves prices</h2>
           <p>
             Each company has an <b>outstanding count</b>: the shares players hold, minus its open short tokens. The bank always buys and sells at the current price
-            and never runs out of money.
+            and never runs out of money, but it holds only {SHARES_PER_COMPANY} shares of each company: you can buy only what players don't already hold. A sale
+            or short that takes a company to ₹0 stops there; that share trades for nothing and the rest of the action is cancelled.
           </p>
           <ul>
             <li>
@@ -263,27 +265,28 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <b>Example.</b> Infosys is at ₹140 with 4 shares outstanding and you buy 4 (two actions: 3, then 1). The 5th share costs ₹140. The 6th reaches a
             threshold, so Infosys moves to ₹150 first and you pay ₹150. The 7th and 8th cost ₹150 each. Total: ₹590.
           </div>
-          <p className="muted small">The track: {TRACK.map((p) => (p === 0 ? "₹0" : p)).join(" · ")}. The gaps widen as prices rise, so a step is a percentage.</p>
+          <p className="muted small">The track: {TRACK.map((p) => (p === 0 ? "₹0" : p)).join(" · ")}. The gaps widen as prices rise: ₹10 a step up to ₹150, ₹25 a step up to ₹250, then ₹50 a step.</p>
         </section>
 
         <section id="shorts">
           <h2>Short selling</h2>
           <ul>
             <li>
-              <b>Opening a short</b>: take a short token, put it on the price space, and receive the current price in cash. It counts −1 on the outstanding count, so
-              it can push the price down a step.
+              <b>Opening a short</b>: take a short token and receive the price in cash. It counts −1 on the outstanding count: if that takes the count below a
+              threshold, the price drops a step first, and you receive, and place your token on, the new price.
             </li>
             <li>
               <b>Covering</b>: pay the current price and return the token. It counts +1, like a buy.
             </li>
             <li>
-              There are {SHORTS_PER_COMPANY} tokens per company. No shorting in the opening, or on Zomato in its listing round.
+              There are {SHORTS_PER_COMPANY} tokens per company. No shorting in the opening, or on Oracle Group in its listing round.
             </li>
             <li>
-              <b>The {SHORT_CAP_STEPS}-step cap</b>: the moment a company's price reaches {SHORT_CAP_STEPS} spaces above where a short was opened, that short is forced
-              closed and its owner pays the price on that space, even if news jumped further. A forced close counts as a buy, so it can push the price up and set
-              off more forced closes. Several at once are settled clockwise from the player whose turn it is, oldest token first. A short opened at ₹300 or higher has
-              no cap, because {SHORT_CAP_STEPS} steps up is past the ceiling.
+              <b>The {SHORT_CAP_STEPS}-step cap</b>: once a move takes a company's price to {SHORT_CAP_STEPS} spaces above where a short was opened, that short is forced
+              closed as soon as the current action or news card has finished. Its owner pays the price on that cap space, even if the price has since moved
+              further. A forced close counts as a buy, so it can push the price up and set off more forced closes. Several at once are settled starting with the
+              player whose turn it is and going clockwise, oldest token first. A short opened at ₹300 or higher has no cap, because {SHORT_CAP_STEPS} steps up is past
+              the ceiling.
             </li>
             <li>
               <b>If you can't pay</b> for a forced close: show your cash, then sell shares of your choice at current prices (thresholds apply) until you can. If you run out
@@ -318,7 +321,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             </table>
           </div>
           <ul>
-            <li>Every shareholder is paid the per-share amount for each share. Zomato and bankrupt companies pay nothing.</li>
+            <li>Every shareholder is paid the per-share amount for each share. Oracle Group and bankrupt companies pay nothing.</li>
             <li>
               The <b>chairman</b> is the one player holding at least {CHAIRMAN_SHARES} of a company's shares; they take its chairman token, which moves the moment
               holdings change. If two players hold {CHAIRMAN_SHARES} each, there is no chairman. The chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the per-share
@@ -336,8 +339,8 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
         </section>
 
         <section id="ipo">
-          <h2>The Zomato IPO</h2>
-          <p>Zomato lists at the start of round {IPO_ROUND}, before anyone's turn.</p>
+          <h2>The Oracle Group IPO</h2>
+          <p>Oracle Group lists at the start of round {IPO_ROUND}, before anyone's turn.</p>
           <ol>
             <li>
               Everyone secretly bids for 0–{IPO_MAX_BID} shares ({IPO_MAX_BID_3P} with three players) at one price: {IPO_BAND.map(rs).join(", ")}. You must be able to
@@ -352,11 +355,11 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
               Unsold shares stay in the bank.
             </li>
             <li>Everyone pays the listing price, not their bid.</li>
-            <li>Zomato then rises one step for each of {THRESHOLDS.join(", ")} shares sold, and its {IPO_CARDS.length} news cards are shuffled into the deck.</li>
+            <li>Oracle Group then rises one step for each of {THRESHOLDS.join(", ")} shares sold, and its {IPO_CARDS.length} news cards are shuffled into the deck.</li>
           </ol>
           <div className="example">
-            <b>Example</b> (Bilal starts the round). Asha bids 6 @ ₹90; Bilal, Chitra and Dev bid 3, 4 and 3 @ ₹80. At ₹90 only 6 are bid; at ₹80, 16. So Zomato lists at
-            ₹80. Asha gets 6; the other 6 go one at a time from Bilal: 2 each. Everyone pays ₹80, and with 12 sold Zomato rises four steps to ₹120.
+            <b>Example</b> (Bilal starts the round). Asha bids 6 @ ₹90; Bilal, Chitra and Dev bid 3, 4 and 3 @ ₹80. At ₹90 only 6 are bid; at ₹80, 16. So Oracle Group lists at
+            ₹80. Asha gets 6; the other 6 go one at a time from Bilal: 2 each. Everyone pays ₹80, and with 12 sold Oracle Group rises four steps to ₹120.
           </div>
         </section>
 
@@ -379,7 +382,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
         <section id="cards">
           <h2>The news cards</h2>
           <p className="muted small">
-            Steps up or down. Every company's ups and downs balance across the deck. Cards marked IPO join the deck when Zomato lists.
+            Steps up or down. Every company's ups and downs balance across the deck. Cards marked IPO join the deck when Oracle Group lists.
           </p>
           <div className="table-scroll">
             <table className="rules-table cards-table">

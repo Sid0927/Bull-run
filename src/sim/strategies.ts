@@ -148,7 +148,7 @@ export const favourPlayer: Strategy = {
       picks.forEach((c, i) => (orders[c] = picks.length === 1 ? 6 : i === 0 ? 3 : 3));
       return [{ type: "openingOrder", player: seat, orders: affordable(s, seat, orders), card: bestCard(s, seat, orders) }];
     }
-    // The IPO pops on a full book, so it bids for the lot, and pays up when its hand likes Zomato.
+    // The IPO pops on a full book, so it bids for the lot, and pays up when its hand likes Oracle Group.
     if (ph.kind === "ipo") return [ipoBid(s, seat, ipoMaxBidOf(s.config), bias[IPO_COMPANY] > 0 ? 1 : 0.67)];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];
@@ -187,7 +187,7 @@ export const dividendPlayer: Strategy = {
       const orders = { HUL: 3, HDFC: 3 };
       return [{ type: "openingOrder", player: seat, orders: affordable(s, seat, orders), card: bestCard(s, seat, orders) }];
     }
-    // Zomato pays no dividend: a small bid at the bottom of the band, for the pop only.
+    // Oracle Group pays no dividend: a small bid at the bottom of the band, for the pop only.
     if (ph.kind === "ipo") return [ipoBid(s, seat, 2, 0)];
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];

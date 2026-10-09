@@ -1,7 +1,8 @@
 /**
  * Original emblems drawn for the game. These are NOT the companies' own logos: the handover
  * forbids real marks (they need permission), so each company gets a badge in its game colour
- * with a glyph for its sector.
+ * with a glyph for its sector. The one exception is Oracle Group, whose own mark is drawn here at
+ * its owner's request.
  */
 import type { ReactElement } from "react";
 import type { CompanyId } from "../engine/index.ts";
@@ -53,11 +54,11 @@ const GLYPHS: Record<CompanyId, ReactElement> = {
       <path d="M9.8 9.8 L14.2 14.2" />
     </g>
   ),
-  // New-age tech, food delivery: a takeaway bowl with steam
-  ZOM: (
-    <g fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12 H19 A7 7 0 0 1 5 12 Z" />
-      <path d="M9.5 9.5 C8.8 8.6 10.2 7.6 9.5 6.5 M12.5 9.5 C11.8 8.6 13.2 7.6 12.5 6.5 M15.5 9.5 C14.8 8.6 16.2 7.6 15.5 6.5" />
+  // Oracle Group (packaging): the company's own mark, an open oval with a stem, used with its permission
+  ORG: (
+    <g fill="none" strokeWidth="1.9" strokeLinejoin="round">
+      <path d="M8.2 14.6 A9 5.6 0 1 1 12.3 15.1" strokeLinecap="round" />
+      <path d="M12.3 6.6 V21.2" strokeLinecap="butt" strokeWidth="2.1" />
     </g>
   ),
 };

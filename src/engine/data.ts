@@ -28,7 +28,7 @@ export const DIVIDEND_ROUNDS = [3, 6, 9, 12] as const;
 export const GAME_LENGTHS = [6, 9, 12] as const;
 export type GameLength = (typeof GAME_LENGTHS)[number];
 
-export const COMPANY_IDS = ["HUL", "HDFC", "INFY", "ONGC", "DLF", "SUN", "ZOM"] as const;
+export const COMPANY_IDS = ["HUL", "HDFC", "INFY", "ONGC", "DLF", "SUN", "ORG"] as const;
 export type CompanyId = (typeof COMPANY_IDS)[number];
 
 export interface Company {
@@ -61,11 +61,11 @@ export const COMPANIES: Record<CompanyId, Company> = {
   DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 100, doubleDividend: false, colour: "#e87ba4" },
   SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 120, doubleDividend: false, colour: "#008300" },
   // startPrice is only a placeholder: the IPO's listing price is set by the bids.
-  ZOM: { id: "ZOM", name: "Zomato", short: "Zomato", sector: "New-age tech", startPrice: 100, doubleDividend: false, colour: "#4a3aa7", ipo: true, noDividend: true },
+  ORG: { id: "ORG", name: "Oracle Group", short: "Oracle", sector: "Packaging", startPrice: 100, doubleDividend: false, colour: "#3d9a3d", ipo: true, noDividend: true },
 };
 
-/** The IPO: Zomato lists at the start of this round, sold by sealed bids. */
-export const IPO_COMPANY: CompanyId = "ZOM";
+/** The IPO: Oracle Group lists at the start of this round, sold by sealed bids. */
+export const IPO_COMPANY: CompanyId = "ORG";
 export const IPO_ROUND = 4;
 // Simulated 9 Oct 2026: ₹90–120 with 4 shares a bid was undersubscribed in 85% of 4-player
 // games and always listed at the floor. ₹60–90 with 6 fills the book far more often and leaves
@@ -116,7 +116,7 @@ export interface NewsCard {
   effects: Partial<Record<CompanyId, number>>;
 }
 
-// Market-wide cards name every company, Zomato included: a move on a company that is not
+// Market-wide cards name every company, Oracle Group included: a move on a company that is not
 // listed yet (or is bankrupt) is ignored by the engine.
 const ALL = (n: number): Record<CompanyId, number> =>
   Object.fromEntries(COMPANY_IDS.map((c) => [c, n])) as Record<CompanyId, number>;
@@ -182,19 +182,19 @@ export const NEWS_CARDS: NewsCard[] = [
 ];
 
 /**
- * Shuffled into the draw deck when Zomato lists. Four of its own, plus two mirrored pairs that
+ * Shuffled into the draw deck when Oracle Group lists. Four of its own, plus two mirrored pairs that
  * tie it to the existing board, so the new company is not an island. Each pair nets to zero for
  * every company it names, so the deck stays balanced.
  */
 export const IPO_CARDS: NewsCard[] = [
-  { id: 51, type: "positive", title: "Expands to 100 new cities", effects: { ZOM: 2 } },
-  { id: 52, type: "positive", title: "First profitable quarter", effects: { ZOM: 3 } },
-  { id: 53, type: "negative", title: "Food safety fine", effects: { ZOM: -2 } },
-  { id: 54, type: "negative", title: "Promoter sells a big stake", effects: { ZOM: -3 } },
-  { id: 55, type: "double", title: "Fuel prices cut", effects: { ZOM: 2, ONGC: -1 } },
-  { id: 56, type: "double", title: "Fuel prices hiked", effects: { ZOM: -2, ONGC: 1 } },
-  { id: 57, type: "double", title: "Quick commerce boom", effects: { ZOM: 2, DLF: -1 } },
-  { id: 58, type: "double", title: "Dining out returns", effects: { ZOM: -2, DLF: 1 } },
+  { id: 51, type: "positive", title: "Wins a big export order", effects: { ORG: 2 } },
+  { id: 52, type: "positive", title: "Record quarterly profit", effects: { ORG: 3 } },
+  { id: 53, type: "negative", title: "Single-use plastic rules tightened", effects: { ORG: -2 } },
+  { id: 54, type: "negative", title: "Promoter sells a big stake", effects: { ORG: -3 } },
+  { id: 55, type: "double", title: "Crude falls, resin gets cheaper", effects: { ORG: 2, ONGC: -1 } },
+  { id: 56, type: "double", title: "Crude rises, resin gets dearer", effects: { ORG: -2, ONGC: 1 } },
+  { id: 57, type: "double", title: "Quick commerce boom, more packs shipped", effects: { ORG: 2, DLF: -1 } },
+  { id: 58, type: "double", title: "Shoppers return to malls", effects: { ORG: -2, DLF: 1 } },
 ];
 
 export const ALL_CARDS: NewsCard[] = [...NEWS_CARDS, ...IPO_CARDS];

@@ -85,7 +85,7 @@ export function RoundTracker({ s }: { s: GameState }) {
     <ol className="rail" aria-label={ended ? "Game over" : `Round ${s.round} of ${n}`} style={{ ["--n" as string]: n + 1 }}>
       {Array.from({ length: n + 1 }, (_, r) => {
         const state = ended || r < s.round ? "past" : r === s.round ? "now" : "next";
-        const marks = [isDiv(r) && "Dividends at the end", isIpo(r) && "Zomato IPO at the start", r === n && "Final round"].filter(Boolean).join(" · ");
+        const marks = [isDiv(r) && "Dividends at the end", isIpo(r) && "Oracle Group IPO at the start", r === n && "Final round"].filter(Boolean).join(" · ");
         return (
           <li key={r} className={`rail-step ${state} ${r === n ? "final" : ""}`} title={`${r === 0 ? "Round 0: the opening" : `Round ${r}`}${marks ? ` — ${marks}` : ""}`} aria-current={state === "now" ? "step" : undefined}>
             <span className="rail-dot">{r}</span>
@@ -239,9 +239,9 @@ export function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, Price
         );
       })}
       <div className="legend small muted">
-        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Zomato pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
+        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Oracle Group pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
         {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
-        {ipoEnabled(s.config) && ` Zomato lists by sealed bids at the start of round ${IPO_ROUND}.`}
+        {ipoEnabled(s.config) && ` Oracle Group lists by sealed bids at the start of round ${IPO_ROUND}.`}
       </div>
     </section>
     </div>
@@ -501,7 +501,7 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
           <Icon name="rocket" size={16} />
         </span>
         <div>
-          <b>Zomato IPO — your sealed bid</b>
+          <b>Oracle Group IPO — your sealed bid</b>
           <span className="muted small">Price band {rs(band[0])}–{rs(band[band.length - 1])}</span>
         </div>
       </div>
@@ -509,7 +509,7 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
         Bid for 0–{max} shares at one price. All bids are revealed together. The listing price is the highest price at which the shares bid at that
         price or more reach 12 (the lowest price if they never do). Bids above it are filled in full, bids at it share what is left one at a time clockwise
         from the start player, and bids below it get nothing. Everyone pays the listing price, then the price rises one step per 3, 6, 9 and 12 shares sold.
-        {s.config.ipoPaysDividend ? "Zomato pays dividends like the others" : "Zomato pays no dividend"} and cannot be shorted until round {IPO_ROUND + 1}.
+        {s.config.ipoPaysDividend ? "Oracle Group pays dividends like the others" : "Oracle Group pays no dividend"} and cannot be shorted until round {IPO_ROUND + 1}.
       </p>
       <div className="field">
         Shares

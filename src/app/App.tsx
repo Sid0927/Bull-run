@@ -347,7 +347,7 @@ function Lobby({ me }: { me: Me }) {
               <Icon name="coin" size={16} /> Dividends after round{divRounds.length > 1 ? "s" : ""} {divRounds.join(", ")}
             </li>
             <li>
-              <Icon name="rocket" size={16} /> Zomato IPO at the start of round {IPO_ROUND}
+              <Icon name="rocket" size={16} /> Oracle Group IPO at the start of round {IPO_ROUND}
             </li>
             <li>
               <Icon name="flag" size={16} /> {maxPlayers === 5 && rounds !== 9 ? "With five players, 9 rounds is recommended" : `Everyone starts with ₹${STARTING_CASH.toLocaleString("en-IN")}`}
