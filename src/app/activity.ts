@@ -34,6 +34,8 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
 
   // What each player got in the opening, gathered into one line per player.
   let bought = new Map<Seat, string[]>();
+  // Each player's dividends over one payout, for the closing "In all" line.
+  let divTotals = new Map<Seat, number>();
   const open = (i: number, kind: Summary["kind"], player: Seat | null, title: string) => {
     // Anything that came before is over once something new starts.
     if (cur) (cur as Summary).done = true;
@@ -49,6 +51,11 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
       cur.lines.unshift(...lines);
       bought = new Map();
     }
+    if (cur.kind === "dividends" && divTotals.size && cur.lines.filter((l) => l.includes(" a share: ")).length > 1) {
+      const all = [...divTotals.entries()].sort((a, b) => b[1] - a[1]).map(([p, n]) => `${name(p)} ${n >= 0 ? "+" : "−"}${rs(Math.abs(n))}`);
+      cur.lines.push(`In all: ${all.join(", ")}`);
+    }
+    divTotals = new Map();
     cur.moves = [...firstPrice.keys()].map((c) => ({ company: c, from: firstPrice.get(c)!, to: lastPrice.get(c)! })).filter((m) => m.from !== m.to);
     if (cur.lines.length || cur.moves.length) out.push(cur);
     cur = null;
@@ -142,8 +149,29 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
         else if (e.from !== null) c.lines.push(`${co(e.company)} has no single chairman now`);
         return;
       case "dividend": {
-        const mine = viewer === null ? 0 : e.paid.filter((x) => x.player === viewer).reduce((a, x) => a + x.amount, 0);
-        c.lines.push(`${co(e.company)} paid ${rs(e.perShare)} a share${viewer !== null && mine ? ` — ${mine > 0 ? `you got ${rs(mine)}` : `you paid ${rs(-mine)} on shorts`}` : ""}`);
+        // Who got what from this company: shares and any chairman bonus added up, shorts paid out.
+        const by = new Map<Seat, { got: number; chair: number; paid: number }>();
+        for (const x of e.paid) {
+          const r = by.get(x.player) ?? { got: 0, chair: 0, paid: 0 };
+          if (x.why === "short") r.paid += -x.amount;
+          else {
+            r.got += x.amount;
+            if (x.why === "chairman") r.chair += x.amount;
+          }
+          by.set(x.player, r);
+          divTotals.set(x.player, (divTotals.get(x.player) ?? 0) + x.amount);
+        }
+        const who = [...by.entries()]
+          .sort((a, b) => b[1].got - b[1].paid - (a[1].got - a[1].paid))
+          .map(([p, r]) =>
+            [
+              r.got ? `${name(p)} got ${rs(r.got)}${r.chair ? ` (incl. ${rs(r.chair)} chairman bonus)` : ""}` : "",
+              r.paid ? `${name(p)} paid ${rs(r.paid)} on a short` : "",
+            ]
+              .filter(Boolean)
+              .join(", "),
+          );
+        c.lines.push(`${co(e.company)} paid ${rs(e.perShare)} a share: ${who.join("; ")}`);
         return;
       }
       case "draw":
