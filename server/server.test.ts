@@ -168,3 +168,73 @@ describe("a game played from three phones", () => {
     assert.equal(watch.mySeat, null);
   });
 });
+
+describe("fixes from the security review", () => {
+  test("no event reveals the seed, and round-end cash shows only your own until the end", async () => {
+    // The finished game above shows everything; check a fresh game mid-play.
+    const g: GameSummary = (await players[0].call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    await players[1].call("/api/games/join", { code: g.code });
+    await players[2].call("/api/games/join", { code: g.code });
+    await players[0].call(`/api/games/${g.id}/start`, {});
+    const rng = new Rng(9);
+    for (let i = 0; i < 40; i++) {
+      const snap = await players[0].snapshot(g.id);
+      const seat = snap.waiting[0];
+      const s = (await players[seat].snapshot(g.id)).view!;
+      for (const a of STRATEGIES.random.candidates(s, seat, rng)) if ((await players[seat].call(`/api/games/${g.id}/action`, { action: a })).status === 200) break;
+    }
+    const mine = await players[0].snapshot(g.id);
+    assert.ok(mine.events.list.every((e) => !/seed/i.test(e.text)), "an event mentions the seed");
+    const ends = mine.events.list.filter((e) => e.kind === "roundEnd");
+    assert.ok(ends.length > 0);
+    for (const e of ends) if (e.kind === "roundEnd") assert.deepEqual(e.cash.slice(1), [0, 0]);
+    // Unknown action types and stray fields are refused or dropped, never stored.
+    const junk = await players[mine.waiting[0]].call(`/api/games/${g.id}/action`, { action: { type: "nonsense", blob: "x".repeat(1000) } });
+    assert.equal(junk.status, 400);
+  });
+
+  test("requests must be JSON (a cross-site form can't post to the game)", async () => {
+    const r = await fetch(`${base}/api/games/join`, { method: "POST", headers: { "Content-Type": "text/plain", Cookie: players[0].cookie }, body: '{"code":"AAAAA"}' });
+    assert.equal(r.status, 415);
+  });
+
+  test("a broken address or cookie is handled, not a server error", async () => {
+    assert.notEqual((await fetch(`${base}/%E0%A4%A`)).status, 500);
+    assert.equal((await fetch(`${base}/api/me`, { headers: { Cookie: "br_session=%E0%A4%A" } })).status, 401);
+  });
+
+  test("switching an account off ends its open game connection", async () => {
+    const made = await admin.call("/api/admin/users", { username: "zed", password: "zed-pass1" });
+    const zed = new Client();
+    await zed.login("zed", "zed-pass1");
+    const g: GameSummary = (await zed.call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    const res = await fetch(`${base}/api/games/${g.id}/stream`, { headers: { Cookie: zed.cookie } });
+    const reader = res.body!.getReader();
+    await reader.read(); // the first update
+    await admin.call(`/api/admin/users/${made.data.id}`, { active: false });
+    // Any push to the game now ends the stream; the admin starting nothing, so trigger one.
+    await players[1].call("/api/games/join", { code: g.code });
+    const ended = await Promise.race([
+      (async () => {
+        for (;;) {
+          const { done } = await reader.read();
+          if (done) return true;
+        }
+      })(),
+      new Promise((r) => setTimeout(() => r(false), 3000)),
+    ]);
+    assert.equal(ended, true);
+  });
+
+  test("wrong passwords from one address don't lock the player out elsewhere", async () => {
+    const attacker = new Client();
+    for (let i = 0; i < 6; i++) {
+      await fetch(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" }, body: JSON.stringify({ username: "bilal", password: "wrong" }) });
+    }
+    const blocked = await fetch(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" }, body: JSON.stringify({ username: "bilal", password: "bilal-pw1" }) });
+    assert.equal(blocked.status, 429);
+    const fromHome = await fetch(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.7" }, body: JSON.stringify({ username: "bilal", password: "bilal-pw1" }) });
+    assert.equal(fromHome.status, 200);
+    void attacker;
+  });
+});

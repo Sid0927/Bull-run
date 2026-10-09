@@ -50,7 +50,12 @@ export const api = {
  * Follow a game live. Reconnects by itself (a phone locking its screen or a server waking up
  * drops the connection) and asks only for the events it hasn't got.
  */
-export function follow(gameId: number, onUpdate: (u: GameUpdate) => void, onStatus: (connected: boolean) => void): () => void {
+export function follow(
+  gameId: number,
+  onUpdate: (u: GameUpdate) => void,
+  onStatus: (connected: boolean) => void,
+  onRefused: (status: number, message: string) => void,
+): () => void {
   let es: EventSource | null = null;
   let have = 0;
   let stopped = false;
@@ -67,7 +72,22 @@ export function follow(gameId: number, onUpdate: (u: GameUpdate) => void, onStat
     es.onerror = () => {
       onStatus(false);
       es?.close();
-      if (!stopped) retry = setTimeout(open, 2000);
+      if (stopped) return;
+      // An EventSource can't say why it failed: ask once, and stop for good on a refusal.
+      fetch(`/api/games/${gameId}/stream?since=${have}`, { credentials: "same-origin" })
+        .then(async (r) => {
+          if (r.status === 401 || r.status === 403 || r.status === 404) {
+            const data = await r.json().catch(() => ({}));
+            stopped = true;
+            onRefused(r.status, (data as { error?: string }).error ?? "You can't open this game.");
+          } else {
+            r.body?.cancel().catch(() => {});
+            retry = setTimeout(open, 2000);
+          }
+        })
+        .catch(() => {
+          retry = setTimeout(open, 2000);
+        });
     };
   };
   open();

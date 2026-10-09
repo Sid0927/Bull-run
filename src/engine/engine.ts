@@ -204,7 +204,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   };
   return {
     state,
-    events: [{ kind: "setup", text: `New game: ${config.players.join(", ")} · ${config.rounds} rounds · seed ${config.seed}` }],
+    events: [{ kind: "setup", text: `New game: ${config.players.join(", ")} · ${config.rounds} rounds` }],
   };
 }
 
@@ -246,6 +246,8 @@ function reduce(ctx: Ctx, a: Action) {
       return ipoBid(ctx, a.player, a.qty, a.price);
     case "forcedSell":
       throw new IllegalAction("There is nothing to pay off.");
+    default:
+      throw new IllegalAction("Unknown action.");
   }
 }
 

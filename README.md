@@ -63,7 +63,8 @@ For development, `npm run server` (API with reload) and `npm run dev` (app on :5
 
 ```bash
 npm install
-npm run dev          # play-test app at http://localhost:5173
+npm run server       # game server on :3000 (memory store, admin / admin123)
+npm run dev          # app with live reload on :5173, talking to the server
 npm test             # rules tests (Node's own test runner via tsx)
 npm run typecheck
 npm run build        # static site in dist/ — open it from any web host

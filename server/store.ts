@@ -284,8 +284,8 @@ export class PgStore implements Store {
     return (await this.q("SELECT * FROM games ORDER BY id DESC LIMIT 200")).map(toGame);
   }
   async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
-    if (patch.status !== undefined) await this.q("UPDATE games SET status = $2 WHERE id = $1", [id, patch.status]);
-    if (patch.seed !== undefined) await this.q("UPDATE games SET seed = $2 WHERE id = $1", [id, patch.seed]);
+    // One statement, so a game is never left "playing" without its seed.
+    await this.q("UPDATE games SET status = COALESCE($2, status), seed = COALESCE($3, seed) WHERE id = $1", [id, patch.status ?? null, patch.seed ?? null]);
   }
   async seated(gameId: number) {
     return (

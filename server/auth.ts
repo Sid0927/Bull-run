@@ -18,6 +18,9 @@ export async function checkPassword(password: string, stored: string): Promise<b
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
+/** Checked against when the username doesn't exist, so a wrong name takes as long as a wrong password. */
+export const DUMMY_HASH = "scrypt$AAAAAAAAAAAAAAAAAAAAAA==$" + Buffer.alloc(64).toString("base64");
+
 export function newToken(): string {
   return randomBytes(32).toString("base64url");
 }
@@ -40,13 +43,18 @@ export function checkNewPassword(pw: string): string | null {
 export class LoginLimiter {
   private fails = new Map<string, number[]>();
   private windowMs = 10 * 60 * 1000;
+  constructor(private limit = 5) {}
   blocked(...keys: string[]): boolean {
     const now = Date.now();
-    return keys.some((k) => (this.fails.get(k) ?? []).filter((t) => now - t < this.windowMs).length >= 5);
+    return keys.some((k) => (this.fails.get(k) ?? []).filter((t) => now - t < this.windowMs).length >= this.limit);
   }
   fail(...keys: string[]) {
     const now = Date.now();
     for (const k of keys) this.fails.set(k, [...(this.fails.get(k) ?? []).filter((t) => now - t < this.windowMs), now]);
+    if (this.fails.size > 10_000) this.sweep(now);
+  }
+  private sweep(now: number) {
+    for (const [k, ts] of this.fails) if (!ts.some((t) => now - t < this.windowMs)) this.fails.delete(k);
   }
   clear(...keys: string[]) {
     for (const k of keys) this.fails.delete(k);

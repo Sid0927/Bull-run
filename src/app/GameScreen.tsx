@@ -28,6 +28,10 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
         setEvents((have) => (next.events.from === 0 ? next.events.list : [...have.slice(0, next.events.from), ...next.events.list]));
       },
       setConnected,
+      (status, message) => {
+        if (status === 401) location.reload(); // signed out: back to the sign-in screen
+        else setError(message);
+      },
     );
   }, [id]);
 
@@ -51,7 +55,19 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
 
   const hist = useMemo(() => (s ? priceHistory(s, events) : null), [s, events]);
 
-  if (!u) return <main className="page">{error ? <p className="error">{error}</p> : <p className="muted">Connecting…</p>}</main>;
+  if (!u)
+    return (
+      <main className="page">
+        {error ? (
+          <>
+            <p className="error">{error}</p>
+            <a href="#/">Back to my games</a>
+          </>
+        ) : (
+          <p className="muted">Connecting…</p>
+        )}
+      </main>
+    );
   if (u.game.status === "abandoned")
     return (
       <main className="page">

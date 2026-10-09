@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize } from "node:path";
 import type { Action } from "../src/engine/index.ts";
 import type { AdminUser, Me } from "../src/shared/api.ts";
-import { LoginLimiter, SESSION_DAYS, checkNewPassword, checkPassword, checkUsername, hashPassword, newToken } from "./auth.ts";
+import { DUMMY_HASH, LoginLimiter, SESSION_DAYS, checkNewPassword, checkPassword, checkUsername, hashPassword, newToken } from "./auth.ts";
 import { GameError, Hub } from "./hub.ts";
 import type { Store, User } from "./store.ts";
 
@@ -42,7 +42,26 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   const { store } = opts;
   const hub = new Hub(store);
   const limiter = new LoginLimiter();
+  const joinLimiter = new LoginLimiter(10);
+  const ipLimiter = new LoginLimiter(30);
   const log = opts.log ?? (() => {});
+
+  /** Render's proxy appends the real address as the last X-Forwarded-For entry; earlier ones are the client's to forge. */
+  function clientIp(req: IncomingMessage): string {
+    const xff = String(req.headers["x-forwarded-for"] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    return xff.at(-1) ?? req.socket.remoteAddress ?? "";
+  }
+
+  /** Sign a user out everywhere, end their live games, and give this request a fresh session. */
+  async function rotateSessions(res: ServerResponse | null, userId: number) {
+    await store.deleteSessionsFor(userId);
+    hub.disconnectUser(userId);
+    if (res) {
+      const token = newToken();
+      await store.createSession(token, userId, new Date(Date.now() + SESSION_DAYS * 86400_000));
+      setCookie(res, token, SESSION_DAYS * 86400);
+    }
+  }
 
   const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin });
   const adminView = (u: User): AdminUser => ({ id: u.id, username: u.username, isAdmin: u.isAdmin, active: u.active, createdAt: u.createdAt });
@@ -51,7 +70,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     const raw = req.headers.cookie ?? "";
     for (const part of raw.split(";")) {
       const [k, ...v] = part.trim().split("=");
-      if (k === COOKIE) return decodeURIComponent(v.join("="));
+      if (k === COOKIE) {
+        try {
+          return decodeURIComponent(v.join("="));
+        } catch {
+          return null;
+        }
+      }
     }
     return null;
   }
@@ -70,6 +95,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   }
 
   async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
+    if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) throw new HttpError(415, "Requests must be JSON.");
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const c of req) {
@@ -93,7 +119,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
 
   async function serveStatic(req: IncomingMessage, res: ServerResponse, path: string) {
     if (!opts.staticDir) return json(res, 404, { error: "Not found." });
-    const safe = normalize(decodeURIComponent(path)).replace(/^(\.\.[/\\])+/, "");
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      decoded = "/";
+    }
+    const safe = normalize(decoded).replace(/^(\.\.[/\\])+/, "");
     let file = join(opts.staticDir, safe);
     try {
       if (!(await stat(file)).isFile()) throw new Error();
@@ -125,15 +157,18 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     // ── Sign in ──
     if (path === "/api/login" && method === "POST") {
       const b = await body(req);
-      const username = String(b.username ?? "").trim();
-      const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "").split(",")[0];
-      const keys = [`u:${username.toLowerCase()}`, `ip:${ip}`];
-      if (limiter.blocked(...keys)) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+      const username = String(b.username ?? "").trim().slice(0, 64);
+      const ip = clientIp(req);
+      // 5 tries per name from one address (so a stranger can't lock a player out), and a looser
+      // cap per address that a success doesn't reset (a table on one Wi-Fi shares an address).
+      const keys = [`u:${username.toLowerCase()}|${ip}`];
+      if (limiter.blocked(...keys) || ipLimiter.blocked(`ip:${ip}`)) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+      limiter.fail(...keys); // counted before checking, so parallel guesses can't slip past
+      ipLimiter.fail(`ip:${ip}`);
       const u = await store.userByName(username);
-      if (!u || !u.active || !(await checkPassword(String(b.password ?? ""), u.passwordHash))) {
-        limiter.fail(...keys);
-        throw new HttpError(401, "That username and password don't match.");
-      }
+      // Always do the slow hash, so the time taken doesn't reveal whether the name exists.
+      const ok = await checkPassword(String(b.password ?? "").slice(0, 200), u?.passwordHash ?? DUMMY_HASH);
+      if (!u || !u.active || !ok) throw new HttpError(401, "That username and password don't match.");
       limiter.clear(...keys);
       const token = newToken();
       await store.createSession(token, u.id, new Date(Date.now() + SESSION_DAYS * 86400_000));
@@ -157,6 +192,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       const bad = checkNewPassword(String(b.next ?? ""));
       if (bad) throw new HttpError(400, bad);
       await store.updateUser(user.id, { passwordHash: await hashPassword(String(b.next)) });
+      await rotateSessions(res, user.id); // other phones signed in as you are signed out
       return json(res, 200, { ok: true });
     }
 
@@ -183,12 +219,12 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
           const bad = checkNewPassword(String(b.password));
           if (bad) throw new HttpError(400, bad);
           await store.updateUser(target.id, { passwordHash: await hashPassword(String(b.password)) });
-          await store.deleteSessionsFor(target.id); // signed out everywhere
+          await rotateSessions(target.id === user.id ? res : null, target.id); // signed out everywhere
         }
         if (b.active !== undefined) {
           if (target.id === user.id && b.active === false) throw new HttpError(400, "You can't switch off your own account.");
           await store.updateUser(target.id, { active: b.active === true });
-          if (b.active === false) await store.deleteSessionsFor(target.id);
+          if (b.active === false) await rotateSessions(null, target.id);
         }
         return json(res, 200, adminView((await store.userById(target.id))!));
       }
@@ -215,7 +251,12 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     }
     if (path === "/api/games/join" && method === "POST") {
       const b = await body(req);
-      const g = await hub.join(user, String(b.code ?? ""));
+      const key = `join:${user.id}`;
+      if (joinLimiter.blocked(key)) throw new HttpError(429, "Too many wrong codes. Wait ten minutes and try again.");
+      const g = await hub.join(user, String(b.code ?? "")).catch((e) => {
+        if (e instanceof GameError && e.status === 404) joinLimiter.fail(key);
+        throw e;
+      });
       return json(res, 200, await hub.summary(g, user.id));
     }
     const gm = path.match(/^\/api\/games\/(\d+)\/(leave|start|action|stream)$/);
@@ -236,8 +277,19 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         return json(res, 200, { ok: true });
       }
       if (gm[2] === "stream" && method === "GET") {
-        const since = Math.max(0, Number(url.searchParams.get("since") ?? 0) || 0);
+        // Listen for the phone going away before anything is awaited, or a connection dropped
+        // while it was opening would never be cleaned up.
+        let closed = false;
+        let stop: (() => void) | null = null;
+        let ping: ReturnType<typeof setInterval> | null = null;
+        req.on("close", () => {
+          closed = true;
+          if (ping) clearInterval(ping);
+          stop?.();
+        });
+        const since = Number(url.searchParams.get("since") ?? 0);
         await hub.mustSee(id, user); // refuse before the stream's headers go out
+        if (closed) return;
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache, no-transform",
@@ -245,13 +297,24 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
           "X-Accel-Buffering": "no",
         });
         res.write("retry: 2000\n\n");
-        const stop = await hub.watch(id, user, since, (u) => res.write(`data: ${JSON.stringify(u)}\n\n`));
-        // A comment every 25s keeps proxies from closing a quiet connection.
-        const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
-        req.on("close", () => {
-          clearInterval(ping);
-          stop();
+        const alive = () => !closed && !res.destroyed && !res.writableEnded;
+        stop = await hub.watch(id, user, since, {
+          send: (u) => {
+            if (alive()) res.write(`data: ${JSON.stringify(u)}\n\n`);
+          },
+          end: () => {
+            if (alive()) res.end();
+          },
+          alive,
         });
+        if (!alive()) {
+          stop();
+          return;
+        }
+        // A comment every 25s keeps proxies from closing a quiet connection.
+        ping = setInterval(() => {
+          if (alive()) res.write(": ping\n\n");
+        }, 25_000);
         return;
       }
     }
