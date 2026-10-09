@@ -189,6 +189,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         case "trade": if (e.trade === "cover") sh.covered += e.prices.length; break;
         case "ipoListing": {
           listedNow.add(e.company);
+          if (e.listingPrice === 500 || e.afterPop === 500) topHere.add(e.company);
           startOf[e.company] = e.listingPrice;
           ipo.games++;
           ipo.listing += e.listingPrice;
@@ -234,6 +235,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     }
     const tops = st.filter((x) => x.rank === 1);
     winnerChairShare += winnerBonus / tops.length / Math.max(1, tops[0].netWorth);
+    for (const c of COMPANY_IDS) if (!COMPANIES[c].ipo && startOf[c] === 500) topHere.add(c);
     for (const c of COMPANY_IDS) {
       swing[c] += maxDev[c];
       if (game.state.companies[c].listed) {

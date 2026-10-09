@@ -13,6 +13,7 @@
   --b1: #e3f0e8;
   --b2: #cbe5d5;
   --b3: #a4d2b7;
+  --b4: #7fbf9a;
   --on-accent: #ffffff;
   --co-HUL: #2a78d6; --co-HDFC: #eb6834; --co-INFY: #1baf7a; --co-ONGC: #eda100; --co-DLF: #e87ba4; --co-SUN: #008300; --co-ZOM: #4a3aa7;
   --co-ink-HUL: #ffffff; --co-ink-HDFC: #1b1206; --co-ink-INFY: #06170f; --co-ink-ONGC: #1b1300; --co-ink-DLF: #22070f; --co-ink-SUN: #ffffff; --co-ink-ZOM: #ffffff;
@@ -25,7 +26,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0d1117; --panel: #151b23; --ink: #e6ebf1; --muted: #8b97a6; --line: #273140;
     --accent: #36c27f; --warn: #ff6b60; --amber: #e0a33a;
-    --b0: #131a22; --b1: #15261d; --b2: #1a3427; --b3: #20462f; --on-accent: #06140d;
+    --b0: #131a22; --b1: #15261d; --b2: #1a3427; --b3: #20462f; --b4: #285a3a; --on-accent: #06140d;
     --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ZOM: #9085e9;
     --co-ink-ZOM: #0d0a24; --up: #36c27f; --down: #ff6b60;
     color-scheme: dark;
@@ -34,7 +35,7 @@
 :root[data-theme="dark"] {
   --bg: #0d1117; --panel: #151b23; --ink: #e6ebf1; --muted: #8b97a6; --line: #273140;
   --accent: #36c27f; --warn: #ff6b60; --amber: #e0a33a;
-  --b0: #131a22; --b1: #15261d; --b2: #1a3427; --b3: #20462f; --on-accent: #06140d;
+  --b0: #131a22; --b1: #15261d; --b2: #1a3427; --b3: #20462f; --b4: #285a3a; --on-accent: #06140d;
   --co-HUL: #3987e5; --co-HDFC: #d95926; --co-INFY: #199e70; --co-ONGC: #c98500; --co-DLF: #d55181; --co-SUN: #008300; --co-ZOM: #9085e9;
   --co-ink-ZOM: #0d0a24; --up: #36c27f; --down: #ff6b60;
   color-scheme: dark;
@@ -94,6 +95,7 @@ input, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line)
 .space.b1 { background: var(--b1); }
 .space.b2 { background: var(--b2); }
 .space.b3 { background: var(--b3); }
+.space.b4 { background: var(--b4); }
 .space .val { min-width: 32px; white-space: nowrap; color: var(--muted); }
 .space.start .val { font-weight: 700; color: var(--ink); text-decoration: underline; }
 .space.bust { background: var(--warn); }

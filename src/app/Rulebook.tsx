@@ -222,7 +222,10 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
               When a trade takes the count <b>below</b> {THRESHOLDS.join(", ")}, the price moves down one step first, and that share trades at the new price.
             </li>
             <li>Every other share trades at the current price.</li>
-            <li>Moves past {rs(TRACK.at(-1)!)} are ignored; shares can still be bought at {rs(TRACK.at(-1)!)}.</li>
+            <li>
+              {rs(TRACK.at(-1)!)} is the ceiling: a move that would go past it stops there, and a move up from {rs(TRACK.at(-1)!)} is ignored. Shares can still be bought at{" "}
+              {rs(TRACK.at(-1)!)}.
+            </li>
           </ul>
           <div className="example">
             <b>Example.</b> Infosys is at ₹140 with 4 shares outstanding and you buy 4 (two actions: 3, then 1). The 5th share costs ₹140. The 6th reaches a

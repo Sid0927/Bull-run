@@ -9,7 +9,7 @@ export interface GameConfig {
   seed: number;
   /** Play-test variant: override some starting prices (each must be a track space). */
   startPrices?: Partial<Record<CompanyId, number>>;
-  /** Play-test variant: starting cash per player (default ₹1,500). */
+  /** Play-test variant: starting cash per player (default STARTING_CASH, ₹1,200). */
   startingCash?: number;
   /**
    * Play-test variant: at the end of each round (after any dividends), every company whose

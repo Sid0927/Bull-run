@@ -152,6 +152,15 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   if (config.startingCash !== undefined && !(Number.isInteger(config.startingCash) && config.startingCash > 0)) throw new IllegalAction("Starting cash must be a whole number above 0.");
   if (config.ipoBand !== undefined && (config.ipoBand.length === 0 || !config.ipoBand.every((p) => p > 0 && (TRACK as readonly number[]).includes(p))))
     throw new IllegalAction("The IPO band must be one or more spaces on the price track above ₹0.");
+  if (!Number.isInteger(config.seed)) throw new IllegalAction("The seed must be a whole number.");
+  if (new Set(config.players).size !== config.players.length) throw new IllegalAction("Give every player a different name.");
+  if (config.dividendBands !== undefined) {
+    const ok = (n: unknown) => Number.isInteger(n) && (n as number) >= 0;
+    if (config.dividendBands.length === 0 || !config.dividendBands.every((b) => ok(b.from) && ok(b.pays)))
+      throw new IllegalAction("A dividend table needs at least one band, each a whole-rupee price and a whole-rupee amount of ₹0 or more.");
+  }
+  if (config.driftAtOrBelow !== undefined && !Number.isInteger(config.driftAtOrBelow)) throw new IllegalAction("The drift level must be a whole number.");
+  if (config.driftMode !== undefined && config.driftMode !== "down" && config.driftMode !== "toStart") throw new IllegalAction('The drift mode must be "down" or "toStart".');
   if (config.chairmanMultiplier !== undefined && !(Number.isInteger(config.chairmanMultiplier) && config.chairmanMultiplier >= 0)) throw new IllegalAction("The chairman multiplier must be a whole number.");
   if (config.ipoMaxBid !== undefined && !(Number.isInteger(config.ipoMaxBid) && config.ipoMaxBid >= 0)) throw new IllegalAction("The IPO bid limit must be a whole number.");
   for (const [c, p] of Object.entries(config.startPrices ?? {})) {

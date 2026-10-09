@@ -548,6 +548,13 @@ describe("play-test variants", () => {
     assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, ipoBand: [65, 75] }), /price track/);
     assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, ipoBand: [] }), /price track/);
     assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: -5 }), /Starting cash/);
+    const base = { players: ["A", "B", "C"], rounds: 6 as const, seed: 1 };
+    assert.throws(() => newGame({ ...base, dividendBands: [] }), /dividend table/);
+    assert.throws(() => newGame({ ...base, dividendBands: [{ from: 110, pays: NaN }] }), /dividend table/);
+    assert.throws(() => newGame({ ...base, dividendBands: [{ from: 10, pays: -200 }] }), /dividend table/);
+    assert.throws(() => newGame({ ...base, driftAtOrBelow: NaN }), /drift level/);
+    assert.throws(() => newGame({ ...base, driftMode: "tostart" as "toStart" }), /drift mode/);
+    assert.throws(() => newGame({ ...base, players: ["A", "A", "B"] }), /different name/);
   });
 
   test("delayed news: the card goes face-down and takes effect at the start of its owner's next turn", () => {

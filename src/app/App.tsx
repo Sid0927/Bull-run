@@ -48,6 +48,9 @@ const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${-n}`);
 const signedRs = (n: number) => (n > 0 ? `+${rs(n)}` : n < 0 ? `−${rs(-n)}` : "±₹0");
 /** Company colours are theme tokens (--co-HUL…), so dark mode gets its own validated steps. */
+/** What a share of `c` pays at today's price under this game's rules. */
+const paysNow = (s: GameState, c: CompanyId) => dividendPerShare(c, price(s, c), s.config.dividendBands, s.config.ipoPaysDividend === true && COMPANIES[c].ipo === true);
+const paysNoDividend = (s: GameState, c: CompanyId) => COMPANIES[c].noDividend === true && s.config.ipoPaysDividend !== true;
 const coStyle = (c: CompanyId) => ({ ["--co" as string]: `var(--co-${c})` });
 
 /** Up/down/flat as an arrow and a word as well as a colour, so it never relies on colour alone. */
@@ -268,7 +271,7 @@ function Game({ live, act, undo, quit, onRules }: ReturnType<typeof useGame> & {
 
   const recordText = JSON.stringify(record);
   // The record holds sealed opening orders and IPO bids, and its seed reveals every hand.
-  const sealing = s.phase.kind === "opening" || s.phase.kind === "ipo";
+  const sealing = s.phase.kind === "opening" || s.phase.kind === "ipo" || s.pendingNews.some((x) => x !== null);
   function copyRecord() {
     navigator.clipboard?.writeText(recordText).then(
       () => setFlash("Game record copied. Paste it on the setup screen to replay this game."),
@@ -288,7 +291,7 @@ function Game({ live, act, undo, quit, onRules }: ReturnType<typeof useGame> & {
           <button
             onClick={copyRecord}
             disabled={sealing}
-            title={sealing ? "Not while orders or bids are sealed: the record would reveal them" : "Seed and action log; loading it replays the game exactly"}
+            title={sealing ? "Not while orders, bids or face-down news are hidden: the record would reveal them" : "Seed and action log; loading it replays the game exactly"}
           >
             Copy record
           </button>
@@ -420,13 +423,19 @@ function bandsOf(s: GameState) {
   return [...(s.config.dividendBands ?? DIVIDEND_BANDS)].sort((a, b) => a.from - b.from);
 }
 function band(s: GameState, p: number): string {
-  const i = bandsOf(s).filter((b) => p > 0 && p >= b.from).length;
-  return `b${Math.min(3, i)}`;
+  const bs = bandsOf(s);
+  const here = [...bs].reverse().find((b) => p > 0 && p >= b.from);
+  if (!here || here.pays === 0) return "b0";
+  // One shade per distinct amount paid, so every change in the dividend shows on the track.
+  const levels = [...new Set(bs.map((b) => b.pays).filter((x) => x > 0))].sort((a, b) => a - b);
+  return `b${Math.min(4, levels.indexOf(here.pays) + 1)}`;
 }
 function dividendLegend(s: GameState): string {
   const bs = bandsOf(s);
   return bs
-    .map((b, i) => {
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => b.pays > 0)
+    .map(({ b, i }) => {
       const next = bs[i + 1];
       const top = next ? TRACK.filter((p) => p < next.from).at(-1)! : TRACK.at(-1)!;
       return `${rs(b.from)}–${rs(top)} ${rs(b.pays)}`;
@@ -457,7 +466,7 @@ function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]
                 </div>
               </div>
               {co.doubleDividend && <div className="tag">Double dividend</div>}
-              {co.noDividend && <div className="tag">No dividend</div>}
+              {paysNoDividend(s, c) && <div className="tag">No dividend</div>}
             </div>
             <ol className="spaces">
               {spaces.map((i) => {
@@ -494,7 +503,7 @@ function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]
               <div className="muted small">Bank {bankShares(s, c)} · shorts {shorts.length}/3</div>
               {st.listed && !st.bankrupt && (
                 <div className="small" title="Dividend a share if it were paid now">
-                  Pays {rs(dividendPerShare(c, price(s, c), s.config.dividendBands))}
+                  Pays {rs(paysNow(s, c))}
                 </div>
               )}
               <div className="small">Chairman: {ch === null ? "—" : s.players[ch].name}</div>
@@ -503,7 +512,7 @@ function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]
         );
       })}
       <div className="legend small muted">
-        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double; Zomato pays none. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
+        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Zomato pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
         {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
         {ipoEnabled(s.config) && ` Zomato lists by sealed bids at the start of round ${IPO_ROUND}.`}
       </div>
@@ -709,7 +718,7 @@ function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Act
         Bid for 0–{max} shares at one price. All bids are revealed together. The listing price is the highest price at which the shares bid at that
         price or more reach 12 (the lowest price if they never do). Bids above it are filled in full, bids at it share what is left one at a time clockwise
         from the start player, and bids below it get nothing. Everyone pays the listing price, then the price rises one step per 3, 6, 9 and 12 shares sold.
-        Zomato pays no dividend and cannot be shorted until round {IPO_ROUND + 1}.
+        {s.config.ipoPaysDividend ? "Zomato pays dividends like the others" : "Zomato pays no dividend"} and cannot be shorted until round {IPO_ROUND + 1}.
       </p>
       <div className="field">
         Shares
