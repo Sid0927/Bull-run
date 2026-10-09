@@ -81,10 +81,24 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
       seen.current = top;
       return;
     }
-    const fresh = done.filter((x) => x.id > seen.current! && !(x.kind === "turn" && x.player === mySeat)).reverse();
+    let fresh = done.filter((x) => x.id > seen.current! && !(x.kind === "turn" && x.player === mySeat)).reverse();
     seen.current = Math.max(seen.current, top);
+    // The newest summary is already on screen as the Latest card: flash that instead of repeating it.
+    const el = latestRef.current;
+    const r = el?.getBoundingClientRect();
+    if (el && r && el.offsetParent !== null && r.bottom > 0 && r.top < window.innerHeight && fresh.some((x) => x.id === sums[0]?.id)) {
+      fresh = fresh.filter((x) => x.id !== sums[0].id);
+      setFlash(sums[0].id);
+    }
     if (fresh.length) setNotes((n) => [...n, ...fresh.map((x) => ({ key: x.id, x }))].slice(-3));
   }, [sums, s, mySeat]);
+  const latestRef = useRef<HTMLButtonElement>(null);
+  const [flash, setFlash] = useState<number | null>(null);
+  useEffect(() => {
+    if (flash === null) return;
+    const t = setTimeout(() => setFlash(null), 2500);
+    return () => clearTimeout(t);
+  }, [flash]);
   const closeNote = useCallback((key: number) => setNotes((n) => n.filter((x) => x.key !== key)), []);
 
   if (!u)
@@ -197,9 +211,9 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         </div>
         <div className="g-col g-desk pane pane-play">
           {sums[0] && s.phase.kind !== "ended" && (
-            <button className="latest-wrap" onClick={() => setTab("log")} aria-label="Latest: open what happened">
+            <button ref={latestRef} className={`latest-wrap ${flash === sums[0].id ? "fresh" : ""}`} onClick={() => setTab("log")} aria-label="Latest: open what happened">
               <span className="latest-label">Latest</span>
-              <SummaryCard x={sums[0]} s={s} at={times[sums[0].last] ?? null} latest />
+              <SummaryCard x={sums[0]} s={s} at={times[sums[0].last] ?? null} latest max={4} />
             </button>
           )}
           {action}

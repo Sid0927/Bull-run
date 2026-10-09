@@ -406,6 +406,8 @@ export interface TradePreview {
   prices: number[];
   total: number; // paid (buy, cover) or received (sell, short)
   crossings: string[];
+  /** The same price moves as data, for wording them on screen. */
+  moves: { company: CompanyId; from: number; to: number; cause: "threshold" | "news" | "opening" | "drift" }[];
   bankrupts: boolean;
   /** Shorts the trade would force closed once it is done, at their cap prices. */
   forcedCloses: { player: Seat; company: CompanyId; price: number }[];
@@ -421,6 +423,7 @@ export function previewTrade(s: GameState, a: Extract<Action, { type: "trade" }>
     checkTrade(ctx.s, a.player, a.kind, a.company, a.qty, a.shortIds, false);
     const prices = runTrade(ctx, a.player, a.kind, a.company, a.qty, a.shortIds);
     const crossings = ctx.events.filter((e) => e.kind === "price" || e.kind === "ceiling").map((e) => e.text);
+    const moves = ctx.events.flatMap((e) => (e.kind === "price" ? [{ company: e.company, from: e.from, to: e.to, cause: e.cause }] : []));
     const bankrupts = ctx.events.some((e) => e.kind === "bankrupt");
     // Then what the real move does next: shorts that reached their cap are forced closed. Other
     // players' cash may be hidden from whoever is asking, so assume they can pay: the closes all
@@ -440,6 +443,7 @@ export function previewTrade(s: GameState, a: Extract<Action, { type: "trade" }>
         prices,
         total: prices.reduce((x, y) => x + y, 0),
         crossings,
+        moves,
         bankrupts,
         forcedCloses,
         traderOwes: debt && debt.player === a.player ? debt.amount - ctx.s.players[a.player].cash : 0,

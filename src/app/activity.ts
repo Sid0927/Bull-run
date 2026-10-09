@@ -36,6 +36,7 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
   let bought = new Map<Seat, string[]>();
   // Each player's dividends over one payout, for the closing "In all" line.
   let divTotals = new Map<Seat, number>();
+  let lastTrade: { line: number; player: Seat; verb: string; company: CompanyId; n: number; total: number } | null = null;
   const open = (i: number, kind: Summary["kind"], player: Seat | null, title: string) => {
     // Anything that came before is over once something new starts.
     if (cur) (cur as Summary).done = true;
@@ -112,8 +113,20 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
       case "trade": {
         const n = e.prices.length;
         const verb = { buy: "bought", sell: "sold", short: "shorted", cover: "covered", forcedSell: "had to sell" }[e.trade];
-        if (n === 0) c.lines.push(`${name(e.player)} tried to sell ${co(e.company)}, but it went bust`);
-        else c.lines.push(`${name(e.player)} ${verb} ${n} ${co(e.company)} for ${rs(e.total)}`);
+        if (n === 0) {
+          c.lines.push(`${name(e.player)} tried to sell ${co(e.company)}, but it went bust`);
+          lastTrade = null;
+          return;
+        }
+        // Two trades of the same kind in a row read as one: "bought 4 HUL for ₹420".
+        if (lastTrade && lastTrade.line === c.lines.length - 1 && lastTrade.player === e.player && lastTrade.verb === verb && lastTrade.company === e.company) {
+          lastTrade.n += n;
+          lastTrade.total += e.total;
+          c.lines[lastTrade.line] = `${name(e.player)} ${verb} ${lastTrade.n} ${co(e.company)} for ${rs(lastTrade.total)}`;
+          return;
+        }
+        c.lines.push(`${name(e.player)} ${verb} ${n} ${co(e.company)} for ${rs(e.total)}`);
+        lastTrade = { line: c.lines.length - 1, player: e.player, verb, company: e.company, n, total: e.total };
         return;
       }
       case "news":

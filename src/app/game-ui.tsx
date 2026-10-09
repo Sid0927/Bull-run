@@ -43,7 +43,11 @@ export function Hud({ s, status, sub, mine, mySeat, waitingOn }: { s: GameState;
 }
 
 /** A summary as a card: who, what they did, and how prices moved. */
-export function SummaryCard({ x, s, at, latest }: { x: Summary; s: GameState; at: string | null; latest?: boolean }) {
+export function SummaryCard({ x, s, at, latest, max }: { x: Summary; s: GameState; at: string | null; latest?: boolean; max?: number }) {
+  // A long summary on the Latest card is cut short; the rest is a tap away under What happened.
+  const cut = max !== undefined && x.lines.length > max + 1;
+  // A payout keeps its "In all" line, which is the one everybody looks for.
+  const lines = !cut ? x.lines : x.kind === "dividends" ? [...x.lines.slice(0, max - 1), x.lines[x.lines.length - 1]] : x.lines.slice(0, max);
   return (
     <article className={`sum ${latest ? "latest" : ""} ${x.done ? "" : "live"} sum-${x.kind}`}>
       <header>
@@ -57,9 +61,10 @@ export function SummaryCard({ x, s, at, latest }: { x: Summary; s: GameState; at
       </header>
       {x.lines.length > 0 && (
         <ul>
-          {x.lines.map((l, i) => (
+          {lines.map((l, i) => (
             <li key={i}>{l}</li>
           ))}
+          {cut && <li className="sum-more">and {x.lines.length - max!} more — tap to see all</li>}
         </ul>
       )}
       {x.moves.length > 0 && (

@@ -1030,3 +1030,14 @@ body::before {
 }
 .card.back.picked { box-shadow: 0 0 0 3px var(--accent); }
 .pickable .card { cursor: pointer; }
+
+/* A summary that just arrived on the Latest card glows briefly, in place of a pop-up. */
+.latest-wrap.fresh .sum { animation: fresh-glow 2.4s var(--ease); }
+@keyframes fresh-glow { 0%, 40% { box-shadow: 0 0 0 3px var(--accent), var(--shadow-lg); } 100% { box-shadow: var(--shadow); } }
+.latest-wrap.fresh .latest-label::after { content: " · just now"; color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .latest-wrap.fresh .sum { animation: none; outline: 3px solid var(--accent); } }
+.trade-hold { margin: 2px 2px 0; }
+.private { scroll-margin-top: calc(160px + env(safe-area-inset-top, 0px)); }
+@media (min-width: 1101px) { .private { scroll-margin-top: 8px; } }
+.sum-more { list-style: none; color: var(--accent); font-weight: 600; }
+.latest-wrap { justify-items: stretch; } .latest-wrap > .sum { width: 100%; box-sizing: border-box; } .latest-label { justify-self: start; }

@@ -43,6 +43,7 @@ import {
   type Holdings,
   type Seat,
   type TradeKind,
+  type TradePreview,
 } from "../engine/index.ts";
 import { waitingOn } from "../shared/view.ts";
 import { CompanyBadge } from "./logos.tsx";
@@ -446,8 +447,18 @@ export function Private({ s, seat, play, busy }: { s: GameState; seat: Seat; pla
   else if (s.phase.kind === "ipo") body = <IpoBidForm s={s} seat={seat} play={play} />;
   else if (s.phase.kind === "openingDraw" || (s.phase.kind === "turn" && s.phase.step === "draw")) body = <Draw s={s} seat={seat} play={play} />;
   else if (s.phase.kind === "turn") body = <Turn s={s} seat={seat} play={play} />;
+  // When the step changes (trade, then draw; a forced sale), bring it into view if it scrolled away.
+  const ref = useRef<HTMLElement>(null);
+  const step = `${s.phase.kind}:${"step" in s.phase ? s.phase.step : ""}:${s.debt ? 1 : 0}`;
+  const prevStep = useRef(step);
+  useEffect(() => {
+    if (prevStep.current === step) return;
+    prevStep.current = step;
+    const r = ref.current?.getBoundingClientRect();
+    if (r && (r.top < 120 || r.top > window.innerHeight * 0.6)) ref.current!.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step]);
   return (
-    <section className="panel private">
+    <section className="panel private" ref={ref}>
       {/* A disabled fieldset turns off every control inside it while a move is on its way. */}
       <fieldset className="desk-controls" disabled={busy} aria-busy={busy}>
         {body}
@@ -609,6 +620,34 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
   );
 }
 
+/** What you already have in a company, so you don't have to look it up before trading. */
+function holdingLine(s: GameState, seat: Seat, c: CompanyId): string {
+  const n = s.players[seat].shares[c];
+  const shorts = openShorts(s, c, seat).length;
+  const name = COMPANIES[c].short;
+  const parts = [n ? `You hold ${n} ${name}` : `You hold no ${name}`];
+  if (shorts) parts.push(`${shorts} open short${shorts === 1 ? "" : "s"}`);
+  parts.push(`${outstanding(s, c)} held by everyone`);
+  return parts.join(" · ");
+}
+
+/** The price moves a trade causes, in plain words: which way, by how much, and why. */
+function moveWords(s: GameState, kind: TradeKind, c: CompanyId, qty: number, pv: TradePreview): string[] {
+  const before = outstanding(s, c);
+  const after = before + (kind === "buy" || kind === "cover" ? qty : -qty);
+  const marks = THRESHOLDS.filter((t) => (after > before ? before < t && after >= t : after < t && before >= t));
+  if (after < before) marks.reverse();
+  const out = pv.moves.map((m, i) => {
+    const name = COMPANIES[m.company].short;
+    const up = m.to > m.from;
+    const t = m.cause === "threshold" ? marks[i] : undefined;
+    const why = t === undefined ? "" : up ? ` as shares held reach ${t}` : ` as shares held drop below ${t}`;
+    return `${name} ${up ? "rises" : "falls"} ${rs(m.from)} → ${rs(m.to)}${why}`;
+  });
+  // Moves the track couldn't make (already at the top, or bust) are still worth saying.
+  return [...out, ...pv.crossings.filter((x) => x.includes("ignored"))];
+}
+
 export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
   const ph = s.phase as Extract<GameState["phase"], { kind: "turn" }>;
   const p = s.players[seat];
@@ -657,6 +696,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
               </button>
             ))}
           </div>
+          <p className="trade-hold small muted">{holdingLine(s, seat, company)}</p>
           <div className="field inline">
             <span className="field-label">Shares</span>
             <div className="seg seg-fill" role="group" aria-label="Number of shares">
@@ -675,7 +715,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
                   <b className="preview-total">{rs(pv.preview.total)}</b>
                 </div>
                 {pv.preview.prices.length > 1 && <div className="small muted">{pv.preview.prices.map(rs).join(" + ")}</div>}
-                {pv.preview.crossings.map((x, i) => (
+                {moveWords(s, kind, company, qty, pv.preview).map((x, i) => (
                   <div key={i} className="small crossing">
                     {x}
                   </div>
