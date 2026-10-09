@@ -198,14 +198,6 @@ CREATE TABLE IF NOT EXISTS games (
   seed INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- Games created before rule sets were recorded were all played under rule set 1.
-ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
-ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS at TIMESTAMPTZ;
-ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
--- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
-UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 CREATE TABLE IF NOT EXISTS game_players (
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -219,6 +211,15 @@ CREATE TABLE IF NOT EXISTS game_actions (
   action JSONB NOT NULL,
   PRIMARY KEY (game_id, seq)
 );
+-- Columns added after the first release; run after every table exists.
+-- Games created before rule sets were recorded were all played under rule set 1.
+ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS at TIMESTAMPTZ;
+ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
+-- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
+UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 `;
 
 type Row = Record<string, unknown>;
