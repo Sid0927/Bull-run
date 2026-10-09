@@ -12,7 +12,7 @@
     "sim": "node --import tsx src/sim/cli.ts",
     "sim:starts": "node --import tsx src/sim/compare-starts.ts",
     "server": "tsx watch server/index.ts",
-    "start": "tsx server/index.ts"
+    "start": "node --import tsx server/index.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

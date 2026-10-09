@@ -6,7 +6,7 @@ services:
     plan: free
     region: singapore # closest Render region to India; create the Neon database in Singapore too
     buildCommand: npm ci --include=dev && npm run build
-    startCommand: npm start
+    startCommand: node --import tsx server/index.ts # not "npm start": npm would not pass the stop signal on
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:

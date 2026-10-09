@@ -21,6 +21,7 @@ if (production && !url) {
 }
 
 const store = url ? new PgStore(url) : new MemoryStore();
+if (url) log("Connecting to the database…");
 await store.init();
 
 const adminUser = process.env.ADMIN_USERNAME ?? (production ? "" : "admin");
@@ -33,9 +34,26 @@ if (!adminUser || !adminPass) {
 } else await ensureAdmin(store, adminUser, adminPass, log);
 
 const staticDir = fileURLToPath(new URL("../dist", import.meta.url));
-const { server } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, log });
+const { server, hub } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, log });
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, () => log(`Listening on port ${port}${url ? "" : " (memory store: nothing is saved)"}`));
+
+// Render stops the old server with SIGTERM on every deploy: finish what's in flight, close the
+// live connections (phones reconnect to the new server by themselves) and the database, then exit.
+let stopping = false;
+function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  log(`${signal}: shutting down`);
+  setTimeout(() => process.exit(0), 10_000).unref();
+  hub.closeAll();
+  server.close(() => {
+    store.close().finally(() => process.exit(0));
+  });
+  server.closeIdleConnections();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 // Last line of defence: log a stray failure rather than let it take every game down with the server.
 process.on("unhandledRejection", (e) => console.error("Unhandled rejection:", e));

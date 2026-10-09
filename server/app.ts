@@ -166,6 +166,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     try {
       if (!(await stat(file)).isFile()) throw new Error();
     } catch {
+      // A missing build file is a 404, not the app: a tab from before a deploy then reloads cleanly
+      // instead of trying to run a web page as a script.
+      if (safe.replace(/\\/g, "/").startsWith("/assets/")) return json(res, 404, { error: "Not found." });
       file = join(opts.staticDir, "index.html"); // the app handles its own screens
     }
     try {
@@ -181,6 +184,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
               "Content-Security-Policy":
                 "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
               "Referrer-Policy": "same-origin",
+              ...(opts.secureCookies ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
             }
           : {}),
       });

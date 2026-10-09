@@ -306,8 +306,21 @@ const toGame = (r: Row): Game => ({
 export class PgStore implements Store {
   private pool: pg.Pool;
   constructor(url: string) {
-    // Neon and Render Postgres both require TLS.
-    this.pool = new pg.Pool({ connectionString: url, ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false }, max: 5 });
+    // Neon requires TLS. "sslmode=require" in its connection string already means "check the
+    // certificate" to this driver; saying verify-full outright keeps that true across driver updates.
+    const local = /(\/\/|@)(localhost|127\.0\.0\.1)(:|\/|$)/.test(url);
+    const connectionString = url.replace(/([?&])sslmode=require\b/, "$1sslmode=verify-full");
+    this.pool = new pg.Pool({
+      connectionString,
+      ssl: local ? undefined : true,
+      max: 5,
+      // Give up on a database that doesn't answer, rather than hanging the start-up or a request.
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+    });
+    // Neon closes idle connections when it scales down. Without a listener that error would end
+    // the whole server; the pool replaces the connection on the next query.
+    this.pool.on("error", (e) => console.error("[bull-run] database connection dropped:", e.message));
   }
   private async q(sql: string, params: unknown[] = []) {
     return (await this.pool.query(sql, params)).rows as Row[];

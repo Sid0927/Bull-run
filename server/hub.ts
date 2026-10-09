@@ -200,6 +200,14 @@ export class Hub {
     }
   }
 
+  /** End every live connection (the server is shutting down). */
+  closeAll() {
+    for (const set of this.listeners.values()) {
+      for (const l of set) l.end();
+      set.clear();
+    }
+  }
+
   /** End the live connections opened with one session (that device signed out). */
   disconnectToken(token: string) {
     for (const set of this.listeners.values()) {
