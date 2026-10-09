@@ -64,7 +64,7 @@ export function App() {
       {body}
     </div>
   );
-  if (route.name === "game") return shell(<GameScreen id={route.id} me={me} onRules={openRules} />, true);
+  if (route.name === "game") return shell(<GameScreen key={route.id} id={route.id} me={me} onRules={openRules} />, true);
   if (route.name === "admin" && me.isAdmin) return shell(<Admin me={me} />);
   return shell(<Lobby me={me} />);
 }
@@ -236,7 +236,17 @@ function Lobby({ me }: { me: Me }) {
   const [code, setCode] = useState("");
   const [rounds, setRounds] = useState(9);
   const [maxPlayers, setMaxPlayers] = useState(5);
-  const load = useCallback(() => api.games().then(setGames, (e) => setError(e.message)), []);
+  const load = useCallback(
+    () =>
+      api.games().then(
+        (g) => {
+          setGames(g);
+          setError("");
+        },
+        (e) => (e instanceof ApiError && e.status === 401 ? location.reload() : setError(e.message)),
+      ),
+    [],
+  );
   useEffect(() => {
     load();
     const t = setInterval(load, 15000);
@@ -636,7 +646,7 @@ function Admin({ me }: { me: Me }) {
                     }, `New password set for ${u.username}; they have been signed out everywhere.`);
                   }}
                 >
-                  <input id={`reset-${u.id}`} autoComplete="off" placeholder="New password" value={resetPw} onChange={(e) => setResetPw(e.target.value)} minLength={6} required />
+                  <input id={`reset-${u.id}`} aria-label={`New password for ${u.username}`} autoComplete="off" placeholder="New password" value={resetPw} onChange={(e) => setResetPw(e.target.value)} minLength={6} required />
                   <button className="primary">Set</button>
                 </form>
               )}

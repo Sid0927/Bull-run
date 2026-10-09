@@ -60,22 +60,32 @@ export function follow(
   let have = 0;
   let stopped = false;
   let retry: ReturnType<typeof setTimeout> | null = null;
+  // Each (re)connection gets a number; anything from an older one (a late probe, a message from a
+  // stream that should be closed) is ignored, so two streams can never both be feeding the screen.
+  let gen = 0;
   const open = () => {
     if (stopped) return;
-    es = new EventSource(`/api/games/${gameId}/stream?since=${have}`);
-    es.onopen = () => onStatus(true);
-    es.onmessage = (m) => {
+    if (retry) clearTimeout(retry);
+    es?.close();
+    const mine = ++gen;
+    const live = () => !stopped && mine === gen;
+    const src = new EventSource(`/api/games/${gameId}/stream?since=${have}`);
+    es = src;
+    src.onopen = () => live() && onStatus(true);
+    src.onmessage = (m) => {
+      if (!live()) return src.close();
       const u = JSON.parse(m.data) as GameUpdate;
       have = u.events.from + u.events.list.length;
       onUpdate(u);
     };
-    es.onerror = () => {
+    src.onerror = () => {
+      src.close();
+      if (!live()) return;
       onStatus(false);
-      es?.close();
-      if (stopped) return;
       // An EventSource can't say why it failed: ask once, and stop for good on a refusal.
       fetch(`/api/games/${gameId}/stream?since=${have}`, { credentials: "same-origin" })
         .then(async (r) => {
+          if (!live()) return r.body?.cancel().catch(() => {});
           if (r.status === 401 || r.status === 403 || r.status === 404) {
             const data = await r.json().catch(() => ({}));
             stopped = true;
@@ -86,18 +96,14 @@ export function follow(
           }
         })
         .catch(() => {
-          retry = setTimeout(open, 2000);
+          if (live()) retry = setTimeout(open, 2000);
         });
     };
   };
   open();
   // Coming back to the tab is the moment a phone's connection is most likely stale.
   const onVisible = () => {
-    if (document.visibilityState === "visible" && es?.readyState !== EventSource.OPEN) {
-      es?.close();
-      if (retry) clearTimeout(retry);
-      open();
-    }
+    if (document.visibilityState === "visible" && es?.readyState !== EventSource.OPEN) open();
   };
   document.addEventListener("visibilitychange", onVisible);
   return () => {

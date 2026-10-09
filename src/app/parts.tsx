@@ -479,9 +479,18 @@ export function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a:
       </div>
       <div className="cards">
         {p.hand.map((id) => (
-          <button key={id} type="button" className="pickable" aria-pressed={pick === id} onClick={() => setPick(id)}>
+          <div
+            key={id}
+            role="button"
+            tabIndex={0}
+            className="pickable"
+            aria-pressed={pick === id}
+            aria-label={`Place “${card(id).title}”`}
+            onClick={() => setPick(id)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setPick(id))}
+          >
             <NewsCardView id={id} picked={pick === id} />
-          </button>
+          </div>
         ))}
       </div>
       <div className="dock">
@@ -557,7 +566,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   const ph = s.phase as Extract<GameState["phase"], { kind: "turn" }>;
   const p = s.players[seat];
   const [kind, setKind] = useState<TradeKind>("buy");
-  const [company, setCompany] = useState<CompanyId>("HUL");
+  const [company, setCompany] = useState<CompanyId>(() => COMPANY_IDS.find((c) => s.companies[c].listed && !s.companies[c].bankrupt) ?? "HUL");
   const [qty, setQty] = useState(1);
   const action: Extract<Action, { type: "trade" }> = { type: "trade", player: seat, kind, company, qty };
   const pv = useMemo(() => previewTrade(s, action), [s, kind, company, qty]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -587,7 +596,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
           </div>
           <div className="seg co-grid" role="group" aria-label="Company">
             {COMPANY_IDS.filter((c) => s.companies[c].listed).map((c) => (
-              <button key={c} className={`co-btn ${c === company ? "on" : ""}`} style={coStyle(c)} aria-pressed={c === company} onClick={() => setCompany(c)}>
+              <button key={c} className={`co-btn ${c === company ? "on" : ""}`} style={coStyle(c)} aria-pressed={c === company} disabled={s.companies[c].bankrupt} onClick={() => setCompany(c)}>
                 <CompanyBadge c={c} size={20} />
                 <span className="co-btn-text">
                   <span>{COMPANIES[c].short}</span>

@@ -19,7 +19,8 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState<Tab>("play");
   const [busy, setBusy] = useState(false);
-  useEffect(() => setBusy(false), [u]);
+  // A new section starts at its top, not wherever the last one was scrolled to.
+  useEffect(() => window.scrollTo(0, 0), [tab]);
 
   useEffect(() => {
     setU(null);
@@ -99,10 +100,10 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     if (busy) return;
     setToast("");
     setBusy(true);
-    api.act(id, a).catch((e) => {
-      setToast((e as Error).message);
-      setBusy(false);
-    });
+    api
+      .act(id, a)
+      .catch((e) => setToast((e as Error).message))
+      .finally(() => setBusy(false));
   };
 
   let status: string;
@@ -155,9 +156,9 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         </div>
       )}
       {toast && (
-        <div className="toast" role="alert" onClick={() => setToast("")}>
+        <button className="toast" role="alert" onClick={() => setToast("")}>
           {toast} <span className="muted small">(tap to close)</span>
-        </div>
+        </button>
       )}
       <Ticker s={s} hist={hist} />
 
@@ -194,7 +195,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
             ["log", "Log", "book"],
           ] as [Tab, string, IconName][]
         ).map(([t, label, icon]) => (
-          <button key={t} className={`${tab === t ? "on" : ""} ${t === "play" && myMove ? "alert" : ""}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
+          <button key={t} className={`${tab === t ? "on" : ""} ${t === "play" && myMove ? "tab-alert" : ""}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
             <Icon name={icon} size={20} />
             <span>{label}</span>
           </button>
