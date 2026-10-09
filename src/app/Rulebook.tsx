@@ -59,11 +59,11 @@ const SECTIONS = [
   ["goal", "The goal"],
   ["companies", "The companies"],
   ["setup", "How a game starts"],
+  ["prices", "How trading moves prices"],
   ["opening", "Round 0: the opening"],
   ["turn", "Your turn"],
-  ["prices", "How trading moves prices"],
   ["shorts", "Short selling"],
-  ["dividends", "Dividends and chairmen"],
+  ["dividends", "Dividends, chairmen and co-chairmen"],
   ["ipo", "The Oracle Group IPO"],
   ["bankruptcy", "Bankruptcy"],
   ["end", "End of the game"],
@@ -124,7 +124,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>
               <span className="quick-no">2</span>
               <b>Play news</b>
-              <span>Place one card from your hand face-down. It moves prices at the start of your next turn, so everyone gets a lap to guess what you hold.</span>
+              <span>Place one card from your hand face-down. From round 1, it moves prices at the start of your next turn, so everyone gets a lap to guess what you hold.</span>
             </li>
             <li>
               <span className="quick-no">3</span>
@@ -152,7 +152,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <h2>The goal</h2>
           <p>
             Have the highest <b>net worth</b> when the last round ends: your cash, plus your shares at their final prices, minus what it would cost to buy back any
-            shares you have sold short. Your cash is secret; the shares you hold are public.
+            shares you have sold short. Your cash is secret, though the log shows every payment; the shares you hold are public.
           </p>
         </section>
 
@@ -199,8 +199,35 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>
               {MARKET_SIZE} more cards are laid face-up: this is the <b>market</b>. Whenever a card is taken from it, the gap is filled from the deck.
             </li>
-            <li>Players keep the same seat order for the whole game.</li>
+            <li>Seat order is the order players joined, going clockwise. It stays the same all game and is used for the opening share-out and the draws.</li>
           </ul>
+        </section>
+
+        <section id="prices">
+          <h2>How trading moves prices</h2>
+          <p>
+            Each company has an <b>outstanding count</b>: the shares players hold, minus its open shorts (it can be below zero when shorts outnumber shares held). The bank always buys and sells at the current price
+            and never runs out of money, but it holds only {SHARES_PER_COMPANY} shares of each company: you can buy only what players don't already hold. A sale
+            or short that takes a company to ₹0 stops there; that share trades for nothing and the rest of that trade is cancelled.
+          </p>
+          <ul>
+            <li>
+              When a trade takes the count <b>up to</b> {THRESHOLDS.join(", ")}, the price moves up one step <b>first</b>, and that share trades at the new price.
+            </li>
+            <li>
+              When a trade takes the count <b>below</b> {THRESHOLDS.join(", ")}, the price moves down one step first, and that share trades at the new price.
+            </li>
+            <li>Every other share trades at the current price.</li>
+            <li>
+              {rs(TRACK.at(-1)!)} is the ceiling: a move that would go past it stops there, and a move up from {rs(TRACK.at(-1)!)} is ignored. Shares can still be bought at{" "}
+              {rs(TRACK.at(-1)!)}.
+            </li>
+          </ul>
+          <div className="example">
+            <b>Example.</b> Infosys is at ₹140 with 4 shares outstanding and you buy 4 (two trades: 3, then 1). The 5th share costs ₹140. The 6th reaches a
+            threshold, so Infosys moves to ₹150 first and you pay ₹150. The 7th and 8th cost ₹150 each. Total: ₹590.
+          </div>
+          <p className="muted small">The track: {TRACK.map((p) => (p === 0 ? "₹0" : p)).join(" · ")}. The gaps widen as prices rise: ₹10 a step up to ₹150, ₹25 a step up to ₹250, then ₹50 a step.</p>
         </section>
 
         <section id="opening">
@@ -230,9 +257,13 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <p>From round 1, each round every player takes one turn. On your turn, in this order:</p>
           <ol>
             <li>
+              <b>Reveal</b>: the card you placed face-down on your last turn is turned over and takes effect, before you do anything. It can move prices and set
+              off forced short closes, including your own.
+            </li>
+            <li>
               <b>Trade</b>: make up to {ACTIONS_PER_TURN} trades (you may make fewer, or none). Each trade is in one company, for 1 to {MAX_QTY_PER_ACTION} shares, and
               is one of: <b>buy</b>, <b>sell</b> shares you own, <b>short</b> (bet the price falls) or <b>cover</b> (close a short). For example: buy 3 HUL, then buy
-              2 Infosys. Both trades may be in the same company, and you may hold and short the same company.
+              2 Infosys. Both trades may be in the same company, you may hold and short the same company, and you may trade the company your own face-down card names.
             </li>
             <li>
               <b>Play news</b>: place one card from your hand face-down. It is not optional. Nobody else sees it, and it does nothing yet: it is revealed and
@@ -243,9 +274,10 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             </li>
           </ol>
           <p>
-            Each company named on a revealed card moves once, by the steps the card gives it. When the deck runs out, shuffle the played cards into a new deck. A news effect on a company that is bankrupt, or that has not listed yet, is ignored.
+            Each company named on a revealed card moves once, by the steps the card gives it. When the deck runs out, shuffle the played cards into a new deck. A news effect on a company that is bankrupt, or that has not listed yet, is ignored. A company that went bankrupt in an earlier round has re-listed at{" "}
+            {rs(TRACK[RELIST_INDEX])} by then, so a face-down card about it moves the new price (see <a href="#bankruptcy">Bankruptcy</a>).
           </p>
-                  <h3>The trades you can make</h3>
+          <h3>The trades you can make</h3>
           <div className="table-scroll">
             <table className="rules-table">
               <thead>
@@ -271,13 +303,13 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
                 </tr>
                 <tr>
                   <td><b>Short</b></td>
-                  <td>Sell shares you don't own: take the price in cash now, buy them back later</td>
+                  <td>Sell shares you don't own: take the price in cash now, buy them back later (see <a href="#shorts">Short selling</a>)</td>
                   <td>A free short (at most {SHORTS_PER_COMPANY} open per company, across all players)</td>
                   <td>Can push it down</td>
                 </tr>
                 <tr>
                   <td><b>Cover</b></td>
-                  <td>Close one of your shorts by paying the current price</td>
+                  <td>Close one of your shorts by paying the current price; the ones nearest their cap close first</td>
                   <td>An open short in that company, and the cash</td>
                   <td>Can push it up</td>
                 </tr>
@@ -290,32 +322,6 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           </p>
         </section>
 
-        <section id="prices">
-          <h2>How trading moves prices</h2>
-          <p>
-            Each company has an <b>outstanding count</b>: the shares players hold, minus its open shorts. The bank always buys and sells at the current price
-            and never runs out of money, but it holds only {SHARES_PER_COMPANY} shares of each company: you can buy only what players don't already hold. A sale
-            or short that takes a company to ₹0 stops there; that share trades for nothing and the rest of the action is cancelled.
-          </p>
-          <ul>
-            <li>
-              When a trade takes the count <b>up to</b> {THRESHOLDS.join(", ")}, the price moves up one step <b>first</b>, and that share trades at the new price.
-            </li>
-            <li>
-              When a trade takes the count <b>below</b> {THRESHOLDS.join(", ")}, the price moves down one step first, and that share trades at the new price.
-            </li>
-            <li>Every other share trades at the current price.</li>
-            <li>
-              {rs(TRACK.at(-1)!)} is the ceiling: a move that would go past it stops there, and a move up from {rs(TRACK.at(-1)!)} is ignored. Shares can still be bought at{" "}
-              {rs(TRACK.at(-1)!)}.
-            </li>
-          </ul>
-          <div className="example">
-            <b>Example.</b> Infosys is at ₹140 with 4 shares outstanding and you buy 4 (two actions: 3, then 1). The 5th share costs ₹140. The 6th reaches a
-            threshold, so Infosys moves to ₹150 first and you pay ₹150. The 7th and 8th cost ₹150 each. Total: ₹590.
-          </div>
-          <p className="muted small">The track: {TRACK.map((p) => (p === 0 ? "₹0" : p)).join(" · ")}. The gaps widen as prices rise: ₹10 a step up to ₹150, ₹25 a step up to ₹250, then ₹50 a step.</p>
-        </section>
 
         <section id="shorts">
           <h2>Short selling</h2>
@@ -328,11 +334,11 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
               <b>Covering</b>: pay the current price to close the short. It counts +1, like a buy.
             </li>
             <li>
-              A company can have at most {SHORTS_PER_COMPANY} open shorts at a time, across all players. No shorting in the opening, or on Oracle Group in its listing round.
+              A company can have at most {SHORTS_PER_COMPANY} open shorts at a time, across all players. See <a href="#turn">the trades you can make</a> for when shorting isn't allowed.
             </li>
             <li>
               <b>The {SHORT_CAP_STEPS}-step cap</b>: once a move takes a company's price to {SHORT_CAP_STEPS} spaces above where a short was opened, that short is forced
-              closed as soon as the current action or news card has finished. Its owner pays the price on that cap space, even if the price has since moved
+              closed as soon as the current trade or news card has finished. Its owner pays the price on that cap space, even if the price has since moved
               further. A forced close counts as a buy, so it can push the price up and set off more forced closes. Several at once are settled starting with the
               player whose turn it is and going clockwise, oldest short first. A short opened at ₹300 or higher has no cap, because {SHORT_CAP_STEPS} steps up is past
               the ceiling.
@@ -345,9 +351,9 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
         </section>
 
         <section id="dividends">
-          <h2>Dividends and chairmen</h2>
+          <h2>Dividends, chairmen and co-chairmen</h2>
           <p>
-            At the end of rounds {DIVIDEND_ROUNDS.join(", ")} (after the last player's turn), every company pays a dividend per share, set by its price at that moment:
+            At the end of rounds {DIVIDEND_ROUNDS.join(", ")} (after the last player's turn), every company pays a dividend per share, set by its price at that moment. Cards still face-down are not revealed first: they take effect next round, after the payout.
           </p>
           <div className="table-scroll">
             <table className="rules-table narrow">
@@ -373,8 +379,9 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>Every shareholder is paid the per-share amount for each share. Oracle Group and bankrupt companies pay nothing.</li>
             <li>
               The <b>chairman</b> is the one player holding at least {CHAIRMAN_SHARES} of a company's shares; the title moves the moment
-              holdings change. If two players hold {CHAIRMAN_SHARES} each, neither is chairman; instead they are <b>co-chairmen</b> and each gets a bonus of {CO_CHAIRMAN_MULTIPLIER}× the per-share dividend. At each payout the chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the
-              per-share dividend, on top of the dividend on their own shares.
+              holdings change. At each payout the chairman gets a bonus of {CHAIRMAN_MULTIPLIER}× the per-share dividend, on top of the dividend on their own shares.
+              If two players hold {CHAIRMAN_SHARES} each, there is no chairman; they are <b>co-chairmen</b>, and each gets {CO_CHAIRMAN_MULTIPLIER}× the per-share
+              dividend instead.
             </li>
             <li>
               Each open short pays the per-share amount to the bank. All dividends and bonuses are paid out first, then short sellers pay. A short seller who
