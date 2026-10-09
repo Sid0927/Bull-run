@@ -9,11 +9,13 @@ import { CompanyBadge } from "./logos.tsx";
 import { AdminDesks, Board, chairOf, turnDoneThisRound, Change, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
 import { summarize, type Summary } from "./activity.ts";
+import { chime } from "./sound.ts";
+import type { GameSource } from "./local.ts";
 import { Activity, Hud, MarketTable, Notifications, SummaryCard } from "./game-ui.tsx";
 
 type Tab = "play" | "board" | "players" | "log";
 
-export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void }) {
+export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () => void; local?: GameSource }) {
   const [u, setU] = useState<GameUpdate | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [times, setTimes] = useState<(string | null)[]>([]);
@@ -33,20 +35,17 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     setU(null);
     setEvents([]);
     setTimes([]);
-    return follow(
-      id,
-      (next) => {
+    const onUpdate = (next: GameUpdate) => {
         setU(next);
         setEvents((have) => (next.events.from === 0 ? next.events.list : [...have.slice(0, next.events.from), ...next.events.list]));
         setTimes((have) => (next.events.from === 0 ? next.events.times : [...have.slice(0, next.events.from), ...next.events.times]));
-      },
-      setConnected,
-      (status, message) => {
-        if (status === 401) location.reload(); // signed out: back to the sign-in screen
-        else setError(message);
-      },
-    );
-  }, [id]);
+    };
+    const onRefused = (status: number, message: string) => {
+      if (status === 401) location.reload(); // signed out: back to the sign-in screen
+      else setError(message);
+    };
+    return local ? local.follow(onUpdate, setConnected, onRefused) : follow(id, onUpdate, setConnected, onRefused);
+  }, [id, local]);
 
   const s = u?.view ?? null;
   const mySeat = u?.mySeat ?? null;
@@ -57,6 +56,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   useEffect(() => {
     if (myMove && !was.current) {
       navigator.vibrate?.(200);
+      chime();
       setTab("play");
     }
     was.current = myMove;
@@ -142,8 +142,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     if (busy) return;
     setToast("");
     setBusy(true);
-    api
-      .act(id, a)
+    (local ? local.act(a) : api.act(id, a))
       .catch((e) => setToast((e as Error).message))
       .finally(() => setBusy(false));
   };
@@ -181,6 +180,12 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     <div className={`game tab-${tab}`}>
       <h1 className="sr-only">Game {u.game.code}</h1>
       <Hud s={s} status={status} sub={sub} mine={myMove} mySeat={mySeat} waitingOn={u.waiting} />
+      {local && s.phase.kind !== "ended" && (
+        <div className="admin-chip practice-chip" role="note">
+          <Icon name="robot" size={16} /> Practice game against the computer — nothing is saved.
+          <a href="#/">Leave</a>
+        </div>
+      )}
       <Notifications items={notes} onClose={closeNote} />
       {u.revealed && (
         <div className="admin-chip" role="note">

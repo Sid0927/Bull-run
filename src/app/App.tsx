@@ -3,17 +3,27 @@ import { DIVIDEND_ROUNDS, GAME_LENGTHS, IPO_ROUND, STARTING_CASH } from "../engi
 import type { AdminUser, GameSummary, LoginRecord, Me } from "../shared/api.ts";
 import { ApiError, api } from "./api.ts";
 import { GameScreen } from "./GameScreen.tsx";
+import { localGame, type GameSource } from "./local.ts";
 import { BullLogo } from "./logos.tsx";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
+import { chime, setSoundOn, soundOn } from "./sound.ts";
 import { Avatar, AvatarStack, Icon, TickerTape, When, clock, fullTime } from "./ui.tsx";
 
-type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" };
+type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" };
+
+/** The practice game in progress. Kept outside React so reading the rules and coming back resumes it. */
+let practice: { source: GameSource; n: number } | null = null;
+function startPractice(you: string, rounds: number, players: number) {
+  practice = { source: localGame(you, players, rounds as 6 | 9 | 12), n: (practice?.n ?? 0) + 1 };
+  go("#/practice");
+}
 
 function parse(hash: string): Route {
   const m = hash.match(/^#\/game\/(\d+)$/);
   if (m) return { name: "game", id: Number(m[1]) };
   if (hash === "#/admin") return { name: "admin" };
+  if (hash === "#/practice") return { name: "practice" };
   if (hash === "#rules") return { name: "rules" };
   return { name: "lobby" };
 }
@@ -65,12 +75,15 @@ export function App() {
     </div>
   );
   if (route.name === "game") return shell(<GameScreen key={route.id} id={route.id} me={me} onRules={openRules} />, true);
+  if (route.name === "practice" && practice)
+    return shell(<GameScreen key={`practice-${practice.n}`} id={0} me={me} onRules={openRules} local={practice.source} />, true);
   if (route.name === "admin" && me.isAdmin) return shell(<Admin me={me} />);
   return shell(<Lobby me={me} />);
 }
 
 function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
+  const [sound, setSound] = useState(soundOn);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -125,6 +138,16 @@ function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSig
               )}
               <button role="menuitem" onClick={onRules}>
                 <Icon name="book" size={18} /> How to play
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setSoundOn(!sound);
+                  setSound(!sound);
+                  if (!sound) chime(true);
+                }}
+              >
+                <Icon name={sound ? "sound" : "mute"} size={18} /> Turn sound: {sound ? "on" : "off"}
               </button>
               <button role="menuitem" onClick={onSignOut}>
                 <Icon name="out" size={18} /> Sign out
@@ -374,6 +397,10 @@ function Lobby({ me }: { me: Me }) {
           <button className="primary big" disabled={busy} onClick={() => run(() => api.create(rounds, maxPlayers))}>
             Create game <Icon name="arrow" size={18} />
           </button>
+          <button className="ghost big practice-btn" onClick={() => startPractice(me.username, rounds, maxPlayers)}>
+            <Icon name="robot" size={18} /> Practice against the computer
+          </button>
+          <p className="muted small">Practice runs on this device only: you and {maxPlayers - 1} computer players, nothing saved.</p>
         </section>
       </div>
 

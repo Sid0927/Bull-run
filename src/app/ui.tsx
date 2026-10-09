@@ -60,6 +60,9 @@ const PATHS = {
   trophy: "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3M12 13v4M8.5 20h7M10 17h4v3h-4z",
   chart: "M4 19h16M6 15l4-5 3 3 5-7",
   x: "M6 6l12 12M18 6 6 18",
+  sound: "M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5ZM15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11",
+  mute: "M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5ZM16 10l5 5M21 10l-5 5",
+  robot: "M7 9h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM12 5v4M10 14h.01M14 14h.01M3 13v2M21 13v2",
 } as const;
 
 export type IconName = keyof typeof PATHS;

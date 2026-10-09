@@ -1041,3 +1041,5 @@ body::before {
 @media (min-width: 1101px) { .private { scroll-margin-top: 8px; } }
 .sum-more { list-style: none; color: var(--accent); font-weight: 600; }
 .latest-wrap { justify-items: stretch; } .latest-wrap > .sum { width: 100%; box-sizing: border-box; } .latest-label { justify-self: start; }
+.practice-chip a { margin-left: auto; color: inherit; }
+.practice-btn { width: 100%; margin-top: 8px; display: inline-flex; justify-content: center; gap: 8px; }
