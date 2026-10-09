@@ -352,7 +352,7 @@ export function NewsCardView({ id, children, impact, picked }: { id: number; chi
       </div>
       {impact !== undefined && (
         <div className={`impact ${impact > 0 ? "up" : impact < 0 ? "down" : "flat"}`} title="Effect on your holdings and shorts at today's prices">
-          For you {impact === 0 ? "±₹0" : signedRs(impact)}
+          For you now {impact === 0 ? "±₹0" : signedRs(impact)}
         </div>
       )}
       {picked && (
@@ -505,14 +505,17 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
           <span className="muted small">Price band {rs(band[0])}–{rs(band[band.length - 1])}</span>
         </div>
       </div>
-      <p className="small">
-        Bid for 0–{max} shares at one price. All bids are revealed together. The listing price is the highest price at which the shares bid at that
-        price or more reach 12 (the lowest price if they never do). Bids above it are filled in full, bids at it share what is left one at a time clockwise
-        from the start player, and bids below it get nothing. Everyone pays the listing price, then the price rises one step per 3, 6, 9 and 12 shares sold.
-        {s.config.ipoPaysDividend ? "Oracle Group pays dividends like the others" : "Oracle Group pays no dividend"} and cannot be shorted until round {IPO_ROUND + 1}.
-      </p>
+      <ul className="ipo-rules small">
+        <li>Bid for 0–{max} shares at one price. Everyone's bid is revealed together.</li>
+        <li>The listing price is the highest price where the shares bid at it or above reach 12 ({rs(band[0])} if they never do).</li>
+        <li>Bids above it are filled in full; bids at it share what's left, one at a time from the start player; bids below get nothing.</li>
+        <li>Everyone pays the listing price, not their bid. Then the price rises a step for each of 3, 6, 9 and 12 shares sold.</li>
+        <li>
+          {s.config.ipoPaysDividend ? "Oracle Group pays dividends like the others" : "Oracle Group pays no dividend"}, and it can't be shorted until round {IPO_ROUND + 1}.
+        </li>
+      </ul>
       <div className="field">
-        Shares
+        <span className="field-label">Shares</span>
         <div className="seg" role="group" aria-label="Shares to bid for">
           {Array.from({ length: max + 1 }, (_, n) => (
             <button key={n} className={n === qty ? "on" : ""} onClick={() => setQty(n)}>
@@ -522,8 +525,8 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
         </div>
       </div>
       <div className="field">
-        Price per share
-        <div className="seg" role="group" aria-label="Bid price">
+        <span className="field-label">Price per share</span>
+        <div className="seg seg-fill" role="group" aria-label="Bid price">
           {band.map((p) => (
             <button key={p} className={p === bid ? "on" : ""} disabled={qty === 0} onClick={() => setBid(p)}>
               {rs(p)}
@@ -637,7 +640,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
             <button className="play primary" onClick={() => play({ type: "playNews", player: seat, card: id })}>
-              Play this card
+              {s.config.delayedNews !== false ? "Place face-down" : "Play this card"}
             </button>
           </NewsCardView>
         ))}

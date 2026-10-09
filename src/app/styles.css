@@ -813,3 +813,5 @@ body {
 .rules .hero-facts { display: flex; padding: 0; gap: 6px; }
 .rules .hero-facts li { max-width: none; }
 .rules .lede { font-size: 18px; line-height: 1.5; }
+.ipo-rules { margin: 4px 0 12px; padding: 12px 14px 12px 30px; display: grid; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); }
+.seg:not(.seg-fill) button { min-width: 44px; }
