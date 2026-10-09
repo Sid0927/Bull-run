@@ -33,9 +33,13 @@ import { STRATEGIES } from "../sim/strategies.ts";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────────────
 
-/** A 3-player game moved straight to round 1, seat 0 to act, nobody holding anything. */
-function midGame(opts: { round?: number; rounds?: 6 | 9 | 12; players?: number } = {}): GameState {
-  const { state } = newGame({ players: ["Asha", "Bilal", "Chitra", "Dev", "Esha"].slice(0, opts.players ?? 3), rounds: opts.rounds ?? 9, seed: 7 });
+/**
+ * A 3-player game moved straight to round 1, seat 0 to act, nobody holding anything. News applies
+ * at once here unless asked otherwise, so a test about prices can play a card and see its effect;
+ * the one-lap-later rule has tests of its own.
+ */
+function midGame(opts: { round?: number; rounds?: 6 | 9 | 12; players?: number; delayedNews?: boolean } = {}): GameState {
+  const { state } = newGame({ players: ["Asha", "Bilal", "Chitra", "Dev", "Esha"].slice(0, opts.players ?? 3), rounds: opts.rounds ?? 9, seed: 7, delayedNews: opts.delayedNews ?? false });
   state.round = opts.round ?? 1;
   state.startPlayer = 0;
   state.phase = { kind: "turn", player: 0, turnInRound: 0, actionsUsed: 0, step: "trade" };
@@ -456,9 +460,9 @@ describe("dividends", () => {
     // Fix the cards drawn so no news moves these prices.
     const quiet = NEWS_CARDS.filter((k) => !k.effects.HUL && !k.effects.SUN && !k.effects.INFY).map((k) => k.id);
     s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
-    setPrice(s, "HUL", 225); // ₹20 → doubled ₹40
-    setPrice(s, "INFY", 120); // ₹10
-    setPrice(s, "SUN", 110); // ₹0
+    setPrice(s, "HUL", 225); // ₹30 → doubled ₹60
+    setPrice(s, "INFY", 120); // ₹20
+    setPrice(s, "SUN", 40); // below ₹50: ₹0
     s.players[0].shares.HUL = 7; // chairman
     s.chairmen.HUL = 0;
     s.players[1].shares.INFY = 2;
@@ -466,24 +470,32 @@ describe("dividends", () => {
     addShort(s, 2, "HUL", 300);
     const r = endRound(s);
     const div = r.events.filter((e) => e.kind === "dividend" && e.paid.length > 0);
-    assert.deepEqual(div.map((e) => e.kind === "dividend" && [e.company, e.perShare]), [["HUL", 40], ["INFY", 10]]);
-    assert.equal(r.state.players[0].cash, STARTING_CASH + 7 * 40 + 3 * 40);
-    assert.equal(r.state.players[1].cash, STARTING_CASH + 2 * 10);
-    assert.equal(r.state.players[2].cash, STARTING_CASH - 40);
+    assert.deepEqual(div.map((e) => e.kind === "dividend" && [e.company, e.perShare]), [["HUL", 60], ["INFY", 20]]);
+    assert.equal(r.state.players[0].cash, STARTING_CASH + 7 * 60 + 3 * 60);
+    assert.equal(r.state.players[1].cash, STARTING_CASH + 2 * 20);
+    assert.equal(r.state.players[2].cash, STARTING_CASH - 60);
   });
 
   test("short sellers pay after every dividend is paid out, whatever order the companies are in", () => {
     const s = midGame({ round: 3 });
     const quiet = ALL_CARDS.filter((k) => !k.effects.HUL && !k.effects.SUN).map((k) => k.id);
     s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
-    setPrice(s, "HUL", 150); // ₹10, doubled: the short owes ₹20
-    setPrice(s, "SUN", 150); // ₹10 a share
+    setPrice(s, "HUL", 150); // ₹20, doubled: the short owes ₹40
+    setPrice(s, "SUN", 150); // ₹20 a share
     addShort(s, 1, "HUL", 150);
     s.players[1].cash = 0;
     s.players[1].shares.SUN = 3;
     const r = endRound(s);
-    assert.equal(r.state.players[1].cash, 30 - 20);
+    assert.equal(r.state.players[1].cash, 60 - 40);
     assert.ok(!r.events.some((e) => e.kind === "shortfall"));
+  });
+
+  test("the final dividend table: nothing below ₹50, then ₹10/20/30/40, doubled for HUL and HDFC Bank", () => {
+    const at = (c: CompanyId, p: number) => dividendPerShare(c, p);
+    assert.deepEqual([40, 50, 100, 110, 200, 225, 350, 400, 500].map((p) => at("ONGC", p)), [0, 10, 10, 20, 20, 30, 30, 40, 40]);
+    assert.deepEqual([40, 50, 110, 225, 400].map((p) => at("HDFC", p)), [0, 20, 40, 60, 80]);
+    assert.equal(at("ORG", 500), 0);
+    assert.equal(at("SUN", 0), 0);
   });
 
   test("no dividend at the end of round 2", () => {

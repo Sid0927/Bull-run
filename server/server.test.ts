@@ -116,6 +116,7 @@ describe("a game played from three phones", () => {
     assert.ok(a.view!.players[1].hand.every((x) => x === 0));
     assert.ok(b.view!.players[1].hand.every((x) => x > 0));
     assert.equal(a.view!.config.seed, 0);
+    assert.equal(a.view!.players[0].cash, 1000); // the final rules: ₹1,000 each
     assert.deepEqual(a.waiting, [0, 1, 2]);
   });
 

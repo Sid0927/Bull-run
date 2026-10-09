@@ -9,7 +9,7 @@ export interface GameConfig {
   seed: number;
   /** Play-test variant: override some starting prices (each must be a track space). */
   startPrices?: Partial<Record<CompanyId, number>>;
-  /** Play-test variant: starting cash per player (default STARTING_CASH, ₹1,200). */
+  /** Play-test variant: starting cash per player (default STARTING_CASH, ₹1,000). */
   startingCash?: number;
   /**
    * Play-test variant: at the end of each round (after any dividends), every company whose
@@ -28,8 +28,9 @@ export interface GameConfig {
   ipoBand?: number[];
   ipoMaxBid?: number;
   /**
-   * Play-test variant: news resolves one lap later. A played card goes face-down and takes effect
-   * at the start of its owner's next turn. Cards still face-down when the game ends are discarded.
+   * News resolves one lap later (the standard rule since 9 Oct 2026; on unless set to false). A
+   * played card goes face-down and takes effect at the start of its owner's next turn. Cards still
+   * face-down when the game ends are discarded.
    */
   delayedNews?: boolean;
   /** Play-test variant: the chairman's bonus as a multiple of the per-share dividend (default 3). */

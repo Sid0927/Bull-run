@@ -3,6 +3,7 @@
  * through the rules engine, saves it, and sends each player only what they may see.
  */
 import { randomInt } from "node:crypto";
+import { rulesConfig } from "./rules.ts";
 import { apply, newGame, replay, type Action, type GameEvent, type GameState, type Seat } from "../src/engine/index.ts";
 import type { GameSummary, GameUpdate } from "../src/shared/api.ts";
 import { cleanAction, eventsFor, viewFor, waitingOn } from "../src/shared/view.ts";
@@ -65,7 +66,7 @@ export class Hub {
       const seated = await this.store.seated(game.id);
       // The IPO company was called ZOM before it became Oracle Group (ORG); old saved moves still say ZOM.
       const actions = (await this.store.actions(game.id)).map((x) => ("company" in x && (x.company as string) === "ZOM" ? { ...x, company: "ORG" as const } : x));
-      const r = replay({ config: { players: seated.map((x) => x.username), rounds: game.rounds, seed }, actions });
+      const r = replay({ config: { ...rulesConfig(game.rules), players: seated.map((x) => x.username), rounds: game.rounds, seed }, actions });
       const live = this.live.get(game.id) ?? { state: r.state, events: r.events, seq: actions.length };
       this.live.set(game.id, live);
       this.trimCache();
@@ -225,7 +226,7 @@ export class Hub {
       const seated = await this.store.seated(g.id);
       if (seated.length < 3) throw new GameError("A game needs at least 3 players.");
       const seed = randomInt(2 ** 31);
-      const { state, events } = newGame({ players: seated.map((p) => p.username), rounds: g.rounds, seed });
+      const { state, events } = newGame({ ...rulesConfig(g.rules), players: seated.map((p) => p.username), rounds: g.rounds, seed });
       await this.store.updateGame(g.id, { status: "playing", seed }); // one write: never "playing" without a seed
       this.live.set(g.id, { state, events: [...events], seq: 0 });
       void this.broadcast(g.id);

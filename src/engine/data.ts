@@ -17,7 +17,7 @@ export const SHORTS_PER_COMPANY = 3;
 export const THRESHOLDS = [3, 6, 9, 12] as const;
 export const HAND_SIZE = 4;
 export const MARKET_SIZE = 4;
-export const STARTING_CASH = 1200; // was 1500 in the handover; lowered 8 Oct 2026
+export const STARTING_CASH = 1000; // was 1500 in the handover; 1200 on 8 Oct, 1000 with the final rules on 9 Oct 2026
 export const OPENING_MAX_SHARES = 6;
 export const ACTIONS_PER_TURN = 2;
 export const MAX_QTY_PER_ACTION = 3;
@@ -83,9 +83,10 @@ export function indexOfPrice(price: number): number {
 
 /** Dividend per share at a price, before the HUL/HDFC Bank doubling. */
 export function baseDividend(price: number): number {
-  if (price >= 400) return 30;
-  if (price >= 225) return 20;
-  if (price >= 120) return 10;
+  if (price >= 400) return 40;
+  if (price >= 225) return 30;
+  if (price >= 110) return 20;
+  if (price >= 50) return 10;
   return 0;
 }
 
@@ -93,9 +94,10 @@ export function baseDividend(price: number): number {
 export type DividendBands = { from: number; pays: number }[];
 
 export const DIVIDEND_BANDS: DividendBands = [
-  { from: 400, pays: 30 },
-  { from: 225, pays: 20 },
-  { from: 120, pays: 10 },
+  { from: 400, pays: 40 },
+  { from: 225, pays: 30 },
+  { from: 110, pays: 20 },
+  { from: 50, pays: 10 },
 ];
 
 export function dividendPerShare(company: CompanyId, price: number, bands?: DividendBands, ignoreNoDividend = false): number {

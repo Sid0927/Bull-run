@@ -21,7 +21,7 @@ const opts = {
   driftAtOrBelow: arg("drift", "") ? Number(arg("drift", "")) : undefined,
   driftMode: arg("drift-mode", "down") as "down" | "toStart",
   ipo: !process.argv.includes("--no-ipo"),
-  delayedNews: process.argv.includes("--delayed-news"),
+  delayedNews: process.argv.includes("--instant-news") ? false : undefined,
   chairmanMultiplier: arg("chairman", "") ? Number(arg("chairman", "")) : undefined,
   // --dividends 400:40,225:30,110:20,50:10  (price it starts at : rupees a share)
   dividendBands: arg("dividends", "") ? arg("dividends", "").split(",").map((x) => ({ from: Number(x.split(":")[0]), pays: Number(x.split(":")[1]) })) : undefined,

@@ -111,7 +111,23 @@ Changes after the first simulations (8 Oct 2026):
   HUL and HDFC Bank ₹80. The companies whose cards swing hardest start highest, so Sun Pharma no
   longer goes bankrupt in about a fifth of games. The handover's prices are kept as
   `HANDOVER_START_PRICES` and as an option on the setup screen.
-- **Starting cash is ₹1,200** (was ₹1,500): closer finishes and fewer automatic chairmanships in simulation.
+- **Starting cash is ₹1,000** (was ₹1,500, then ₹1,200).
+
+### The final rules (9 Oct 2026)
+
+| Rule | Decision |
+|---|---|
+| Starting prices | Tiered: Infosys and Sun Pharma ₹120, ONGC and DLF ₹100, HUL and HDFC Bank ₹80 |
+| News | One lap later: played face-down, takes effect at the start of your next turn |
+| Dividend table | ₹10 at ₹50–100 · ₹20 at ₹110–200 · ₹30 at ₹225–350 · ₹40 at ₹400–500; HUL and HDFC Bank double; nothing below ₹50; Oracle Group none |
+| Starting cash | ₹1,000 |
+| Chairman bonus | 3× the per-share dividend, on top of the dividend on their own shares |
+| IPO | ₹60–90 band, 0–6 shares a bid (0–8 with 3 players) |
+
+These are the engine's defaults, so the app, the rulebook and the simulator all play them. Online
+games record the rule set they started under (`server/rules.ts`): games begun before this change
+keep the old rules (news at once, ₹1,200, the ₹120-up dividend table) so their saved moves still
+replay. Simulator: `--instant-news` brings back news that applies at once.
 - **5 players: 9 rounds is recommended.** 12 is still allowed; the setup screen says so.
 - Play-test variants, off by default, available in the simulator (`--start`, `--cash`,
   `--drift`, `--drift-mode`, `--chairman <multiple>`, `--dividends 400:40,225:30,110:20,50:10`) and partly in the app: a tiered starting-price layout, starting
@@ -119,7 +135,7 @@ Changes after the first simulations (8 Oct 2026):
 
 ## Oracle Group IPO (added 9 Oct 2026)
 
-A seventh company, Oracle Group (New-age tech), lists at the **start of round 4**, before the first
+A seventh company, Oracle Group (Packaging), lists at the **start of round 4**, before the first
 turn. It has its own track, 12 certificates, 3 short tokens, a chairman token and a marker.
 
 1. **Sealed bids.** Each player writes 0–6 shares (0–8 in a 3-player game) and one price: ₹60, ₹70, ₹80 or ₹90. You
@@ -132,8 +148,8 @@ turn. It has its own track, 12 certificates, 3 short tokens, a chairman token an
 4. **Everyone pays the listing price**, then the price rises one step for each of 3, 6, 9 and
    12 shares sold (the opening's rule).
 5. **Its 8 news cards are shuffled into the deck.** Four are its own (+2, +3, −2, −3) and two
-   mirrored pairs tie it to the board: *Fuel prices cut / hiked* (Oracle Group ±2, ONGC ∓1) and
-   *Quick commerce boom / Dining out returns* (Oracle Group ±2, DLF ∓1). Bull run and Market crash
+   mirrored pairs tie it to the board: *Crude falls / rises, resin gets cheaper / dearer* (Oracle Group ±2, ONGC ∓1) and
+   *Quick commerce boom / Shoppers return to malls* (Oracle Group ±2, DLF ∓1). Bull run and Market crash
    move it once it is listed; before that they pass it by.
 6. **It pays no dividend** and **cannot be shorted until round 5**. Otherwise every normal rule
    applies, bankruptcy and re-listing included.
@@ -142,11 +158,11 @@ The band and bid limit come from simulation: ₹90–120 with 4 shares a bid was
 in 85% of 4-player games and always listed at the floor. ₹60–90 with 6 shares fills far more
 often. Simulator flags: `--no-ipo`; band and limit are `ipoBand` / `ipoMaxBid` in `runBatch`.
 
-## Test rule: news one lap later (off by default)
+## News one lap later (the standard rule since 9 Oct 2026)
 
 A played news card goes face-down and takes effect at the start of its owner's next turn,
-before they trade. Cards still face-down when the game ends are discarded. Setup screen:
-"Test rule: news takes effect one lap later". Simulator: `--delayed-news`. The `follower`
+before they trade. Cards still face-down when the game ends are discarded. The opening's cards
+are still revealed together at the end of round 0. Simulator: `--instant-news` turns it off. The `follower`
 computer player copies the previous player's trades, to stand in for a table reacting.
 
 Engine-level choices the rules did not reach:

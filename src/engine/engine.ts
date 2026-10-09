@@ -620,7 +620,7 @@ function playNews(ctx: Ctx, seat: Seat, id: number) {
   if (!p.hand.includes(id)) throw new IllegalAction("That card is not in your hand.");
   p.hand = p.hand.filter((x) => x !== id);
   s.phase.step = "draw";
-  if (s.config.delayedNews) {
+  if (s.config.delayedNews !== false) {
     s.pendingNews[seat] = id;
     ctx.events.push({ kind: "newsPending", player: seat, text: `${p.name} places a news card face-down; it takes effect at the start of their next turn` });
     return;

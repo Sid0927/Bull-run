@@ -630,7 +630,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
         <span className="step-no">2</span>
         <div>
           <b>Play a news card</b>
-          <span className="muted small">{s.config.delayedNews ? "Required. It goes face-down and takes effect at the start of your next turn." : "Required. It applies at once."}</span>
+          <span className="muted small">{s.config.delayedNews !== false ? "Required. It goes face-down and takes effect at the start of your next turn." : "Required. It applies at once."}</span>
         </div>
       </div>
       <div className="cards">

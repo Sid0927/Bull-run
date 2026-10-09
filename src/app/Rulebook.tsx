@@ -10,6 +10,7 @@ import {
   COMPANIES,
   COMPANY_IDS,
   DIVIDEND_BANDS,
+  dividendPerShare,
   DIVIDEND_ROUNDS,
   GAME_LENGTHS,
   HAND_SIZE,
@@ -36,6 +37,8 @@ import { Icon } from "./ui.tsx";
 
 const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${-n}`);
+/** The worked dividend example: what HUL pays a share at ₹250. */
+const EX_HUL = dividendPerShare("HUL", 250);
 const LISTED = COMPANY_IDS.filter((c) => !COMPANIES[c].ipo);
 const IPO_CO = COMPANY_IDS.find((c) => COMPANIES[c].ipo)!;
 
@@ -120,7 +123,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>
               <span className="quick-no">2</span>
               <b>Play news</b>
-              <span>Play one card from your hand. It moves prices for everyone, so time it for your shares.</span>
+              <span>Place one card from your hand face-down. It moves prices at the start of your next turn, so everyone gets a lap to guess what you hold.</span>
             </li>
             <li>
               <span className="quick-no">3</span>
@@ -230,14 +233,15 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
               tokens) of one company. Both actions may be on the same company, and you may hold and short the same company.
             </li>
             <li>
-              <b>Play news</b>: play one card from your hand face-up. It is not optional. Its effect happens at once.
+              <b>Play news</b>: place one card from your hand face-down. It is not optional. Nobody else sees it, and it does nothing yet: it is revealed and
+              takes effect at the very start of your next turn, before you trade. A card placed in the final round is never revealed.
             </li>
             <li>
               <b>Draw</b>: take one face-up card from the market (then refill the market from the deck) or the top card of the deck, unseen.
             </li>
           </ol>
           <p>
-            When the deck runs out, shuffle the played cards into a new deck. A news effect on a company that is bankrupt, or that has not listed yet, is ignored.
+            Each company named on a revealed card moves once, by the steps the card gives it. When the deck runs out, shuffle the played cards into a new deck. A news effect on a company that is bankrupt, or that has not listed yet, is ignored.
           </p>
         </section>
 
@@ -333,8 +337,8 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             </li>
           </ul>
           <div className="example">
-            <b>Example.</b> End of round 6. HUL is at ₹250, so it pays ₹20 doubled to ₹40. Asha holds 7 HUL: she is chairman and gets 7 × ₹40 + {CHAIRMAN_MULTIPLIER} × ₹40
-            = {rs(7 * 40 + CHAIRMAN_MULTIPLIER * 40)}. Chitra has 2 HUL shorts and pays ₹80.
+            <b>Example.</b> End of round 6. HUL is at ₹250, so it pays {rs(EX_HUL / 2)} doubled to {rs(EX_HUL)}. Asha holds 7 HUL: she is chairman and gets 7 ×{" "}
+            {rs(EX_HUL)} + {CHAIRMAN_MULTIPLIER} × {rs(EX_HUL)} = {rs(7 * EX_HUL + CHAIRMAN_MULTIPLIER * EX_HUL)}. Chitra has 2 HUL shorts and pays {rs(2 * EX_HUL)}.
           </div>
         </section>
 
@@ -374,7 +378,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
 
         <section id="end">
           <h2>End of the game</h2>
-          <p>The game ends after the last round's dividends.</p>
+          <p>The game ends after the last round's dividends. Any news cards still face-down are discarded unrevealed.</p>
           <p className="formula">Net worth = cash + shares × current price − cost to buy back open shorts at the current price</p>
           <p>The highest net worth wins. A tie goes to the player with more cash; if that is tied too, the win is shared.</p>
         </section>

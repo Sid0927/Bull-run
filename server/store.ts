@@ -3,6 +3,7 @@
  * development and tests. A game is stored as its seed and the list of actions taken: the rules
  * engine replays them, so nothing else about a game needs saving.
  */
+import { CURRENT_RULES } from "./rules.ts";
 import pg from "pg";
 import type { Action } from "../src/engine/index.ts";
 
@@ -25,6 +26,8 @@ export interface Game {
   rounds: 6 | 9 | 12;
   maxPlayers: number;
   seed: number | null;
+  /** Which rule set the game is played under (see rules.ts). */
+  rules: number;
   createdAt: string;
 }
 
@@ -103,7 +106,7 @@ export class MemoryStore implements Store {
     for (const [t, s] of this.sessions) if (s.userId === userId) this.sessions.delete(t);
   }
   async createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }) {
-    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, createdAt: new Date().toISOString(), ...g };
+    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, rules: CURRENT_RULES, createdAt: new Date().toISOString(), ...g };
     this.games.push(game);
     return { ...game };
   }
@@ -182,6 +185,8 @@ CREATE TABLE IF NOT EXISTS games (
   seed INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Games created before rule sets were recorded were all played under rule set 1.
+ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
 CREATE TABLE IF NOT EXISTS game_players (
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -214,6 +219,7 @@ const toGame = (r: Row): Game => ({
   rounds: r.rounds as 6 | 9 | 12,
   maxPlayers: r.max_players as number,
   seed: (r.seed as number | null) ?? null,
+  rules: r.rules as number,
   createdAt: new Date(r.created_at as string).toISOString(),
 });
 
@@ -266,7 +272,7 @@ export class PgStore implements Store {
     await this.q("DELETE FROM sessions WHERE user_id = $1", [userId]);
   }
   async createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }) {
-    const [r] = await this.q("INSERT INTO games (code, created_by, status, rounds, max_players) VALUES ($1, $2, 'lobby', $3, $4) RETURNING *", [g.code, g.createdBy, g.rounds, g.maxPlayers]);
+    const [r] = await this.q("INSERT INTO games (code, created_by, status, rounds, max_players, rules) VALUES ($1, $2, 'lobby', $3, $4, $5) RETURNING *", [g.code, g.createdBy, g.rounds, g.maxPlayers, CURRENT_RULES]);
     return toGame(r);
   }
   async gameById(id: number) {
