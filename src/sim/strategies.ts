@@ -20,6 +20,7 @@ import {
   type Holdings,
   type Seat,
   type TradeKind,
+  tradeRoom,
 } from "../engine/index.ts";
 import { Rng } from "../engine/rng.ts";
 
@@ -122,9 +123,10 @@ export const randomPlayer: Strategy = {
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return rng.shuffle(drawChoices(s, seat, false));
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];
-    if (ph.actionsUsed < 2 && rng.next() < 0.6) {
+    if (tradeRoom(s) > 0 && rng.next() < 0.6) {
+      const room = tradeRoom(s);
       const kinds: TradeKind[] = ["buy", "sell", "short", "cover"];
-      for (let i = 0; i < 12; i++) out.push(trade(seat, kinds[rng.int(4)], COMPANY_IDS[rng.int(COMPANY_IDS.length)], 1 + rng.int(3)));
+      for (let i = 0; i < 12; i++) out.push(trade(seat, kinds[rng.int(4)], COMPANY_IDS[rng.int(COMPANY_IDS.length)], 1 + rng.int(room)));
     }
     out.push(playNews(s, seat, p.hand[rng.int(p.hand.length)]));
     return out;
@@ -153,20 +155,21 @@ export const favourPlayer: Strategy = {
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];
-    if (ph.actionsUsed < 2) {
+    if (tradeRoom(s) > 0) {
+      const room = tradeRoom(s);
       // Cover a short the hand is about to push up.
       for (const c of COMPANY_IDS) {
         const mine = openShorts(s, c, seat).length;
-        if (mine && bias[c] > 0) for (let q = Math.min(3, mine); q >= 1; q--) out.push(trade(seat, "cover", c, q));
+        if (mine && bias[c] > 0) for (let q = Math.min(room, mine); q >= 1; q--) out.push(trade(seat, "cover", c, q));
       }
       // Sell what the hand is against.
-      for (const c of COMPANY_IDS) if (p.shares[c] && bias[c] < 0) for (let q = Math.min(3, p.shares[c]); q >= 1; q--) out.push(trade(seat, "sell", c, q));
+      for (const c of COMPANY_IDS) if (p.shares[c] && bias[c] < 0) for (let q = Math.min(room, p.shares[c]); q >= 1; q--) out.push(trade(seat, "sell", c, q));
       // Buy what it favours, keeping a little cash back.
       for (const c of ranked.filter((c) => bias[c] > 0)) {
-        for (let q = 3; q >= 1; q--) if (p.cash - q * price(s, c) * 1.2 > 100) out.push(trade(seat, "buy", c, q));
+        for (let q = room; q >= 1; q--) if (p.cash - q * price(s, c) * 1.2 > 100) out.push(trade(seat, "buy", c, q));
       }
       // Short what it is strongly against.
-      for (const c of [...ranked].reverse().filter((c) => bias[c] <= -2)) for (let q = 2; q >= 1; q--) out.push(trade(seat, "short", c, q));
+      for (const c of [...ranked].reverse().filter((c) => bias[c] <= -2)) for (let q = Math.min(2, room); q >= 1; q--) out.push(trade(seat, "short", c, q));
     }
     out.push(playNews(s, seat, bestCard(s, seat)));
     return out;
@@ -192,15 +195,16 @@ export const dividendPlayer: Strategy = {
     if (ph.kind === "openingDraw" || (ph.kind === "turn" && ph.step === "draw")) return drawChoices(s, seat, true);
     if (ph.kind !== "turn") return [];
     const out: Action[] = [];
-    if (ph.actionsUsed < 2) {
+    if (tradeRoom(s) > 0) {
+      const room = tradeRoom(s);
       // Cover any short it was left with; never opens one.
       for (const c of COMPANY_IDS) {
         const mine = openShorts(s, c, seat).length;
-        if (mine) out.push(trade(seat, "cover", c, Math.min(3, mine)));
+        if (mine) out.push(trade(seat, "cover", c, Math.min(room, mine)));
       }
       // Build towards a chairmanship in the double-dividend pair, keeping a reserve.
       const order = [...SAFE].sort((a, b) => p.shares[b] - p.shares[a] || price(s, a) - price(s, b));
-      for (const c of order) for (let q = 3; q >= 1; q--) if (p.cash - q * price(s, c) * 1.2 > 300) out.push(trade(seat, "buy", c, q));
+      for (const c of order) for (let q = room; q >= 1; q--) if (p.cash - q * price(s, c) * 1.2 > 300) out.push(trade(seat, "buy", c, q));
     }
     out.push(playNews(s, seat, bestCard(s, seat)));
     return out;
@@ -226,12 +230,13 @@ export const followerPlayer: Strategy = {
     const theirRound = seat === s.startPlayer ? s.round - 1 : s.round;
     const theirs = s.tape.filter((t) => t.seat === prev && t.round === theirRound);
     const out: Action[] = [];
-    if (ph.actionsUsed < 2) {
+    if (tradeRoom(s) > 0) {
+      const room = tradeRoom(s);
       // Copy their trades in the order they made them, one per action already taken.
       for (const t of theirs.slice(ph.actionsUsed)) {
-        if (t.kind === "buy") for (let q = Math.min(3, t.qty); q >= 1; q--) if (p.cash - q * price(s, t.company) * 1.2 > 100) out.push(trade(seat, "buy", t.company, q));
+        if (t.kind === "buy") for (let q = Math.min(room, t.qty); q >= 1; q--) if (p.cash - q * price(s, t.company) * 1.2 > 100) out.push(trade(seat, "buy", t.company, q));
         if (t.kind === "short" || t.kind === "sell") {
-          if (p.shares[t.company]) out.push(trade(seat, "sell", t.company, Math.min(3, p.shares[t.company])));
+          if (p.shares[t.company]) out.push(trade(seat, "sell", t.company, Math.min(room, p.shares[t.company])));
           out.push(trade(seat, "short", t.company, 1));
         }
       }

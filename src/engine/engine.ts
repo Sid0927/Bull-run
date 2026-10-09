@@ -420,15 +420,27 @@ export function previewTrade(s: GameState, a: Extract<Action, { type: "trade" }>
   }
 }
 
+/** Most shares in one trade under this game's rules. */
+export const maxQtyOf = (c: GameConfig) => c.maxQtyPerAction ?? MAX_QTY_PER_ACTION;
+/** What `actionsUsed` counts up to: actions, or shares when actions may be split across companies. */
+export const turnBudget = (c: GameConfig) => (c.actionsPerTurn ?? ACTIONS_PER_TURN) * (c.splitActions ? maxQtyOf(c) : 1);
+/** How many more shares the player to move may trade in one go this turn (0 when trading is over). */
+export function tradeRoom(s: GameState): number {
+  if (s.phase.kind !== "turn" || s.phase.step !== "trade" || s.phase.actionsUsed >= turnBudget(s.config)) return 0;
+  return s.config.splitActions ? Math.min(maxQtyOf(s.config), turnBudget(s.config) - s.phase.actionsUsed) : maxQtyOf(s.config);
+}
+
 function checkTrade(s: GameState, seat: Seat, kind: TradeKind, c: CompanyId, qty: number, shortIds: number[] | undefined, inTurn = true) {
   if (s.phase.kind !== "turn") throw new IllegalAction("Trading happens on player turns, from round 1.");
   if (inTurn) {
     if (s.phase.player !== seat) throw new IllegalAction("It is not your turn.");
     if (s.phase.step !== "trade") throw new IllegalAction("You have already played your news card; trading is over for this turn.");
-    if (s.phase.actionsUsed >= ACTIONS_PER_TURN) throw new IllegalAction("You have used both trade actions this turn.");
+    if (s.phase.actionsUsed >= turnBudget(s.config)) throw new IllegalAction("You have used both trade actions this turn.");
   }
   if (!COMPANY_IDS.includes(c)) throw new IllegalAction("No such company.");
-  if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_ACTION) throw new IllegalAction("An action is 1 to 3 shares or short tokens.");
+  if (!Number.isInteger(qty) || qty < 1 || qty > maxQtyOf(s.config)) throw new IllegalAction(`An action is 1 to ${maxQtyOf(s.config)} shares or short tokens.`);
+  if (inTurn && s.config.splitActions && s.phase.actionsUsed + qty > turnBudget(s.config))
+    throw new IllegalAction(`Only ${turnBudget(s.config) - s.phase.actionsUsed} more shares can be traded this turn.`);
   if (!s.companies[c].listed) throw new IllegalAction(`${cname(c)} is not listed yet: it lists through the IPO at the start of round ${IPO_ROUND}.`);
   if (s.companies[c].bankrupt) throw new IllegalAction(`${cname(c)} is bankrupt and cannot be traded until it re-lists.`);
   const p = s.players[seat];
@@ -510,7 +522,7 @@ function trade(ctx: Ctx, seat: Seat, kind: TradeKind, c: CompanyId, qty: number,
         ? `${s.players[seat].name} tries to ${kind} ${cname(c)}, but the first share takes it to ₹0: nothing trades`
         : `${s.players[seat].name} ${verb} ${done} ${cname(c)} ${noun} at ${prices.map(fmt).join(", ")} — ${kind === "buy" || kind === "cover" ? "pays" : "receives"} ${fmt(total)}`,
   });
-  if (s.phase.kind === "turn") s.phase.actionsUsed += 1;
+  if (s.phase.kind === "turn") s.phase.actionsUsed += s.config.splitActions ? Math.max(1, done) : 1;
   if (done > 0) s.tape = [...s.tape, { seat, round: s.round, kind, company: c, qty: done }].slice(-12);
   syncChairmen(ctx);
   settle(ctx);

@@ -39,6 +39,15 @@ export interface GameConfig {
   dividendBands?: { from: number; pays: number }[];
   /** Play-test variant: the IPO company pays dividends like any other (default: it pays none). */
   ipoPaysDividend?: boolean;
+  /** Play-test variant: trade actions a turn (default 2). */
+  actionsPerTurn?: number;
+  /** Play-test variant: the most shares or short tokens in one trade (default 3). */
+  maxQtyPerAction?: number;
+  /**
+   * Play-test variant: an action may be split across companies. A turn then allows
+   * actionsPerTurn × maxQtyPerAction shares in total, in as many trades as you like.
+   */
+  splitActions?: boolean;
 }
 
 export interface Player {

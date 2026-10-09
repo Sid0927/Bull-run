@@ -158,6 +158,23 @@ The band and bid limit come from simulation: ₹90–120 with 4 shares a bid was
 in 85% of 4-player games and always listed at the floor. ₹60–90 with 6 shares fills far more
 often. Simulator flags: `--no-ipo`; band and limit are `ipoBand` / `ipoMaxBid` in `runBatch`.
 
+## Trade limits (simulated 9 Oct 2026, kept as they are)
+
+Simulator options `--actions <n>`, `--max-qty <n>` and `--split` (an action may be spread across
+companies, so a turn is a budget of actions × max shares). 2,000 games each, 9 rounds,
+favour/dividend/follower players:
+
+| 4 players | gap first–last | chairman present (rounds) |
+|---|---|---|
+| Current (2 trades of up to 3 shares in one company) | ₹1,409 | 34% |
+| Split a trade across companies | ₹1,515 | 41% |
+| Up to 6 shares a trade | ₹1,573 | 39% |
+| Three trades a turn | ₹1,582 | 41% |
+| All three | ₹1,852 | 49% |
+
+Seat order did not matter in any of them and bankruptcies did not change. Every loosening widened
+the gap between first and last and made chairmanships come sooner.
+
 ## News one lap later (the standard rule since 9 Oct 2026)
 
 A played news card goes face-down and takes effect at the start of its owner's next turn,
