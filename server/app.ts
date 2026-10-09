@@ -149,7 +149,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   }
 
   function json(res: ServerResponse, status: number, data: unknown) {
-    res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
     res.end(JSON.stringify(data));
   }
 
@@ -175,6 +175,14 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         "Content-Type": TYPES[extname(file)] ?? "application/octet-stream",
         "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
         "X-Content-Type-Options": "nosniff",
+        ...(extname(file) === ".html"
+          ? {
+              // Only this site's own scripts; the fonts come from Google; no framing by other sites.
+              "Content-Security-Policy":
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+              "Referrer-Policy": "same-origin",
+            }
+          : {}),
       });
       res.end(req.method === "HEAD" ? undefined : data);
     } catch {
@@ -229,7 +237,10 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     }
     if (path === "/api/logout" && method === "POST") {
       const token = cookieOf(req);
-      if (token) await store.deleteSession(token);
+      if (token) {
+        await store.deleteSession(token);
+        hub.disconnectToken(token);
+      }
       setCookie(res, "", 0);
       return json(res, 200, { ok: true });
     }
@@ -240,7 +251,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     if (path === "/api/me" && method === "GET") return json(res, 200, me(user));
     if (path === "/api/me/password" && method === "POST") {
       const b = await body(req);
-      if (!(await checkPassword(String(b.current ?? ""), user.passwordHash))) throw new HttpError(400, "Your current password is wrong.");
+      const key = `pw:${user.id}`;
+      if (limiter.blocked(key)) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+      if (!(await checkPassword(String(b.current ?? "").slice(0, 200), user.passwordHash))) {
+        limiter.fail(key);
+        throw new HttpError(400, "Your current password is wrong.");
+      }
+      limiter.clear(key);
       const bad = checkNewPassword(String(b.next ?? ""));
       if (bad) throw new HttpError(400, bad);
       await store.updateUser(user.id, { passwordHash: await hashPassword(String(b.next)) });
@@ -266,11 +283,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         log(`admin ${user.username} created ${u.username}`);
         return json(res, 200, adminView(u));
       }
-      const m = path.match(/^\/api\/admin\/users\/(\d+)$/);
+      const m = path.match(/^\/api\/admin\/users\/(\d{1,9})$/);
       if (m && method === "POST") {
         const target = await store.userById(Number(m[1]));
         if (!target) throw new HttpError(404, "No such account.");
         const b = await body(req);
+        if (b.password !== undefined && typeof b.password !== "string") throw new HttpError(400, "A password must be text.");
+        if (b.active !== undefined && typeof b.active !== "boolean") throw new HttpError(400, "Switch on or off with true or false.");
         if (b.password !== undefined) {
           const bad = checkNewPassword(String(b.password));
           if (bad) throw new HttpError(400, bad);
@@ -288,7 +307,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         const games = await store.allGames();
         return json(res, 200, await Promise.all(games.map((g) => hub.summary(g, user.id))));
       }
-      const ab = path.match(/^\/api\/admin\/games\/(\d+)\/abandon$/);
+      const ab = path.match(/^\/api\/admin\/games\/(\d{1,9})\/abandon$/);
       if (ab && method === "POST") {
         await hub.abandon(Number(ab[1]));
         return json(res, 200, { ok: true });
@@ -297,7 +316,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
 
     // ── Games ──
     if (path === "/api/games" && method === "GET") {
-      const games = (await store.gamesFor(user.id)).filter((g) => g.status !== "abandoned");
+      const games = await store.gamesFor(user.id);
       return json(res, 200, await Promise.all(games.map((g) => hub.summary(g, user.id))));
     }
     if (path === "/api/games" && method === "POST") {
@@ -315,7 +334,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       });
       return json(res, 200, await hub.summary(g, user.id));
     }
-    const gm = path.match(/^\/api\/games\/(\d+)\/(leave|start|action|stream)$/);
+    const gm = path.match(/^\/api\/games\/(\d{1,9})\/(leave|start|action|stream)$/);
     if (gm) {
       const id = Number(gm[1]);
       if (gm[2] === "leave" && method === "POST") {
@@ -354,7 +373,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         });
         res.write("retry: 2000\n\n");
         const alive = () => !closed && !res.destroyed && !res.writableEnded;
-        stop = await hub.watch(id, user, since, {
+        stop = await hub.watch(id, user, cookieOf(req) ?? "", since, {
           send: (u) => {
             if (alive()) res.write(`data: ${JSON.stringify(u)}\n\n`);
           },
@@ -391,9 +410,16 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
 /** Make sure there is an admin account to sign in with. */
 export async function ensureAdmin(store: Store, username: string, password: string, log: (m: string) => void) {
   const users = await store.listUsers();
-  if (users.some((u) => u.isAdmin)) return;
+  if (users.some((u) => u.isAdmin && u.active)) return;
   const bad = checkUsername(username) ?? checkNewPassword(password);
   if (bad) throw new Error(`ADMIN_USERNAME / ADMIN_PASSWORD: ${bad}`);
+  // No admin can sign in: bring the configured one back (switched on, with the configured password).
+  const existing = await store.userByName(username);
+  if (existing) {
+    await store.updateUser(existing.id, { active: true, isAdmin: true, passwordHash: await hashPassword(password) });
+    log(`Restored the admin account "${username}".`);
+    return;
+  }
   await store.createUser(username, await hashPassword(password), true);
   log(`Created the admin account "${username}".`);
 }

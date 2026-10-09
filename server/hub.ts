@@ -27,7 +27,12 @@ interface Live {
   lastMoveAt: string | null;
 }
 
-type Listener = { userId: number; seat: Seat | null; send: (u: GameUpdate) => void; end: () => void; alive: () => boolean; sent: number };
+type Listener = { userId: number; token: string; opened: number; seat: Seat | null; send: (u: GameUpdate) => void; end: () => void; alive: () => boolean; sent: number };
+
+/** Live connections one person may hold at once (phones, tabs); a new one ends their oldest. */
+const STREAMS_PER_USER = 8;
+/** Games one person may have waiting for players at once. */
+const LOBBY_GAMES_PER_USER = 5;
 
 /** Games kept in memory; beyond this, games nobody is watching are dropped and replayed when needed. */
 const CACHE_LIMIT = 100;
@@ -55,10 +60,12 @@ export class Hub {
         else this.inFlight.delete(gameId);
       });
     const next = prev.then(run, run);
-    this.locks.set(
-      gameId,
-      next.catch(() => {}),
-    );
+    const tail = next.catch(() => {});
+    this.locks.set(gameId, tail);
+    // Forget the lock once nothing else has queued behind it, so the map holds only games in use.
+    void tail.then(() => {
+      if (this.locks.get(gameId) === tail) this.locks.delete(gameId);
+    });
     return next;
   }
 
@@ -111,7 +118,9 @@ export class Hub {
   async summary(game: Game, forUser: number): Promise<GameSummary> {
     const seated = await this.store.seated(game.id);
     const creator = await this.store.userById(game.createdBy);
-    const live = await this.load(game);
+    // A finished or abandoned game is not replayed just to be listed.
+    const done = game.status === "ended" || game.status === "abandoned";
+    const live = done ? this.live.get(game.id) ?? null : await this.load(game);
     const mine = seated.find((p) => p.userId === forUser);
     return {
       id: game.id,
@@ -122,16 +131,16 @@ export class Hub {
       createdBy: creator?.username ?? "?",
       players: seated.map((p) => p.username),
       yourMove: !!(live && mine && game.status === "playing" && waitingOn(live.state).includes(mine.seat)),
-      round: live ? live.state.round : null,
+      round: live ? live.state.round : game.status === "ended" ? game.rounds : null,
       waitingFor: live && game.status === "playing" ? waitingOn(live.state).map((i) => seated.find((p) => p.seat === i)?.username ?? "?") : [],
       createdAt: game.createdAt,
       startedAt: game.startedAt,
       endedAt: game.endedAt,
-      lastMoveAt: live?.lastMoveAt ?? null,
+      lastMoveAt: live?.lastMoveAt ?? game.endedAt ?? null,
     };
   }
 
-  private async update(game: Game, seated: Seated[], user: User, sinceRaw: number): Promise<GameUpdate> {
+  private async update(game: Game, seated: Seated[], user: User, sinceRaw: number, summary?: Promise<GameSummary>): Promise<GameUpdate> {
     const live = await this.load(game);
     const since = Math.min(Math.max(0, Math.floor(sinceRaw) || 0), live?.events.length ?? 0);
     const mine = seated.find((p) => p.userId === user.id);
@@ -139,7 +148,7 @@ export class Hub {
     // The admin sees everything in a game they are not playing in; in their own games, only their seat.
     const reveal = user.isAdmin && !mine;
     return {
-      game: await this.summary(game, user.id),
+      game: await (summary ?? this.summary(game, user.id)),
       seats: seated.map((p) => ({ seat: p.seat, username: p.username })),
       mySeat: seat,
       revealed: reveal,
@@ -165,23 +174,40 @@ export class Hub {
     const game = await this.store.gameById(gameId);
     if (!game) return;
     const seated = await this.store.seated(gameId);
+    // Several connections of one session (or one person) share the checks and the summary.
+    const sessions = new Map<string, Promise<User | null>>();
+    const summaries = new Map<number, Promise<GameSummary>>();
     for (const l of set) {
-      // Re-check on every push: a closed connection, a switched-off account or a player who has
-      // left must stop receiving the game.
-      const user = await this.store.userById(l.userId);
-      const allowed = !!user && user.active && (user.isAdmin || seated.some((p) => p.userId === l.userId));
+      // Re-check on every push: a closed connection, an ended session, a switched-off account or a
+      // player who has left must stop receiving the game.
+      if (!sessions.has(l.token)) sessions.set(l.token, this.store.sessionUser(l.token));
+      const user = await sessions.get(l.token)!;
+      const allowed = !!user && user.id === l.userId && user.active && (user.isAdmin || seated.some((p) => p.userId === l.userId));
       if (!l.alive() || !allowed) {
         set.delete(l);
         l.end();
         continue;
       }
       try {
-        const u = await this.update(game, seated, user, l.sent);
+        if (!summaries.has(user.id)) summaries.set(user.id, this.summary(game, user.id));
+        const u = await this.update(game, seated, user, l.sent, summaries.get(user.id));
         l.sent = u.events.from + u.events.list.length;
         l.send(u);
       } catch (e) {
         // One watcher's failure must not stop the others getting the move.
         console.error(`Could not send game ${gameId} to user ${l.userId}:`, e);
+      }
+    }
+  }
+
+  /** End the live connections opened with one session (that device signed out). */
+  disconnectToken(token: string) {
+    for (const set of this.listeners.values()) {
+      for (const l of set) {
+        if (l.token === token) {
+          set.delete(l);
+          l.end();
+        }
       }
     }
   }
@@ -198,14 +224,21 @@ export class Hub {
     }
   }
 
-  async watch(gameId: number, user: User, since: number, conn: { send: (u: GameUpdate) => void; end: () => void; alive: () => boolean }): Promise<() => void> {
+  async watch(gameId: number, user: User, token: string, since: number, conn: { send: (u: GameUpdate) => void; end: () => void; alive: () => boolean }): Promise<() => void> {
     const game = await this.mustSee(gameId, user);
     const seated = await this.store.seated(gameId);
     const mine = seated.find((p) => p.userId === user.id);
     const first = await this.update(game, seated, user, since);
-    const l: Listener = { userId: user.id, seat: mine?.seat ?? null, ...conn, sent: first.events.from + first.events.list.length };
+    const l: Listener = { userId: user.id, token, opened: Date.now(), seat: mine?.seat ?? null, ...conn, sent: first.events.from + first.events.list.length };
     if (!conn.alive()) return () => {};
     conn.send(first);
+    // Too many open at once: end this person's oldest connections.
+    const theirs = [...this.listeners.entries()].flatMap(([, set]) => [...set].filter((x) => x.userId === user.id).map((x) => ({ x, set })));
+    theirs.sort((a, b) => a.x.opened - b.x.opened);
+    for (const { x, set } of theirs.slice(0, Math.max(0, theirs.length + 1 - STREAMS_PER_USER))) {
+      set.delete(x);
+      x.end();
+    }
     const set = this.listeners.get(gameId) ?? new Set();
     set.add(l);
     this.listeners.set(gameId, set);
@@ -224,6 +257,8 @@ export class Hub {
 
   async create(user: User, rounds: number, maxPlayers: number): Promise<Game> {
     if (![6, 9, 12].includes(rounds)) throw new GameError("A game is 6, 9 or 12 rounds.");
+    const waiting = (await this.store.gamesFor(user.id)).filter((g) => g.status === "lobby" && g.createdBy === user.id).length;
+    if (waiting >= LOBBY_GAMES_PER_USER) throw new GameError(`You already have ${waiting} games waiting for players. Start or cancel one first.`, 429);
     if (!Number.isInteger(maxPlayers) || maxPlayers < 3 || maxPlayers > 5) throw new GameError("A game is for 3–5 players.");
     let code = "";
     for (let tries = 0; ; tries++) {

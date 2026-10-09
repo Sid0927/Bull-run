@@ -171,7 +171,7 @@ export class MemoryStore implements Store {
   }
   async gamesFor(userId: number) {
     const ids = new Set(this.players.filter((p) => p.userId === userId).map((p) => p.gameId));
-    return this.games.filter((g) => ids.has(g.id)).map((g) => ({ ...g })).reverse();
+    return this.games.filter((g) => ids.has(g.id) && g.status !== "abandoned").map((g) => ({ ...g })).reverse().slice(0, 100);
   }
   async allGames() {
     return this.games.map((g) => ({ ...g })).reverse();
@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS login_events (
 CREATE INDEX IF NOT EXISTS login_events_at ON login_events (at DESC);
 -- Sign-in history is kept for 90 days.
 DELETE FROM login_events WHERE at < now() - interval '90 days';
+DELETE FROM sessions WHERE expires_at < now();
 -- Columns added after the first release; run after every table exists.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
@@ -339,6 +340,7 @@ export class PgStore implements Store {
   }
   async createSession(token: string, userId: number, expiresAt: Date) {
     await this.q("INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)", [token, userId, expiresAt]);
+    if (Math.random() < 0.05) await this.q("DELETE FROM sessions WHERE expires_at < now()");
   }
   async sessionUser(token: string) {
     const [r] = await this.q("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = $1 AND s.expires_at > now()", [token]);
@@ -386,7 +388,7 @@ export class PgStore implements Store {
     return r ? toGame(r) : null;
   }
   async gamesFor(userId: number) {
-    return (await this.q("SELECT g.* FROM games g JOIN game_players p ON p.game_id = g.id WHERE p.user_id = $1 ORDER BY g.id DESC", [userId])).map(toGame);
+    return (await this.q("SELECT g.* FROM games g JOIN game_players p ON p.game_id = g.id WHERE p.user_id = $1 AND g.status <> 'abandoned' ORDER BY g.id DESC LIMIT 100", [userId])).map(toGame);
   }
   async allGames() {
     return (await this.q("SELECT * FROM games ORDER BY id DESC LIMIT 200")).map(toGame);

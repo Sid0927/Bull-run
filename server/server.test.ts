@@ -258,6 +258,41 @@ describe("fixes from the security review", () => {
     assert.equal(after.filter((l) => l.username === "flood" && l.result === "blocked").length, 1);
   });
 
+  test("the admin can't lock themselves out, and odd values are refused", async () => {
+    const me = (await admin.call("/api/me")).data as { id: number };
+    assert.equal((await admin.call(`/api/admin/users/${me.id}`, { active: "no" })).status, 400);
+    assert.equal((await admin.call(`/api/admin/users/${me.id}`, { password: { x: 1 } })).status, 400);
+    assert.equal((await admin.call("/api/me")).status, 200);
+    assert.equal((await admin.call("/api/admin/users/99999999999", { active: true })).status, 404);
+    assert.equal((await players[0].call("/api/games/99999999999/leave", {})).status, 404);
+  });
+
+  test("a player can't pile up games nobody has joined", async () => {
+    const solo = new Client();
+    await admin.call("/api/admin/users", { username: "solo", password: "solo-pass1" });
+    await solo.login("solo", "solo-pass1");
+    for (let i = 0; i < 5; i++) assert.equal((await solo.call("/api/games", { rounds: 6, maxPlayers: 3 })).status, 200);
+    assert.equal((await solo.call("/api/games", { rounds: 6, maxPlayers: 3 })).status, 429);
+  });
+
+  test("signing out ends that phone's live game connection", async () => {
+    const g: GameSummary = (await players[0].call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    const p = new Client();
+    await p.login("asha", "asha-pw1");
+    const res = await fetch(`${base}/api/games/${g.id}/stream`, { headers: { Cookie: p.cookie } });
+    const reader = res.body!.getReader();
+    await reader.read();
+    await p.call("/api/logout", {});
+    const ended = await Promise.race([
+      (async () => {
+        for (;;) if ((await reader.read()).done) return true;
+      })(),
+      new Promise((r) => setTimeout(() => r(false), 3000)),
+    ]);
+    assert.equal(ended, true);
+    await players[0].call(`/api/games/${g.id}/leave`, {});
+  });
+
   test("wrong passwords from one address don't lock the player out elsewhere", async () => {
     const attacker = new Client();
     for (let i = 0; i < 6; i++) {
