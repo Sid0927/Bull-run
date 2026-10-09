@@ -65,6 +65,8 @@ export const IPO_ROUND = 4;
 // the least free money on the first day.
 export const IPO_BAND = [60, 70, 80, 90] as const;
 export const IPO_MAX_BID = 6;
+/** With three players 6 a bid left the book unfilled in 73% of games; agreed 9 Oct 2026. */
+export const IPO_MAX_BID_3P = 8;
 
 export function indexOfPrice(price: number): number {
   const i = TRACK.indexOf(price as (typeof TRACK)[number]);

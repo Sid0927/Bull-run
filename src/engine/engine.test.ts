@@ -667,6 +667,13 @@ describe("Zomato IPO", () => {
     assert.ok(!r.events.some((e) => e.kind === "price" && e.company === "ZOM"));
   });
 
+  test("in a 3-player game a bid may be for up to 8 shares", () => {
+    const s = toRound4(3);
+    assert.equal(s.phase.kind, "ipo");
+    ok(s, { type: "ipoBid", player: 0, qty: 8, price: 60 });
+    illegal(s, { type: "ipoBid", player: 0, qty: 9, price: 60 }, /0 to 8/);
+  });
+
   test("no shorting in its listing round; allowed from round 5", () => {
     const s = midGame({ round: 4 });
     listZomato(s, 150);

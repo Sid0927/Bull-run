@@ -16,6 +16,7 @@ import {
   IPO_CARDS,
   IPO_COMPANY,
   IPO_MAX_BID,
+  IPO_MAX_BID_3P,
   IPO_ROUND,
   HAND_SIZE,
   MARKET_SIZE,
@@ -115,7 +116,7 @@ export function ipoBandOf(config: GameConfig): readonly number[] {
 }
 
 export function ipoMaxBidOf(config: GameConfig): number {
-  return config.ipoMaxBid ?? IPO_MAX_BID;
+  return config.ipoMaxBid ?? (config.players.length === 3 ? IPO_MAX_BID_3P : IPO_MAX_BID);
 }
 
 /** Whose input the game is waiting for, or null when it has ended. */

@@ -72,7 +72,7 @@ Changes after the first simulations (8 Oct 2026):
 A seventh company, Zomato (New-age tech), lists at the **start of round 4**, before the first
 turn. It has its own track, 12 certificates, 3 short tokens, a chairman token and a marker.
 
-1. **Sealed bids.** Each player writes 0–6 shares and one price: ₹60, ₹70, ₹80 or ₹90. You
+1. **Sealed bids.** Each player writes 0–6 shares (0–8 in a 3-player game) and one price: ₹60, ₹70, ₹80 or ₹90. You
    must be able to pay shares × your price.
 2. **Listing price.** From ₹90 down, add up the shares bid at that price or more. The first
    price where that reaches 12 is the listing price; if it never does, it lists at ₹60.
