@@ -829,3 +829,21 @@ body {
 }
 .toast { font: inherit; text-align: left; width: calc(100% - 32px); color: var(--ink); }
 .pickable { display: block; }
+
+/* ── Admin ────────────────────────────────────────────────────────── */
+.admin-chip { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 8px 12px; border-radius: 12px; background: var(--gold-soft); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); font-size: 13px; font-weight: 600; }
+.admin-chip .icon { color: var(--gold); }
+.admin-desks { display: grid; gap: 12px; }
+.admin-desks > p { margin: -6px 0 0; }
+.admin-desk { padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); }
+.admin-desk .desk-head { padding-bottom: 10px; }
+.admin-desk h3 { margin: 10px 0 6px; }
+.admin-link { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius); background: var(--gold-soft); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); color: var(--ink); text-decoration: none; font-weight: 600; }
+.admin-link span { flex: 1; }
+.admin-link .icon:first-child { color: var(--gold); }
+.filter-seg { margin: 8px 0 12px; }
+.filter-seg button { min-height: 36px; font-size: 13px; }
+.filter-seg .count { margin-left: 4px; }
+.filter-seg button.on .count { background: transparent; color: inherit; border-color: currentColor; }
+.game-times { line-height: 1.4; }
+.log-time { display: inline-block; min-width: 3.4em; margin-right: 8px; font-family: var(--font-num); font-size: 11px; color: var(--muted); }

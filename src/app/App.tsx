@@ -6,7 +6,7 @@ import { GameScreen } from "./GameScreen.tsx";
 import { BullLogo } from "./logos.tsx";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
-import { Avatar, AvatarStack, Icon, TickerTape } from "./ui.tsx";
+import { Avatar, AvatarStack, Icon, TickerTape, When, clock } from "./ui.tsx";
 
 type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" };
 
@@ -300,6 +300,12 @@ function Lobby({ me }: { me: Me }) {
         </p>
       )}
 
+      {me.isAdmin && (
+        <a className="admin-link" href="#/admin">
+          <Icon name="shield" /> <span>See all games and accounts</span> <Icon name="arrow" size={18} />
+        </a>
+      )}
+
       {yours.length > 0 && (
         <section className="stack">
           <h2 className="section-title">
@@ -436,9 +442,7 @@ function GameList({ games, admin }: { games: GameSummary[]; admin?: (g: GameSumm
               <span className="game-status">
                 <span className={`pill pill-${g.yourMove ? "move" : g.status}`}>{g.yourMove ? "Your move" : STATUS[g.status]}</span>
                 {g.status === "playing" && g.round !== null && (
-                  <span className="muted small">
-                    Round {g.round} of {g.rounds}
-                  </span>
+                  <span className="muted small">{g.round === 0 ? `Opening · ${g.rounds} rounds` : `Round ${g.round} of ${g.rounds}`}</span>
                 )}
                 {g.status === "lobby" && (
                   <span className="muted small">
@@ -452,6 +456,43 @@ function GameList({ games, admin }: { games: GameSummary[]; admin?: (g: GameSumm
                   {g.players.join(", ")}
                   {admin && ` · by ${g.createdBy}`}
                 </span>
+              </span>
+              <span className="game-times muted small">
+                {admin ? (
+                  <>
+                    Created {clock(g.createdAt)}
+                    {g.startedAt && <> · started {clock(g.startedAt)}</>}
+                    {g.lastMoveAt && (
+                      <>
+                        {" "}
+                        · last move <When at={g.lastMoveAt} />
+                      </>
+                    )}
+                    {g.endedAt && <> · {g.status === "abandoned" ? "abandoned" : "finished"} {clock(g.endedAt)}</>}
+                    {g.waitingFor.length > 0 && <> · waiting for {g.waitingFor.join(", ")}</>}
+                  </>
+                ) : g.status === "playing" ? (
+                  <>
+                    {g.lastMoveAt ? (
+                      <>
+                        Last move <When at={g.lastMoveAt} />
+                      </>
+                    ) : (
+                      <>
+                        Started <When at={g.startedAt} />
+                      </>
+                    )}
+                    {!g.yourMove && g.waitingFor.length > 0 && <> · waiting for {g.waitingFor.join(", ")}</>}
+                  </>
+                ) : g.status === "ended" ? (
+                  <>
+                    Finished <When at={g.endedAt} />
+                  </>
+                ) : (
+                  <>
+                    Created <When at={g.createdAt} />
+                  </>
+                )}
               </span>
               {g.status === "playing" && g.round !== null && (
                 <span className="progress" aria-hidden="true">
@@ -533,11 +574,18 @@ function Admin({ me }: { me: Me }) {
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [resetPw, setResetPw] = useState("");
   const [confirmAbandon, setConfirmAbandon] = useState<number | null>(null);
+  const [show, setShow] = useState<"all" | GameSummary["status"]>("all");
   const load = useCallback(() => {
     api.users().then(setUsers, (e) => setMsg({ ok: false, text: e.message }));
     api.allGames().then(setGames, () => {});
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    // Keep the list of games current while the page is open.
+    const t = setInterval(() => api.allGames().then(setGames, () => {}), 15000);
+    return () => clearInterval(t);
+  }, [load]);
+  const shown = games.filter((g) => show === "all" || g.status === show);
 
   async function attempt(f: () => Promise<unknown>, ok: string) {
     try {
@@ -659,11 +707,27 @@ function Admin({ me }: { me: Me }) {
         <h2>
           <Icon name="chart" /> All games <span className="count">{games.length}</span>
         </h2>
-        {games.length === 0 ? (
-          <p className="muted">No games yet.</p>
+        <p className="muted small">Open any game to watch it. In games you aren't playing in, you see every player's cash, cards and sealed moves.</p>
+        <div className="seg filter-seg" role="group" aria-label="Show games">
+          {(
+            [
+              ["all", "All"],
+              ["playing", "In play"],
+              ["lobby", "Waiting room"],
+              ["ended", "Finished"],
+              ["abandoned", "Abandoned"],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} className={show === k ? "on" : ""} aria-pressed={show === k} onClick={() => setShow(k)}>
+              {label} <span className="count">{k === "all" ? games.length : games.filter((g) => g.status === k).length}</span>
+            </button>
+          ))}
+        </div>
+        {shown.length === 0 ? (
+          <p className="muted">{games.length === 0 ? "No games yet." : "No games here."}</p>
         ) : (
           <GameList
-            games={games}
+            games={shown}
             admin={(g) =>
               (g.status === "lobby" || g.status === "playing") &&
               (confirmAbandon === g.id ? (

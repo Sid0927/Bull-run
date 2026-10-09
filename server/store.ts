@@ -29,6 +29,15 @@ export interface Game {
   /** Which rule set the game is played under (see rules.ts). */
   rules: number;
   createdAt: string;
+  /** When it left the waiting room, and when it finished or was abandoned (null until then). */
+  startedAt: string | null;
+  endedAt: string | null;
+}
+
+/** A move as stored, with when it was made (null for moves saved before times were recorded). */
+export interface TimedAction {
+  action: Action;
+  at: string | null;
 }
 
 export interface Seated {
@@ -58,7 +67,7 @@ export interface Store {
   seated(gameId: number): Promise<Seated[]>;
   addPlayer(gameId: number, userId: number): Promise<void>;
   removePlayer(gameId: number, userId: number): Promise<void>;
-  actions(gameId: number): Promise<Action[]>;
+  actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
 }
 
@@ -69,7 +78,7 @@ export class MemoryStore implements Store {
   private sessions = new Map<string, { userId: number; expiresAt: Date }>();
   private games: Game[] = [];
   private players: { gameId: number; userId: number; seat: number }[] = [];
-  private log = new Map<number, Action[]>();
+  private log = new Map<number, TimedAction[]>();
 
   async init() {}
   async close() {}
@@ -106,7 +115,7 @@ export class MemoryStore implements Store {
     for (const [t, s] of this.sessions) if (s.userId === userId) this.sessions.delete(t);
   }
   async createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }) {
-    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, rules: CURRENT_RULES, createdAt: new Date().toISOString(), ...g };
+    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, rules: CURRENT_RULES, startedAt: null, endedAt: null, createdAt: new Date().toISOString(), ...g };
     this.games.push(game);
     return { ...game };
   }
@@ -127,7 +136,11 @@ export class MemoryStore implements Store {
   }
   async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
     const g = this.games.find((x) => x.id === id);
-    if (g) Object.assign(g, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
+    if (!g) return;
+    Object.assign(g, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
+    const now = new Date().toISOString();
+    if (patch.status === "playing") g.startedAt = now;
+    if (patch.status === "ended" || patch.status === "abandoned") g.endedAt = now;
   }
   async seated(gameId: number) {
     return this.players
@@ -153,7 +166,7 @@ export class MemoryStore implements Store {
   async appendAction(gameId: number, seq: number, action: Action) {
     const list = this.log.get(gameId) ?? [];
     if (list.length !== seq) throw new Error(`Action ${seq} out of order for game ${gameId}`);
-    list.push(action);
+    list.push({ action, at: new Date().toISOString() });
     this.log.set(gameId, list);
   }
 }
@@ -187,6 +200,10 @@ CREATE TABLE IF NOT EXISTS games (
 );
 -- Games created before rule sets were recorded were all played under rule set 1.
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS at TIMESTAMPTZ;
+ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
 -- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
 UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 CREATE TABLE IF NOT EXISTS game_players (
@@ -223,6 +240,8 @@ const toGame = (r: Row): Game => ({
   seed: (r.seed as number | null) ?? null,
   rules: r.rules as number,
   createdAt: new Date(r.created_at as string).toISOString(),
+  startedAt: r.started_at ? new Date(r.started_at as string).toISOString() : null,
+  endedAt: r.ended_at ? new Date(r.ended_at as string).toISOString() : null,
 });
 
 export class PgStore implements Store {
@@ -293,7 +312,13 @@ export class PgStore implements Store {
   }
   async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
     // One statement, so a game is never left "playing" without its seed.
-    await this.q("UPDATE games SET status = COALESCE($2, status), seed = COALESCE($3, seed) WHERE id = $1", [id, patch.status ?? null, patch.seed ?? null]);
+    await this.q(
+      `UPDATE games SET status = COALESCE($2, status), seed = COALESCE($3, seed),
+         started_at = CASE WHEN $2 = 'playing' THEN now() ELSE started_at END,
+         ended_at = CASE WHEN $2 IN ('ended', 'abandoned') THEN now() ELSE ended_at END
+       WHERE id = $1`,
+      [id, patch.status ?? null, patch.seed ?? null],
+    );
   }
   async seated(gameId: number) {
     return (
@@ -324,7 +349,10 @@ export class PgStore implements Store {
     }
   }
   async actions(gameId: number) {
-    return (await this.q("SELECT action FROM game_actions WHERE game_id = $1 ORDER BY seq", [gameId])).map((r) => r.action as Action);
+    return (await this.q("SELECT action, at FROM game_actions WHERE game_id = $1 ORDER BY seq", [gameId])).map((r) => ({
+      action: r.action as Action,
+      at: r.at ? new Date(r.at as string).toISOString() : null,
+    }));
   }
   async appendAction(gameId: number, seq: number, action: Action) {
     await this.q("INSERT INTO game_actions (game_id, seq, action) VALUES ($1, $2, $3)", [gameId, seq, JSON.stringify(action)]);

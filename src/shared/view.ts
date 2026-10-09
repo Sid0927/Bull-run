@@ -9,15 +9,18 @@ import type { Action, GameEvent, GameState, Seat } from "../engine/index.ts";
 
 export const HIDDEN_CARD = 0;
 
-export function viewFor(s: GameState, seat: Seat | null): GameState {
+export function viewFor(s: GameState, seat: Seat | null, reveal = false): GameState {
   const v = structuredClone(s);
-  const ended = s.phase.kind === "ended";
+  // `reveal` is the admin watching a game they are not in: every seat is shown, the deck order and
+  // the seed still are not.
+  const ended = s.phase.kind === "ended" || reveal;
   v.rng = 0;
   v.config = { ...v.config, seed: 0 };
   v.deck = v.deck.map(() => HIDDEN_CARD);
   v.players = v.players.map((p, i) =>
     i === seat || ended ? p : { ...p, cash: 0, hand: p.hand.map(() => HIDDEN_CARD) },
   );
+  if (reveal) return v;
   v.pendingNews = v.pendingNews.map((id, i) => (id === null || i === seat ? id : HIDDEN_CARD));
   if (v.phase.kind === "opening") {
     v.phase = { ...v.phase, submissions: v.phase.submissions.map((x, i) => (x === null || i === seat ? x : { orders: {}, card: HIDDEN_CARD })) };
@@ -33,10 +36,11 @@ export function viewFor(s: GameState, seat: Seat | null): GameState {
  * the cash in a round-end snapshot only to its owner until the game is over. Any mention of the
  * seed is stripped (it would let anyone rebuild every hand and the deck).
  */
-export function eventsFor(events: GameEvent[], seat: Seat | null, ended = false): GameEvent[] {
+export function eventsFor(events: GameEvent[], seat: Seat | null, ended = false, reveal = false): GameEvent[] {
+  if (reveal) ended = true;
   return events.map((e) => {
     let out = e;
-    if (e.kind === "draw" && e.from === "deck" && e.player !== seat) out = { ...e, card: HIDDEN_CARD };
+    if (e.kind === "draw" && e.from === "deck" && e.player !== seat && !reveal) out = { ...e, card: HIDDEN_CARD };
     if (e.kind === "roundEnd" && !ended) out = { ...e, cash: e.cash.map((c, i) => (i === seat ? c : 0)) };
     if (/seed\s*\d/i.test(out.text)) out = { ...out, text: out.text.replace(/\s*·?\s*seed\s*-?\d+/gi, "") };
     return out;

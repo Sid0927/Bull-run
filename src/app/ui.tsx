@@ -125,3 +125,39 @@ export function Confetti() {
     </div>
   );
 }
+
+// ─── Times ──────────────────────────────────────────────────────────────────────────────
+
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+/** "14:05" today, "Thu 14:05" this week, "3 Oct, 14:05" before that. */
+export function clock(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const hm = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (sameDay(d, now)) return hm;
+  if (now.getTime() - d.getTime() < 6 * 86400000) return `${d.toLocaleDateString("en-IN", { weekday: "short" })} ${hm}`;
+  return `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${hm}`;
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago". */
+export function ago(iso: string | null): string {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  const d = Math.floor(s / 86400);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+}
+
+/** A time that reads relatively and shows the exact moment on hover. */
+export function When({ at }: { at: string | null }) {
+  if (!at) return null;
+  return (
+    <time dateTime={at} title={new Date(at).toLocaleString("en-IN")}>
+      {ago(at)}
+    </time>
+  );
+}

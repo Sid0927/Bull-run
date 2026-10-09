@@ -6,7 +6,7 @@ import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { Board, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { AdminDesks, Board, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
 
 type Tab = "play" | "board" | "players" | "cards" | "log";
@@ -14,6 +14,7 @@ type Tab = "play" | "board" | "players" | "cards" | "log";
 export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void }) {
   const [u, setU] = useState<GameUpdate | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
+  const [times, setTimes] = useState<(string | null)[]>([]);
   const [connected, setConnected] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -25,11 +26,13 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   useEffect(() => {
     setU(null);
     setEvents([]);
+    setTimes([]);
     return follow(
       id,
       (next) => {
         setU(next);
         setEvents((have) => (next.events.from === 0 ? next.events.list : [...have.slice(0, next.events.from), ...next.events.list]));
+        setTimes((have) => (next.events.from === 0 ? next.events.times : [...have.slice(0, next.events.from), ...next.events.times]));
       },
       setConnected,
       (status, message) => {
@@ -121,10 +124,14 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
     s.phase.kind === "ended" ? (
       <EndScreen s={s} viewer={mySeat} onNew={() => go("#/")} />
     ) : mySeat === null ? (
-      <section className="panel">
-        <h2>Watching</h2>
-        <p className="muted">You are not a player in this game.</p>
-      </section>
+      u.revealed ? (
+        <AdminDesks s={s} />
+      ) : (
+        <section className="panel">
+          <h2>Watching</h2>
+          <p className="muted">You are not a player in this game.</p>
+        </section>
+      )
     ) : myMove ? (
       <Private s={s} seat={mySeat} play={play} busy={busy} />
     ) : (
@@ -150,6 +157,11 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
           )}
         </div>
       </div>
+      {u.revealed && (
+        <div className="admin-chip" role="note">
+          <Icon name="shield" size={16} /> Admin view: every player's cash and cards are shown to you.
+        </div>
+      )}
       {!connected && (
         <div className="offline" role="status">
           <span className="spinner" /> Reconnecting to the game…
@@ -174,13 +186,13 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         <aside className="side">
           <div className="pane pane-play">{action}</div>
           <div className="pane pane-players">
-            <Players s={s} viewer={mySeat} />
+            <Players s={s} viewer={mySeat} reveal={u.revealed} />
           </div>
           <div className="pane pane-cards">
             <Market s={s} />
           </div>
           <div className="pane pane-log">
-            <Log events={events} />
+            <Log events={events} times={times} />
           </div>
         </aside>
       </div>

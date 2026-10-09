@@ -4,7 +4,7 @@
  */
 import { randomInt } from "node:crypto";
 import { rulesConfig } from "./rules.ts";
-import { apply, newGame, replay, type Action, type GameEvent, type GameState, type Seat } from "../src/engine/index.ts";
+import { apply, newGame, type Action, type GameEvent, type GameState, type Seat } from "../src/engine/index.ts";
 import type { GameSummary, GameUpdate } from "../src/shared/api.ts";
 import { cleanAction, eventsFor, viewFor, waitingOn } from "../src/shared/view.ts";
 import type { Game, Seated, Store, User } from "./store.ts";
@@ -21,7 +21,10 @@ export class GameError extends Error {
 interface Live {
   state: GameState;
   events: GameEvent[];
+  /** When each event happened (the time of the move that caused it), aligned with `events`. */
+  times: (string | null)[];
   seq: number;
+  lastMoveAt: string | null;
 }
 
 type Listener = { userId: number; seat: Seat | null; send: (u: GameUpdate) => void; end: () => void; alive: () => boolean; sent: number };
@@ -65,9 +68,21 @@ export class Hub {
     const p = (async () => {
       const seated = await this.store.seated(game.id);
       // The IPO company was called ZOM before it became Oracle Group (ORG); old saved moves still say ZOM.
-      const actions = (await this.store.actions(game.id)).map((x) => ("company" in x && (x.company as string) === "ZOM" ? { ...x, company: "ORG" as const } : x));
-      const r = replay({ config: { ...rulesConfig(game.rules), players: seated.map((x) => x.username), rounds: game.rounds, seed }, actions });
-      const live = this.live.get(game.id) ?? { state: r.state, events: r.events, seq: actions.length };
+      const saved = await this.store.actions(game.id);
+      const actions = saved.map(({ action: x }) => ("company" in x && (x.company as string) === "ZOM" ? { ...x, company: "ORG" as const } : x));
+      // Replayed a move at a time so every event keeps the time of the move that caused it.
+      const start = newGame({ ...rulesConfig(game.rules), players: seated.map((x) => x.username), rounds: game.rounds, seed });
+      let state = start.state;
+      const events = [...start.events];
+      const times: (string | null)[] = start.events.map(() => game.startedAt);
+      actions.forEach((a, i) => {
+        const r = apply(state, a);
+        if (!r.ok) throw new Error(`Move ${i + 1} (${a.type}) is illegal on replay: ${r.error}`);
+        state = r.state;
+        events.push(...r.events);
+        times.push(...r.events.map(() => saved[i].at));
+      });
+      const live = this.live.get(game.id) ?? { state, events, times, seq: actions.length, lastMoveAt: saved.at(-1)?.at ?? null };
       this.live.set(game.id, live);
       this.trimCache();
       return live;
@@ -99,20 +114,32 @@ export class Hub {
       players: seated.map((p) => p.username),
       yourMove: !!(live && mine && game.status === "playing" && waitingOn(live.state).includes(mine.seat)),
       round: live ? live.state.round : null,
+      waitingFor: live && game.status === "playing" ? waitingOn(live.state).map((i) => seated.find((p) => p.seat === i)?.username ?? "?") : [],
+      createdAt: game.createdAt,
+      startedAt: game.startedAt,
+      endedAt: game.endedAt,
+      lastMoveAt: live?.lastMoveAt ?? null,
     };
   }
 
-  private async update(game: Game, seated: Seated[], userId: number, sinceRaw: number): Promise<GameUpdate> {
+  private async update(game: Game, seated: Seated[], user: User, sinceRaw: number): Promise<GameUpdate> {
     const live = await this.load(game);
     const since = Math.min(Math.max(0, Math.floor(sinceRaw) || 0), live?.events.length ?? 0);
-    const mine = seated.find((p) => p.userId === userId);
+    const mine = seated.find((p) => p.userId === user.id);
     const seat = mine ? mine.seat : null;
+    // The admin sees everything in a game they are not playing in; in their own games, only their seat.
+    const reveal = user.isAdmin && !mine;
     return {
-      game: await this.summary(game, userId),
+      game: await this.summary(game, user.id),
       seats: seated.map((p) => ({ seat: p.seat, username: p.username })),
       mySeat: seat,
-      view: live ? viewFor(live.state, seat) : null,
-      events: { from: since, list: live ? eventsFor(live.events.slice(since), seat, live.state.phase.kind === "ended") : [] },
+      revealed: reveal,
+      view: live ? viewFor(live.state, seat, reveal) : null,
+      events: {
+        from: since,
+        list: live ? eventsFor(live.events.slice(since), seat, live.state.phase.kind === "ended", reveal) : [],
+        times: live ? live.times.slice(since) : [],
+      },
       waiting: live && game.status === "playing" ? waitingOn(live.state) : [],
     };
   }
@@ -134,7 +161,7 @@ export class Hub {
         l.end();
         continue;
       }
-      const u = await this.update(game, seated, l.userId, l.sent);
+      const u = await this.update(game, seated, user, l.sent);
       l.sent = u.events.from + u.events.list.length;
       l.send(u);
     }
@@ -156,7 +183,7 @@ export class Hub {
     const game = await this.mustSee(gameId, user);
     const seated = await this.store.seated(gameId);
     const mine = seated.find((p) => p.userId === user.id);
-    const first = await this.update(game, seated, user.id, since);
+    const first = await this.update(game, seated, user, since);
     const l: Listener = { userId: user.id, seat: mine?.seat ?? null, ...conn, sent: first.events.from + first.events.list.length };
     if (!conn.alive()) return () => {};
     conn.send(first);
@@ -228,7 +255,8 @@ export class Hub {
       const seed = randomInt(2 ** 31);
       const { state, events } = newGame({ ...rulesConfig(g.rules), players: seated.map((p) => p.username), rounds: g.rounds, seed });
       await this.store.updateGame(g.id, { status: "playing", seed }); // one write: never "playing" without a seed
-      this.live.set(g.id, { state, events: [...events], seq: 0 });
+      const now = new Date().toISOString();
+      this.live.set(g.id, { state, events: [...events], times: events.map(() => now), seq: 0, lastMoveAt: null });
       void this.broadcast(g.id);
     });
   }
@@ -247,8 +275,11 @@ export class Hub {
       const r = apply(live.state, a);
       if (!r.ok) throw new GameError(r.error);
       await this.store.appendAction(g.id, live.seq, a);
+      const now = new Date().toISOString();
       live.state = r.state;
       live.events.push(...r.events);
+      live.times.push(...r.events.map(() => now));
+      live.lastMoveAt = now;
       live.seq++;
       if (r.state.phase.kind === "ended") await this.store.updateGame(g.id, { status: "ended" });
       void this.broadcast(g.id);

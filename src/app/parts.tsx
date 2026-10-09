@@ -40,7 +40,7 @@ import {
   type TradeKind,
 } from "../engine/index.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { Avatar, Confetti, Icon } from "./ui.tsx";
+import { Avatar, Confetti, Icon, clock } from "./ui.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 
 export const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -253,7 +253,7 @@ export function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, Price
 
 // ─── Public panels ──────────────────────────────────────────────────────────────────────
 
-export function Players({ s, viewer }: { s: GameState; viewer: Seat | null }) {
+export function Players({ s, viewer, reveal }: { s: GameState; viewer: Seat | null; reveal?: boolean }) {
   const who = actor(s);
   return (
     <section className="panel">
@@ -278,7 +278,7 @@ export function Players({ s, viewer }: { s: GameState; viewer: Seat | null }) {
                   </span>
                 </div>
                 <div className="player-money">
-                  <span className="num">{i === viewer ? rs(p.cash) : "₹ ••••"}</span>
+                  <span className="num">{i === viewer || reveal || s.phase.kind === "ended" ? rs(p.cash) : "₹ ••••"}</span>
                   <span className="muted small">cash</span>
                 </div>
               </div>
@@ -368,7 +368,7 @@ export function NewsCardView({ id, children, impact, picked }: { id: number; chi
   );
 }
 
-export function Log({ events }: { events: GameEvent[] }) {
+export function Log({ events, times }: { events: GameEvent[]; times?: (string | null)[] }) {
   const ref = useRef<HTMLOListElement>(null);
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight });
@@ -380,6 +380,11 @@ export function Log({ events }: { events: GameEvent[] }) {
       <ol className="log" ref={ref}>
         {events.map((e, i) => (
           <li key={i} className={`ev ${e.kind}`}>
+            {times?.[i] && (times[i] !== times[i - 1] || e.kind === "roundStart") && (
+              <time className="log-time" dateTime={times[i]!} title={new Date(times[i]!).toLocaleString("en-IN")}>
+                {clock(times[i])}
+              </time>
+            )}
             {e.text}
           </li>
         ))}
@@ -836,6 +841,65 @@ export function EndScreen({ s, viewer, onNew }: { s: GameState; viewer: Seat | n
       <button className="primary big" onClick={onNew}>
         Back to my games
       </button>
+    </section>
+  );
+}
+
+/** The admin's view of a game they are not playing in: every desk, open. */
+export function AdminDesks({ s }: { s: GameState }) {
+  const ph = s.phase;
+  return (
+    <section className="panel admin-desks">
+      <h2>
+        <Icon name="shield" /> Every player's desk
+      </h2>
+      <p className="muted small">Admin view: you can see what the players can't see of each other.</p>
+      {s.players.map((p, i) => {
+        const sub = ph.kind === "opening" ? ph.submissions[i] : null;
+        const bid = ph.kind === "ipo" ? ph.bids[i] : null;
+        return (
+          <div key={i} className="admin-desk">
+            <div className="desk-head">
+              <Avatar name={p.name} seat={i} size={36} />
+              <div className="desk-who">
+                <b>{p.name}</b>
+                <span className="muted small">
+                  {ph.kind === "opening" ? (sub ? "Orders sealed" : "Still choosing") : ph.kind === "ipo" ? (bid ? "Bid sealed" : "Still bidding") : `${p.hand.length} cards`}
+                </span>
+              </div>
+              <div className="desk-cash">
+                <span className="muted small">Cash</span>
+                <span className="cash">{rs(p.cash)}</span>
+              </div>
+            </div>
+            {sub && (
+              <p className="small">
+                Orders:{" "}
+                {Object.entries(sub.orders).filter(([, n]) => n).map(([c, n]) => `${n} ${COMPANIES[c as CompanyId].short}`).join(", ") || "none"} · card #{sub.card} “{card(sub.card).title}”
+              </p>
+            )}
+            {bid && <p className="small">IPO bid: {bid.qty ? `${bid.qty} shares at ${rs(bid.price)}` : "no shares"}</p>}
+            {s.pendingNews[i] !== null && s.pendingNews[i] !== undefined && (
+              <>
+                <h3>Face-down card</h3>
+                <div className="cards">
+                  <NewsCardView id={s.pendingNews[i]!} />
+                </div>
+              </>
+            )}
+            {p.hand.length > 0 && (
+              <>
+                <h3>Hand</h3>
+                <div className="cards">
+                  {p.hand.map((id) => (
+                    <NewsCardView key={id} id={id} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }

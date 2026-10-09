@@ -185,6 +185,19 @@ describe("fixes from the security review", () => {
       for (const a of STRATEGIES.random.candidates(s, seat, rng)) if ((await players[seat].call(`/api/games/${g.id}/action`, { action: a })).status === 200) break;
     }
     const mine = await players[0].snapshot(g.id);
+    // The admin is not in this game, so sees every desk; a player sees only their own.
+    const boss = await admin.snapshot(g.id);
+    assert.equal(boss.revealed, true);
+    assert.ok(boss.view!.players.every((p) => p.hand.every((x) => x > 0)));
+    assert.ok(boss.view!.players.some((p, i) => i > 0 && p.cash > 0));
+    assert.equal(boss.view!.config.seed, 0);
+    assert.equal(mine.revealed, false);
+    assert.ok(mine.view!.players.slice(1).every((p) => p.cash === 0 && p.hand.every((x) => x === 0)));
+    // Every event comes with the time of the move that caused it.
+    assert.equal(mine.events.times.length, mine.events.list.length);
+    assert.ok(mine.events.times.every((t) => t !== null && !Number.isNaN(Date.parse(t))));
+    const listed = ((await admin.call("/api/admin/games")).data as GameSummary[]).find((x) => x.id === g.id)!;
+    assert.ok(listed.startedAt && listed.lastMoveAt && listed.waitingFor.length > 0);
     assert.ok(mine.events.list.every((e) => !/seed/i.test(e.text)), "an event mentions the seed");
     const ends = mine.events.list.filter((e) => e.kind === "roundEnd");
     assert.ok(ends.length > 0);
