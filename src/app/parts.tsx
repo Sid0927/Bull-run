@@ -390,26 +390,47 @@ export function NewsCardView({ id, children, impact, picked }: { id: number; chi
   );
 }
 
+/** A row of cards where tapping one chooses it; the choice is confirmed with the big button below. */
+export function PickCards({ ids, pick, onPick, s, seat, label }: { ids: number[]; pick: number | null; onPick: (id: number) => void; s: GameState; seat: Seat; label: (id: number) => string }) {
+  return (
+    <div className="cards carousel">
+      {ids.map((id) => (
+        <div
+          key={id}
+          role="button"
+          tabIndex={0}
+          className="pickable"
+          aria-pressed={pick === id}
+          aria-label={label(id)}
+          onClick={() => onPick(id)}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onPick(id))}
+        >
+          <NewsCardView id={id} picked={pick === id} impact={cardImpact(s, seat, id)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Log({ events, times }: { events: GameEvent[]; times?: (string | null)[] }) {
-  const ref = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    ref.current?.scrollTo({ top: ref.current.scrollHeight });
-  }, [events.length]);
-  // Blind draws would reveal a card to everyone; the log says only that one was drawn.
+  // Newest first: what just happened is what people look for.
+  const order = events.map((_, i) => events.length - 1 - i);
   return (
     <section className="panel">
-      <h2>Event log</h2>
-      <ol className="log" ref={ref}>
-        {events.map((e, i) => (
+      <ol className="log">
+        {order.map((i) => {
+          const e = events[i];
+          return (
           <li key={i} className={`ev ${e.kind}`}>
-            {times?.[i] && (times[i] !== times[i - 1] || e.kind === "roundStart") && (
+            {times?.[i] && (times[i] !== times[i + 1] || e.kind === "roundStart") && (
               <time className="log-time" dateTime={times[i]!} title={fullTime(times[i]!)}>
                 {clock(times[i])}
               </time>
             )}
             {e.text}
           </li>
-        ))}
+          );
+        })}
       </ol>
     </section>
   );
@@ -427,7 +448,6 @@ export function Private({ s, seat, play, busy }: { s: GameState; seat: Seat; pla
   else if (s.phase.kind === "turn") body = <Turn s={s} seat={seat} play={play} />;
   return (
     <section className="panel private">
-      <DeskHead s={s} seat={seat} />
       {/* A disabled fieldset turns off every control inside it while a move is on its way. */}
       <fieldset className="desk-controls" disabled={busy} aria-busy={busy}>
         {body}
@@ -595,6 +615,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   const [kind, setKind] = useState<TradeKind>("buy");
   const [company, setCompany] = useState<CompanyId>(() => COMPANY_IDS.find((c) => s.companies[c].listed && !s.companies[c].bankrupt) ?? "HUL");
   const [qty, setQty] = useState(1);
+  const [pick, setPick] = useState<number | null>(null);
   const room0 = tradeRoom(s);
   if (room0 > 0 && qty > room0) setQty(room0);
   const action: Extract<Action, { type: "trade" }> = { type: "trade", player: seat, kind, company, qty };
@@ -692,60 +713,87 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
           <span className="muted small">{s.config.delayedNews === false ? "Required. It applies at once." : lastRound(s) ? "Required. It goes face-down, but this is the final round: the game ends before it is revealed." : "Required. It goes face-down and takes effect at the start of your next turn."}</span>
         </div>
       </div>
-      <div className="cards">
-        {p.hand.map((id) => (
-          <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
-            <button className="play primary" onClick={() => play({ type: "playNews", player: seat, card: id })}>
-              {s.config.delayedNews !== false ? "Place card" : "Play card"}
-            </button>
-          </NewsCardView>
-        ))}
-      </div>
+      <PickCards ids={p.hand} pick={pick} onPick={setPick} s={s} seat={seat} label={(id) => `Choose “${card(id).title}”`} />
+      {/* The button only floats once a card is chosen, so it never sits over the trade controls. */}
+      {pick !== null && p.hand.includes(pick) ? (
+        <div className="dock">
+          <button className="primary big" onClick={() => play({ type: "playNews", player: seat, card: pick })}>
+            {`${s.config.delayedNews !== false ? "Place" : "Play"} “${card(pick).title}”`}
+          </button>
+        </div>
+      ) : (
+        <p className="pick-hint small muted">Tap a card above to choose it — your turn ends when you place it.</p>
+      )}
     </>
   );
 }
 
 export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
   const p = s.players[seat];
+  // "deck" or a market slot.
+  const [pick, setPick] = useState<number | "deck" | null>(null);
+  const slots = s.market.map((id, slot) => ({ id, slot })).filter((x): x is { id: number; slot: number } => x.id !== null);
+  const chosen = pick === "deck" ? null : slots.find((x) => x.slot === pick) ?? null;
   return (
     <>
       <div className="step-head">
         <span className="step-no">{s.phase.kind === "openingDraw" ? <Icon name="plus" size={16} /> : 3}</span>
         <div>
           <b>{s.phase.kind === "openingDraw" ? "Draw back up to 4" : "Draw a card"}</b>
-          <span className="muted small">Take one from the market, or draw blind from the deck.</span>
+          <span className="muted small">Tap a face-up card to take it, or the deck to draw one unseen.</span>
         </div>
       </div>
-      <div className="cards">
-        {s.market.map((id, slot) =>
-          id === null ? null : (
-            <NewsCardView key={slot} id={id} impact={cardImpact(s, seat, id)}>
-              <button className="play primary" onClick={() => play({ type: "draw", player: seat, from: "market", slot })}>
-                Take
-              </button>
-            </NewsCardView>
-          ),
-        )}
-        <div className="card back">
-          <div className="deck-face" aria-hidden="true">
-            <span>?</span>
+      <div className="cards carousel">
+        {slots.map(({ id, slot }) => (
+          <div
+            key={slot}
+            role="button"
+            tabIndex={0}
+            className="pickable"
+            aria-pressed={pick === slot}
+            aria-label={`Choose “${card(id).title}”`}
+            onClick={() => setPick(slot)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setPick(slot))}
+          >
+            <NewsCardView id={id} picked={pick === slot} impact={cardImpact(s, seat, id)} />
           </div>
-          <div className="deck-count small">{s.deck.length || s.discard.length} cards in the deck</div>
-          <button className="play primary" onClick={() => play({ type: "draw", player: seat, from: "deck" })}>
-            Draw blind
-          </button>
+        ))}
+        <div
+          role="button"
+          tabIndex={0}
+          className="pickable"
+          aria-pressed={pick === "deck"}
+          aria-label="Choose the deck"
+          onClick={() => setPick("deck")}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setPick("deck"))}
+        >
+          <div className={`card back ${pick === "deck" ? "picked" : ""}`}>
+            <div className="deck-face" aria-hidden="true">
+              <span>?</span>
+            </div>
+            <div className="deck-count small">{s.deck.length || s.discard.length} cards in the deck</div>
+          </div>
         </div>
+      </div>
+      <div className="dock">
+        <button
+          className="primary big"
+          disabled={pick === null}
+          onClick={() => (pick === "deck" ? play({ type: "draw", player: seat, from: "deck" }) : chosen && play({ type: "draw", player: seat, from: "market", slot: chosen.slot }))}
+        >
+          {pick === null ? "Tap a card or the deck" : pick === "deck" ? "Draw from the deck" : `Take “${card(chosen!.id).title}”`}
+        </button>
       </div>
       {s.pendingNews[seat] !== null && (
         <>
           <h3>Your face-down card <span className="muted small">({lastRound(s) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span></h3>
-          <div className="cards">
+          <div className="cards carousel">
             <NewsCardView id={s.pendingNews[seat]!} />
           </div>
         </>
       )}
       <h3>Your hand</h3>
-      <div className="cards">
+      <div className="cards carousel">
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} />
         ))}

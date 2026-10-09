@@ -1,15 +1,17 @@
 /** One online game: the waiting room before it starts, then the board for everyone. */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COMPANIES, COMPANY_IDS, THRESHOLDS, TOP, TRACK, capIndex, openShorts, outstanding, price, type Action, type GameEvent, type GameState, type Seat } from "../engine/index.ts";
 import type { GameUpdate, Me } from "../shared/api.ts";
 import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { AdminDesks, Board, chairOf, turnDoneThisRound, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { AdminDesks, Board, chairOf, turnDoneThisRound, Change, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
+import { summarize, type Summary } from "./activity.ts";
+import { Activity, Hud, MarketTable, Notifications, SummaryCard } from "./game-ui.tsx";
 
-type Tab = "play" | "board" | "players" | "cards" | "log";
+type Tab = "play" | "board" | "players" | "log";
 
 export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void }) {
   const [u, setU] = useState<GameUpdate | null>(null);
@@ -65,6 +67,25 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   }, [myMove]);
 
   const hist = useMemo(() => (s ? priceHistory(s, events) : null), [s, events]);
+  const sums = useMemo(() => (s ? summarize(events, s, mySeat) : []), [s, events, mySeat]);
+
+  // A pop-up for every turn that finishes (other players' turns, payouts, the IPO), so what
+  // changed is never missed. Whatever had already happened when the screen opened isn't repeated.
+  const [notes, setNotes] = useState<{ key: number; x: Summary }[]>([]);
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    if (!s) return;
+    const done = sums.filter((x) => x.done);
+    const top = done.reduce((m, x) => Math.max(m, x.id), -1);
+    if (seen.current === null) {
+      seen.current = top;
+      return;
+    }
+    const fresh = done.filter((x) => x.id > seen.current! && !(x.kind === "turn" && x.player === mySeat)).reverse();
+    seen.current = Math.max(seen.current, top);
+    if (fresh.length) setNotes((n) => [...n, ...fresh.map((x) => ({ key: x.id, x }))].slice(-3));
+  }, [sums, s, mySeat]);
+  const closeNote = useCallback((key: number) => setNotes((n) => n.filter((x) => x.key !== key)), []);
 
   if (!u)
     return (
@@ -118,7 +139,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   if (s.phase.kind === "ended") status = "Closing bell — game over";
   else if (myMove) {
     status = s.debt ? "You must sell shares to pay" : s.phase.kind === "opening" ? "Write your opening orders" : s.phase.kind === "ipo" ? "Place your IPO bid" : "Your move";
-    sub = s.debt ? "" : s.phase.kind === "turn" ? (s.phase.step === "draw" ? "Draw a card to finish your turn" : "Trade, then play a news card") : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards" : "";
+    sub = s.debt ? "" : s.phase.kind === "turn" ? (s.phase.step === "draw" ? "Draw a card to finish your turn" : "Trade if you want, then place a card") : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards" : "";
   } else if (s.phase.kind === "opening" || s.phase.kind === "ipo") status = `Waiting for ${names(u.waiting)}`;
   else if (s.debt) status = `${names(u.waiting)} is selling shares to pay`;
   else if (s.phase.kind === "openingDraw" || (s.phase.kind === "turn" && s.phase.step === "draw")) status = `${names(u.waiting)} is drawing a card`;
@@ -145,23 +166,8 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   return (
     <div className={`game tab-${tab}`}>
       <h1 className="sr-only">Game {u.game.code}</h1>
-      <div className="game-head">
-        <RoundTracker s={s} />
-        <div className={`status-line ${myMove ? "mine" : ""} ${s.phase.kind === "ended" ? "over" : ""}`} role="status">
-          {myMove ? <span className="pulse-dot light" /> : s.phase.kind !== "ended" && u.waiting.length > 0 && <Avatar name={s.players[u.waiting[0]].name} seat={u.waiting[0]} size={22} />}
-          <span className="status-text">
-            <b>{status}</b>
-            {sub && <span className="status-sub">{sub}</span>}
-          </span>
-          {!myMove && s.phase.kind !== "ended" && (
-            <span className="dots" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-          )}
-        </div>
-      </div>
+      <Hud s={s} status={status} sub={sub} mine={myMove} mySeat={mySeat} waitingOn={u.waiting} />
+      <Notifications items={notes} onClose={closeNote} />
       {u.revealed && (
         <div className="admin-chip" role="note">
           <Icon name="shield" size={16} /> Admin view: every player's cash and cards are shown to you.
@@ -177,29 +183,39 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
           <span role="alert">{toast}</span> <span className="muted small">(tap to close)</span>
         </button>
       )}
-      <Ticker s={s} hist={hist} />
+      <div className="only-narrow">
+        <Ticker s={s} hist={hist} />
+      </div>
 
-      <div className="layout">
-        <div className="col-board">
-          <div className="only-wide">
-            <Board s={s} hist={hist} />
-          </div>
-          <div className="only-narrow pane pane-board">
-            <CompactBoard s={s} hist={hist} />
-          </div>
+      <div className="g-layout">
+        <div className="g-col g-market pane pane-board">
+          <section className="panel rail-panel">
+            <RoundTracker s={s} />
+          </section>
+          <MarketTable s={s} hist={hist} />
+          <Market s={s} />
         </div>
-        <aside className="side">
-          <div className="pane pane-play">{action}</div>
+        <div className="g-col g-desk pane pane-play">
+          {sums[0] && s.phase.kind !== "ended" && (
+            <button className="latest-wrap" onClick={() => setTab("log")} aria-label="Latest: open what happened">
+              <span className="latest-label">Latest</span>
+              <SummaryCard x={sums[0]} s={s} at={times[sums[0].last] ?? null} latest />
+            </button>
+          )}
+          {action}
+        </div>
+        <div className="g-col g-side">
+          <div className="pane pane-log">
+            <Activity sums={sums} s={s} times={times} />
+            <details className="raw-log">
+              <summary>Every detail, newest first</summary>
+              <Log events={events} times={times} />
+            </details>
+          </div>
           <div className="pane pane-players">
             <Players s={s} viewer={mySeat} reveal={u.revealed} />
           </div>
-          <div className="pane pane-cards">
-            <Market s={s} />
-          </div>
-          <div className="pane pane-log">
-            <Log events={events} times={times} />
-          </div>
-        </aside>
+        </div>
       </div>
 
       <nav className="tabbar only-narrow" aria-label="Game sections">
@@ -208,8 +224,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
             ["play", "Play", "home"],
             ["board", "Prices", "chart"],
             ["players", "Players", "users"],
-            ["cards", "Market", "copy"],
-            ["log", "Log", "book"],
+            ["log", "Happened", "book"],
           ] as [Tab, string, IconName][]
         ).map(([t, label, icon]) => (
           <button key={t} className={`${tab === t ? "on" : ""} ${t === "play" && myMove ? "tab-alert" : ""}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
@@ -227,19 +242,19 @@ function Waiting({ s, seat, who }: { s: GameState; seat: Seat; who: string }) {
   const p = s.players[seat];
   return (
     <section className="panel private waiting">
-      <DeskHead s={s} seat={seat} note={`Waiting for ${who}`} />
+      <p className="small muted waiting-for">Waiting for {who} — your cards are below.</p>
       {s.pendingNews[seat] !== null && s.pendingNews[seat] !== undefined && (
         <>
           <h3>
             Your face-down card <span className="muted small">({lastRound(s) && turnDoneThisRound(s, seat) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span>
           </h3>
-          <div className="cards">
+          <div className="cards carousel">
             <NewsCardView id={s.pendingNews[seat]!} />
           </div>
         </>
       )}
       <h3>Your hand</h3>
-      <div className="cards">
+      <div className="cards carousel">
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)} />
         ))}
