@@ -239,8 +239,8 @@ export function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, Price
         );
       })}
       <div className="legend small muted">
-        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Oracle Group pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
-        {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
+        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Oracle Group pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) also gets a bonus of{" "}
+        {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend, on top of their own shares' dividends. Each open short pays the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
         {ipoEnabled(s.config) && ` Oracle Group lists by sealed bids at the start of round ${IPO_ROUND}.`}
       </div>
     </section>

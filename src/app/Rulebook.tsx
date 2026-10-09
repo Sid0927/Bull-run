@@ -324,8 +324,8 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>Every shareholder is paid the per-share amount for each share. Oracle Group and bankrupt companies pay nothing.</li>
             <li>
               The <b>chairman</b> is the one player holding at least {CHAIRMAN_SHARES} of a company's shares; they take its chairman token, which moves the moment
-              holdings change. If two players hold {CHAIRMAN_SHARES} each, there is no chairman. The chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the per-share
-              dividend.
+              holdings change. If two players hold {CHAIRMAN_SHARES} each, there is no chairman. At each payout the chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the
+              per-share dividend, on top of the dividend on their own shares.
             </li>
             <li>
               Each open short token pays the per-share amount to the bank. All dividends and bonuses are paid out first, then short sellers pay. A short seller who
