@@ -6,11 +6,12 @@ import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { Board, Change, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { Board, Change, DeskHead, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { Avatar, Icon, type IconName } from "./ui.tsx";
 
 type Tab = "play" | "board" | "players" | "cards" | "log";
 
-export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: () => void }) {
+export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void }) {
   const [u, setU] = useState<GameUpdate | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [connected, setConnected] = useState(true);
@@ -59,21 +60,32 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
     return (
       <main className="page">
         {error ? (
-          <>
+          <div className="empty-state">
+            <Icon name="x" size={32} />
             <p className="error">{error}</p>
-            <a href="#/">Back to my games</a>
-          </>
+            <a className="button primary" href="#/">
+              Back to my games
+            </a>
+          </div>
         ) : (
-          <p className="muted">Connecting…</p>
+          <div className="empty-state">
+            <span className="spinner big" />
+            <p className="muted">Opening the trading floor…</p>
+          </div>
         )}
       </main>
     );
   if (u.game.status === "abandoned")
     return (
       <main className="page">
-        <h1 className="page-title">Game {u.game.code}</h1>
-        <p>This game was abandoned.</p>
-        <a href="#/">Back to my games</a>
+        <div className="empty-state">
+          <Icon name="flag" size={32} />
+          <h1 className="page-title">Game {u.game.code}</h1>
+          <p>This game was abandoned by the admin.</p>
+          <a className="button primary" href="#/">
+            Back to my games
+          </a>
+        </div>
       </main>
     );
   if (!s || !hist) return <WaitingRoom u={u} me={me} onError={setError} error={error} />;
@@ -85,14 +97,17 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
   };
 
   let status: string;
-  if (s.phase.kind === "ended") status = "Game over";
-  else if (myMove) status = s.debt ? "You must sell shares to pay" : s.phase.kind === "opening" ? "Write your opening orders" : s.phase.kind === "ipo" ? "Place your IPO bid" : "Your move";
-  else if (s.phase.kind === "opening" || s.phase.kind === "ipo") status = `Waiting for ${names(u.waiting)}`;
-  else status = `${names(u.waiting)}'s move`;
+  let sub = "";
+  if (s.phase.kind === "ended") status = "Closing bell — game over";
+  else if (myMove) {
+    status = s.debt ? "You must sell shares to pay" : s.phase.kind === "opening" ? "Write your opening orders" : s.phase.kind === "ipo" ? "Place your IPO bid" : "Your move";
+    sub = s.debt ? "" : s.phase.kind === "turn" ? (s.phase.step === "draw" ? "Draw a card to finish your turn" : "Trade, then play a news card") : s.phase.kind === "openingDraw" ? "Draw back up to 4 cards" : "";
+  } else if (s.phase.kind === "opening" || s.phase.kind === "ipo") status = `Waiting for ${names(u.waiting)}`;
+  else status = `${names(u.waiting)} is trading`;
 
   const action =
     s.phase.kind === "ended" ? (
-      <EndScreen s={s} onNew={() => go("#/")} />
+      <EndScreen s={s} viewer={mySeat} onNew={() => go("#/")} />
     ) : mySeat === null ? (
       <section className="panel">
         <h2>Watching</h2>
@@ -108,11 +123,26 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
     <div className={`game tab-${tab}`}>
       <div className="game-head">
         <RoundTracker s={s} />
-        <div className={`status-line ${myMove ? "mine" : ""}`} role="status">
-          {status}
+        <div className={`status-line ${myMove ? "mine" : ""} ${s.phase.kind === "ended" ? "over" : ""}`} role="status">
+          {myMove ? <span className="pulse-dot light" /> : s.phase.kind !== "ended" && u.waiting.length > 0 && <Avatar name={s.players[u.waiting[0]].name} seat={u.waiting[0]} size={22} />}
+          <span className="status-text">
+            <b>{status}</b>
+            {sub && <span className="status-sub">{sub}</span>}
+          </span>
+          {!myMove && s.phase.kind !== "ended" && (
+            <span className="dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          )}
         </div>
       </div>
-      {!connected && <div className="offline">Reconnecting to the game…</div>}
+      {!connected && (
+        <div className="offline" role="status">
+          <span className="spinner" /> Reconnecting to the game…
+        </div>
+      )}
       {toast && (
         <div className="toast" role="alert" onClick={() => setToast("")}>
           {toast} <span className="muted small">(tap to close)</span>
@@ -146,18 +176,18 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
       <nav className="tabbar only-narrow" aria-label="Game sections">
         {(
           [
-            ["play", myMove ? "● Play" : "Play"],
-            ["board", "Prices"],
-            ["players", "Players"],
-            ["cards", "Market"],
-            ["log", "Log"],
-          ] as [Tab, string][]
-        ).map(([t, label]) => (
-          <button key={t} className={tab === t ? "on" : ""} aria-pressed={tab === t} onClick={() => setTab(t)}>
-            {label}
+            ["play", "Play", "home"],
+            ["board", "Prices", "chart"],
+            ["players", "Players", "users"],
+            ["cards", "Market", "copy"],
+            ["log", "Log", "book"],
+          ] as [Tab, string, IconName][]
+        ).map(([t, label, icon]) => (
+          <button key={t} className={`${tab === t ? "on" : ""} ${t === "play" && myMove ? "alert" : ""}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
+            <Icon name={icon} size={20} />
+            <span>{label}</span>
           </button>
         ))}
-        <button onClick={onRules}>Rules</button>
       </nav>
     </div>
   );
@@ -167,11 +197,8 @@ export function GameScreen({ id, me, onRules }: { id: number; me: Me; onRules: (
 function Waiting({ s, seat, who }: { s: GameState; seat: Seat; who: string }) {
   const p = s.players[seat];
   return (
-    <section className="panel private">
-      <h2>
-        {p.name} <span className="cash">{rs(p.cash)}</span>
-      </h2>
-      <p className="waiting-note">Waiting for {who}.</p>
+    <section className="panel private waiting">
+      <DeskHead s={s} seat={seat} note={`Waiting for ${who}`} />
       {s.pendingNews[seat] !== null && s.pendingNews[seat] !== undefined && (
         <>
           <h3>Your face-down card</h3>
@@ -253,6 +280,7 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
   const g = u.game;
   const isCreator = g.createdBy === me.username;
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
   const share = async () => {
     const text = `Join my Bull Run game with code ${g.code}: ${location.origin}`;
     try {
@@ -260,51 +288,81 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
       else {
         await navigator.clipboard.writeText(g.code);
         setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       }
     } catch {
       /* cancelled */
     }
   };
+  const act = (f: () => Promise<unknown>, after?: () => void) => {
+    setBusy(true);
+    f().then(
+      () => after?.(),
+      (e) => onError((e as Error).message),
+    ).finally(() => setBusy(false));
+  };
+  const need = Math.max(0, 3 - u.seats.length);
   return (
     <main className="page">
-      <section className="panel waiting-room">
-        <p className="muted">Game code</p>
-        <div className="big-code" aria-label={`Game code ${g.code.split("").join(" ")}`}>
-          {g.code}
+      <section className="waiting-room">
+        <p className="eyebrow">Waiting room</p>
+        <div className="ticket-big">
+          <span className="ticket-label">Game code</span>
+          <div className="big-code" aria-label={`Game code ${g.code.split("").join(" ")}`}>
+            {g.code.split("").map((ch, i) => (
+              <span key={i}>{ch}</span>
+            ))}
+          </div>
+          <button className="share-btn" onClick={share}>
+            <Icon name={copied ? "check" : "share"} size={18} /> {copied ? "Code copied" : "Share the code"}
+          </button>
         </div>
-        <button onClick={share}>{copied ? "Code copied" : "Share the code"}</button>
         <p className="small muted">
           {g.rounds} rounds · up to {g.maxPlayers} players · standard rules
         </p>
-        <h2>
-          Players ({u.seats.length}/{g.maxPlayers})
-        </h2>
-        <ol className="seat-list">
-          {u.seats.map((p) => (
-            <li key={p.seat}>
-              {p.username}
-              {p.username === g.createdBy && <span className="tag">host</span>}
-              {p.username === me.username && <span className="tag">you</span>}
-            </li>
-          ))}
-        </ol>
+
+        <div className="seats">
+          {Array.from({ length: g.maxPlayers }, (_, i) => {
+            const p = u.seats[i];
+            return p ? (
+              <div key={i} className="seat filled">
+                <Avatar name={p.username} seat={p.seat} size={48} />
+                <b>{p.username}</b>
+                <span className="small muted">{p.username === g.createdBy ? "host" : p.username === me.username ? "you" : "ready"}</span>
+              </div>
+            ) : (
+              <div key={i} className="seat empty">
+                <span className="seat-ring" />
+                <span className="small muted">{i < 3 ? "needed" : "open seat"}</span>
+              </div>
+            );
+          })}
+        </div>
+
         {error && <p className="error">{error}</p>}
         {isCreator || me.isAdmin ? (
           <>
-            <button className="primary big" disabled={u.seats.length < 3} onClick={() => api.start(g.id).catch((e) => onError(e.message))}>
-              {u.seats.length < 3 ? `Need ${3 - u.seats.length} more to start` : "Start the game"}
+            <button className="primary big" disabled={need > 0 || busy} onClick={() => act(() => api.start(g.id))}>
+              {need > 0 ? `Need ${need} more to start` : "Start the game"}
             </button>
             {isCreator && (
-              <button className="link" onClick={() => api.leave(g.id).then(() => go("#/"), (e) => onError(e.message))}>
+              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/"))}>
                 Cancel this game
               </button>
             )}
           </>
         ) : (
           <>
-            <p>Waiting for {g.createdBy} to start the game.</p>
+            <p className="waiting-note">
+              <span className="dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>{" "}
+              Waiting for {g.createdBy} to start the game
+            </p>
             {u.mySeat !== null && (
-              <button className="link" onClick={() => api.leave(g.id).then(() => go("#/"), (e) => onError(e.message))}>
+              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/"))}>
                 Leave this game
               </button>
             )}

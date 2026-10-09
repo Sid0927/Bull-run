@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { GAME_LENGTHS } from "../engine/index.ts";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { DIVIDEND_ROUNDS, GAME_LENGTHS, IPO_ROUND, STARTING_CASH } from "../engine/index.ts";
 import type { AdminUser, GameSummary, Me } from "../shared/api.ts";
 import { ApiError, api } from "./api.ts";
 import { GameScreen } from "./GameScreen.tsx";
 import { BullLogo } from "./logos.tsx";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
+import { Avatar, AvatarStack, CandleBackdrop, Icon, TickerTape } from "./ui.tsx";
 
 type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" };
 
@@ -27,7 +28,10 @@ export function App() {
   const [back, setBack] = useState("#/");
 
   useEffect(() => {
-    const on = () => setRoute(parse(location.hash));
+    const on = () => {
+      setRoute(parse(location.hash));
+      window.scrollTo(0, 0);
+    };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
@@ -41,7 +45,12 @@ export function App() {
   };
 
   if (route.name === "rules") return <Rulebook onClose={() => go(back)} />;
-  if (me === undefined) return <div className="splash"><BullLogo size={56} /></div>;
+  if (me === undefined)
+    return (
+      <div className="splash">
+        <BullLogo size={64} />
+      </div>
+    );
   if (me === null) return <Login onIn={setMe} onRules={openRules} />;
 
   const signOut = async () => {
@@ -62,25 +71,68 @@ export function App() {
 
 function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
   return (
     <header className="topbar">
-      <a className="brand" href="#/">
-        <BullLogo size={28} /> Bull Run
+      <a className="brand" href="#/" aria-label="Bull Run: my games">
+        <BullLogo size={30} />
+        <span className="brand-word">
+          Bull<span>Run</span>
+        </span>
       </a>
       <nav className="topnav">
-        <button onClick={onRules}>Rules</button>
-        <ThemeToggle />
-        <button className="me-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {me.username} ▾
+        <button className="icon-btn" onClick={onRules} aria-label="How to play" title="How to play">
+          <Icon name="book" />
         </button>
-      </nav>
-      {open && (
-        <div className="menu" onClick={() => setOpen(false)}>
-          <a href="#/">My games</a>
-          {me.isAdmin && <a href="#/admin">Admin</a>}
-          <button onClick={onSignOut}>Sign out</button>
+        <ThemeToggle />
+        <div className="me-wrap" ref={ref}>
+          <button className="me-btn" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
+            <Avatar name={me.username} size={28} />
+            <span className="me-name">{me.username}</span>
+            <span className="chev" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          {open && (
+            <div className="menu" role="menu" onClick={() => setOpen(false)}>
+              <div className="menu-head">
+                <Avatar name={me.username} size={36} />
+                <div>
+                  <b>{me.username}</b>
+                  <div className="muted small">{me.isAdmin ? "Admin" : "Player"}</div>
+                </div>
+              </div>
+              <a href="#/" role="menuitem">
+                <Icon name="home" size={18} /> My games
+              </a>
+              {me.isAdmin && (
+                <a href="#/admin" role="menuitem">
+                  <Icon name="shield" size={18} /> Admin
+                </a>
+              )}
+              <button role="menuitem" onClick={onRules}>
+                <Icon name="book" size={18} /> How to play
+              </button>
+              <button role="menuitem" onClick={onSignOut}>
+                <Icon name="out" size={18} /> Sign out
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </nav>
     </header>
   );
 }
@@ -90,6 +142,7 @@ function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSig
 function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
@@ -97,7 +150,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
     setBusy(true);
     setError("");
     try {
-      onIn(await api.login(username, password));
+      onIn(await api.login(username.trim(), password));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -106,44 +159,81 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
   }
   return (
     <main className="login">
+      <TickerTape />
+      <CandleBackdrop />
+      <div className="login-glow" aria-hidden="true" />
       <div className="login-theme">
         <ThemeToggle />
       </div>
-      <div className="login-card">
-        <BullLogo size={64} />
-        <h1>Bull Run</h1>
-        <p className="muted">The Indian stock market game for 3–5 players</p>
-        <form onSubmit={submit} className="stack">
-          <label>
-            Username
-            <input id="username" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required />
+      <div className="login-center">
+        <div className="login-hero">
+          <div className="logo-halo">
+            <BullLogo size={76} />
+          </div>
+          <h1 className="wordmark">
+            Bull <span>Run</span>
+          </h1>
+          <p className="tagline">The Dalal Street board game</p>
+          <ul className="hero-facts" aria-label="At a glance">
+            <li>3–5 traders</li>
+            <li>₹{STARTING_CASH.toLocaleString("en-IN")} each</li>
+            <li>7 companies</li>
+          </ul>
+        </div>
+        <form onSubmit={submit} className="login-card">
+          <h2>Sign in to trade</h2>
+          <label className="float">
+            <input id="username" placeholder=" " autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <span>Username</span>
           </label>
-          <label>
-            Password
-            <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <label className="float">
+            <input id="password" placeholder=" " type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <span>Password</span>
+            <button type="button" className="peek" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}>
+              {show ? "Hide" : "Show"}
+            </button>
           </label>
-          {error && <p className="error">{error}</p>}
-          <button className="primary big" disabled={busy}>
-            {busy ? "Signing in…" : "Sign in"}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary big shine" disabled={busy}>
+            {busy ? (
+              <span className="spinner" aria-label="Signing in" />
+            ) : (
+              <>
+                Enter the market <Icon name="arrow" size={18} />
+              </>
+            )}
+          </button>
+          <p className="muted small center">Accounts are given out by the game's admin.</p>
+          <button type="button" className="ghost-link" onClick={onRules}>
+            <Icon name="book" size={16} /> How to play
           </button>
         </form>
-        <p className="muted small">Accounts are given out by the game's admin.</p>
-        <button className="link" onClick={onRules}>
-          How to play
-        </button>
+        <p className="credit">
+          <span>Created by</span> <b>Siddhant Bansal</b>
+        </p>
       </div>
-      <p className="credit">Created by Siddhant Bansal</p>
+      <TickerTape reverse />
     </main>
   );
 }
 
 // ─── Lobby ──────────────────────────────────────────────────────────────────────────────
 
-const STATUS: Record<GameSummary["status"], string> = { lobby: "Waiting for players", playing: "In play", ended: "Finished", abandoned: "Abandoned" };
+const STATUS: Record<GameSummary["status"], string> = { lobby: "Waiting room", playing: "In play", ended: "Finished", abandoned: "Abandoned" };
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? "Burning the midnight oil" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
 
 function Lobby({ me }: { me: Me }) {
   const [games, setGames] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
   const [rounds, setRounds] = useState(9);
   const [maxPlayers, setMaxPlayers] = useState(5);
@@ -151,96 +241,144 @@ function Lobby({ me }: { me: Me }) {
   useEffect(() => {
     load();
     const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   async function run(f: () => Promise<GameSummary>) {
+    if (busy) return;
     setError("");
+    setBusy(true);
     try {
       const g = await f();
       go(`#/game/${g.id}`);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
-  const live = games?.filter((g) => g.status === "lobby" || g.status === "playing") ?? [];
+  const yours = games?.filter((g) => g.yourMove) ?? [];
+  const live = games?.filter((g) => !g.yourMove && (g.status === "lobby" || g.status === "playing")) ?? [];
   const done = games?.filter((g) => g.status === "ended") ?? [];
+  const divRounds = DIVIDEND_ROUNDS.filter((r) => r <= rounds);
   return (
-    <main className="page">
-      <h1 className="page-title">Hello, {me.username}</h1>
+    <main className="page lobby">
+      <section className="lobby-hero">
+        <div>
+          <p className="eyebrow">{greeting()}</p>
+          <h1 className="page-title">{me.username}</h1>
+          <p className="muted">
+            {games === null ? "Checking the floor…" : yours.length ? `${yours.length} ${yours.length === 1 ? "game is" : "games are"} waiting on your move.` : "The market is open. Start a game or join one."}
+          </p>
+        </div>
+        <div className="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 120 60">
+            <path d="M2 52 L22 40 L36 46 L56 24 L70 32 L92 10 L118 4" className="hero-line" />
+            <path d="M2 52 L22 40 L36 46 L56 24 L70 32 L92 10 L118 4 L118 60 L2 60 Z" className="hero-fill" />
+          </svg>
+        </div>
+      </section>
+
       {error && (
-        <p className="error" role="alert">
+        <p className="error banner" role="alert">
           {error}
         </p>
       )}
+
+      {yours.length > 0 && (
+        <section className="stack">
+          <h2 className="section-title">
+            <span className="pulse-dot" /> Your move
+          </h2>
+          <GameList games={yours} />
+        </section>
+      )}
+
       <div className="lobby-grid">
-        <section className="panel">
-          <h2>Join a game</h2>
+        <section className="panel join-panel">
+          <h2>
+            <Icon name="users" /> Join a game
+          </h2>
+          <p className="muted small">Type the 5-letter code the host shared.</p>
           <form
-            className="row"
+            className="stack"
             onSubmit={(e) => {
               e.preventDefault();
               run(() => api.join(code));
             }}
           >
-            <input
-              id="join-code"
-              className="code-input"
-              placeholder="Code"
-              value={code}
-              maxLength={5}
-              autoCapitalize="characters"
-              autoComplete="off"
-              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-            />
-            <button className="primary" disabled={code.length !== 5}>
-              Join
+            <CodeInput value={code} onChange={setCode} />
+            <button className="primary big" disabled={code.length !== 5 || busy}>
+              Join game <Icon name="arrow" size={18} />
             </button>
           </form>
         </section>
-        <section className="panel">
-          <h2>New game</h2>
+        <section className="panel new-panel">
+          <h2>
+            <Icon name="plus" /> New game
+          </h2>
           <div className="field">
-            Rounds
-            <div className="seg" role="group" aria-label="Rounds">
+            <span className="field-label">Rounds</span>
+            <div className="seg seg-fill" role="group" aria-label="Rounds">
               {GAME_LENGTHS.map((n) => (
-                <button key={n} className={n === rounds ? "on" : ""} onClick={() => setRounds(n)}>
+                <button key={n} className={n === rounds ? "on" : ""} aria-pressed={n === rounds} onClick={() => setRounds(n)}>
                   {n}
                 </button>
               ))}
             </div>
           </div>
           <div className="field">
-            Players (up to)
-            <div className="seg" role="group" aria-label="Most players">
+            <span className="field-label">Players (up to)</span>
+            <div className="seg seg-fill" role="group" aria-label="Most players">
               {[3, 4, 5].map((n) => (
-                <button key={n} className={n === maxPlayers ? "on" : ""} onClick={() => setMaxPlayers(n)}>
+                <button key={n} className={n === maxPlayers ? "on" : ""} aria-pressed={n === maxPlayers} onClick={() => setMaxPlayers(n)}>
                   {n}
                 </button>
               ))}
             </div>
           </div>
-          {maxPlayers === 5 && rounds === 12 && <p className="muted small">With five players, nine rounds is recommended.</p>}
-          <button className="primary" onClick={() => run(() => api.create(rounds, maxPlayers))}>
-            Create game
+          <ul className="game-facts small">
+            <li>
+              <Icon name="coin" size={16} /> Dividends after round{divRounds.length > 1 ? "s" : ""} {divRounds.join(", ")}
+            </li>
+            <li>
+              <Icon name="rocket" size={16} /> Zomato IPO at the start of round {IPO_ROUND}
+            </li>
+            <li>
+              <Icon name="flag" size={16} /> {maxPlayers === 5 && rounds !== 9 ? "With five players, 9 rounds is recommended" : `Everyone starts with ₹${STARTING_CASH.toLocaleString("en-IN")}`}
+            </li>
+          </ul>
+          <button className="primary big" disabled={busy} onClick={() => run(() => api.create(rounds, maxPlayers))}>
+            Create game <Icon name="arrow" size={18} />
           </button>
         </section>
       </div>
 
-      <section className="panel">
-        <h2>Your games</h2>
+      <section className="stack">
+        <h2 className="section-title">Your games</h2>
         {games === null ? (
-          <p className="muted">Loading…</p>
+          <div className="skeleton-list">
+            <div className="skeleton" />
+            <div className="skeleton" />
+          </div>
         ) : live.length === 0 ? (
-          <p className="muted">No games yet. Create one and share its code, or join with a code someone sent you.</p>
+          <div className="empty-state">
+            <Icon name="chart" size={32} />
+            <p>{yours.length ? "Nothing else on the go." : "No games yet. Create one and share its code, or join with a code someone sent you."}</p>
+          </div>
         ) : (
           <GameList games={live} />
         )}
       </section>
       {done.length > 0 && (
-        <section className="panel">
-          <h2>Finished</h2>
+        <section className="stack">
+          <h2 className="section-title">Finished</h2>
           <GameList games={done} />
         </section>
       )}
@@ -249,20 +387,74 @@ function Lobby({ me }: { me: Me }) {
   );
 }
 
-function GameList({ games }: { games: GameSummary[] }) {
+/** Five letter boxes over one real input, so paste, autofill and screen readers all just work. */
+function CodeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="code-boxes">
+      <span className="sr-only">Game code</span>
+      <input
+        id="join-code"
+        value={value}
+        maxLength={5}
+        inputMode="text"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))}
+      />
+      <span className="boxes" aria-hidden="true">
+        {Array.from({ length: 5 }, (_, i) => (
+          <span key={i} className={`box ${i === value.length ? "cursor" : ""} ${value[i] ? "filled" : ""}`}>
+            {value[i] ?? ""}
+          </span>
+        ))}
+      </span>
+    </label>
+  );
+}
+
+function GameList({ games, admin }: { games: GameSummary[]; admin?: (g: GameSummary) => ReactNode }) {
   return (
     <ul className="game-list">
       {games.map((g) => (
-        <li key={g.id}>
-          <a href={`#/game/${g.id}`} className={`game-item ${g.yourMove ? "your-move" : ""}`}>
-            <span className="game-code">{g.code}</span>
-            <span className="game-meta">
-              <b>{g.yourMove ? "Your move" : STATUS[g.status]}</b>
-              {g.status === "playing" && g.round !== null && ` · round ${g.round} of ${g.rounds}`}
-              <span className="muted small">{g.players.join(", ")}</span>
+        <li key={g.id} className={admin ? "admin-game" : ""}>
+          <a href={`#/game/${g.id}`} className={`game-item status-${g.status} ${g.yourMove ? "your-move" : ""}`}>
+            <span className="ticket">
+              <span className="ticket-label">Code</span>
+              <span className="game-code">{g.code}</span>
             </span>
-            <span aria-hidden="true">›</span>
+            <span className="game-meta">
+              <span className="game-status">
+                <span className={`pill pill-${g.yourMove ? "move" : g.status}`}>{g.yourMove ? "Your move" : STATUS[g.status]}</span>
+                {g.status === "playing" && g.round !== null && (
+                  <span className="muted small">
+                    Round {g.round} of {g.rounds}
+                  </span>
+                )}
+                {g.status === "lobby" && (
+                  <span className="muted small">
+                    {g.players.length}/{g.maxPlayers} joined
+                  </span>
+                )}
+              </span>
+              <span className="game-people">
+                <AvatarStack names={g.players} />
+                <span className="muted small truncate">
+                  {g.players.join(", ")}
+                  {admin && ` · by ${g.createdBy}`}
+                </span>
+              </span>
+              {g.status === "playing" && g.round !== null && (
+                <span className="progress" aria-hidden="true">
+                  <span style={{ width: `${Math.min(100, (g.round / g.rounds) * 100)}%` }} />
+                </span>
+              )}
+            </span>
+            <span className="go" aria-hidden="true">
+              <Icon name="arrow" size={18} />
+            </span>
           </a>
+          {admin?.(g)}
         </li>
       ))}
     </ul>
@@ -273,29 +465,31 @@ function ChangePassword() {
   const [open, setOpen] = useState(false);
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   if (!open)
     return (
-      <p>
-        <button className="link" onClick={() => setOpen(true)}>
-          Change my password
+      <p className="center">
+        <button className="ghost-link" onClick={() => setOpen(true)}>
+          <Icon name="key" size={16} /> Change my password
         </button>
       </p>
     );
   return (
     <section className="panel">
-      <h2>Change my password</h2>
+      <h2>
+        <Icon name="key" /> Change my password
+      </h2>
       <form
         className="stack"
         onSubmit={async (e) => {
           e.preventDefault();
           try {
             await api.changePassword(cur, next);
-            setMsg("Password changed.");
+            setMsg({ ok: true, text: "Password changed." });
             setCur("");
             setNext("");
           } catch (err) {
-            setMsg((err as Error).message);
+            setMsg({ ok: false, text: (err as Error).message });
           }
         }}
       >
@@ -304,11 +498,16 @@ function ChangePassword() {
           <input id="cur-pw" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} required />
         </label>
         <label>
-          New password
+          New password <span className="muted small">(at least 6 characters)</span>
           <input id="new-pw" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={6} />
         </label>
-        {msg && <p className="small">{msg}</p>}
-        <button className="primary">Save</button>
+        {msg && <p className={msg.ok ? "notice" : "error"}>{msg.text}</p>}
+        <div className="row">
+          <button className="primary">Save</button>
+          <button type="button" onClick={() => setOpen(false)}>
+            Close
+          </button>
+        </div>
       </form>
     </section>
   );
@@ -321,11 +520,12 @@ function Admin({ me }: { me: Me }) {
   const [games, setGames] = useState<GameSummary[]>([]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [resetPw, setResetPw] = useState("");
+  const [confirmAbandon, setConfirmAbandon] = useState<number | null>(null);
   const load = useCallback(() => {
-    api.users().then(setUsers, (e) => setMsg(e.message));
+    api.users().then(setUsers, (e) => setMsg({ ok: false, text: e.message }));
     api.allGames().then(setGames, () => {});
   }, []);
   useEffect(load, [load]);
@@ -333,37 +533,61 @@ function Admin({ me }: { me: Me }) {
   async function attempt(f: () => Promise<unknown>, ok: string) {
     try {
       await f();
-      setMsg(ok);
+      setMsg({ ok: true, text: ok });
       load();
     } catch (e) {
-      setMsg((e as ApiError).message);
+      setMsg({ ok: false, text: (e as ApiError).message });
     }
   }
 
+  const players = users.filter((u) => !u.isAdmin);
+  const active = games.filter((g) => g.status === "playing").length;
   return (
     <main className="page">
-      <h1 className="page-title">Admin</h1>
+      <section className="lobby-hero compact">
+        <div>
+          <p className="eyebrow">Control room</p>
+          <h1 className="page-title">Admin</h1>
+        </div>
+      </section>
+      <div className="stat-row">
+        <div className="stat">
+          <b>{players.length}</b>
+          <span>players</span>
+        </div>
+        <div className="stat">
+          <b>{active}</b>
+          <span>games in play</span>
+        </div>
+        <div className="stat">
+          <b>{games.filter((g) => g.status === "ended").length}</b>
+          <span>finished</span>
+        </div>
+      </div>
       {msg && (
-        <p className="notice" role="status">
-          {msg}
+        <p className={msg.ok ? "notice" : "error banner"} role="status">
+          {msg.text}
         </p>
       )}
       <section className="panel">
-        <h2>New account</h2>
+        <h2>
+          <Icon name="plus" /> New account
+        </h2>
         <form
-          className="stack"
+          className="new-account"
           onSubmit={(e) => {
             e.preventDefault();
+            const name = username.trim();
             attempt(async () => {
-              await api.createUser(username.trim(), password, false);
+              await api.createUser(name, password, false);
               setUsername("");
               setPassword("");
-            }, `Account ${username.trim()} created. Give them the username and password.`);
+            }, `Account ${name} created. Give them the username and password.`);
           }}
         >
           <label>
             Username
-            <input id="new-user" autoCapitalize="none" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <input id="new-user" autoCapitalize="none" autoComplete="off" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
           </label>
           <label>
             Password
@@ -371,21 +595,31 @@ function Admin({ me }: { me: Me }) {
           </label>
           <button className="primary">Create account</button>
         </form>
+        <p className="muted small">Usernames are 3–24 letters, digits, dots, dashes or underscores. Passwords need 6 characters or more.</p>
       </section>
 
       <section className="panel">
-        <h2>Accounts ({users.length})</h2>
+        <h2>
+          <Icon name="users" /> Accounts <span className="count">{users.length}</span>
+        </h2>
         <ul className="user-list">
           {users.map((u) => (
             <li key={u.id} className={u.active ? "" : "inactive"}>
               <div className="user-row">
-                <span>
-                  <b>{u.username}</b> {u.isAdmin && <span className="tag">admin</span>} {!u.active && <span className="tag warn">switched off</span>}
+                <span className="user-id">
+                  <Avatar name={u.username} size={34} />
+                  <span>
+                    <b>{u.username}</b>
+                    <span className="muted small">
+                      {u.isAdmin ? " Admin" : " Player"}
+                      {!u.active && " · switched off"}
+                    </span>
+                  </span>
                 </span>
                 <span className="row">
                   <button onClick={() => setResetFor(resetFor === u.id ? null : u.id)}>New password</button>
                   {u.id !== me.id && (
-                    <button onClick={() => attempt(() => api.updateUser(u.id, { active: !u.active }), u.active ? `${u.username} can no longer sign in.` : `${u.username} can sign in again.`)}>
+                    <button className={u.active ? "danger-outline" : ""} onClick={() => attempt(() => api.updateUser(u.id, { active: !u.active }), u.active ? `${u.username} can no longer sign in.` : `${u.username} can sign in again.`)}>
                       {u.active ? "Switch off" : "Switch on"}
                     </button>
                   )}
@@ -413,31 +647,30 @@ function Admin({ me }: { me: Me }) {
       </section>
 
       <section className="panel">
-        <h2>All games</h2>
+        <h2>
+          <Icon name="chart" /> All games <span className="count">{games.length}</span>
+        </h2>
         {games.length === 0 ? (
           <p className="muted">No games yet.</p>
         ) : (
-          <ul className="game-list">
-            {games.map((g) => (
-              <li key={g.id} className="admin-game">
-                <a href={`#/game/${g.id}`} className="game-item">
-                  <span className="game-code">{g.code}</span>
-                  <span className="game-meta">
-                    <b>{STATUS[g.status]}</b>
-                    {g.round !== null && g.status === "playing" && ` · round ${g.round} of ${g.rounds}`}
-                    <span className="muted small">
-                      {g.players.join(", ")} · created by {g.createdBy}
-                    </span>
-                  </span>
-                </a>
-                {(g.status === "lobby" || g.status === "playing") && (
-                  <button className="danger-outline" onClick={() => attempt(() => api.abandon(g.id), `Game ${g.code} abandoned.`)}>
-                    Abandon
+          <GameList
+            games={games}
+            admin={(g) =>
+              (g.status === "lobby" || g.status === "playing") &&
+              (confirmAbandon === g.id ? (
+                <span className="row confirm">
+                  <button className="danger" onClick={() => attempt(() => api.abandon(g.id), `Game ${g.code} abandoned.`).then(() => setConfirmAbandon(null))}>
+                    Abandon {g.code}
                   </button>
-                )}
-              </li>
-            ))}
-          </ul>
+                  <button onClick={() => setConfirmAbandon(null)}>Keep</button>
+                </span>
+              ) : (
+                <button className="danger-outline" onClick={() => setConfirmAbandon(g.id)}>
+                  Abandon
+                </button>
+              ))
+            }
+          />
         )}
       </section>
     </main>

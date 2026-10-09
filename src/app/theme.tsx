@@ -1,5 +1,6 @@
 /** Day, night, or follow the phone. The choice is remembered on this device. */
 import { useEffect, useState } from "react";
+import { Icon } from "./ui.tsx";
 
 type Theme = "light" | "dark" | "system";
 const KEY = "bull-run:theme";
@@ -37,10 +38,10 @@ export function ThemeToggle() {
   }, [theme]);
   const next: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
   const label = { system: "Auto", light: "Day", dark: "Night" }[theme];
-  const icon = { system: "◐", light: "☀", dark: "☾" }[theme];
+  const icon = ({ system: "auto", light: "sun", dark: "moon" } as const)[theme];
   return (
-    <button className="theme-toggle" onClick={() => setTheme(next[theme])} title={`Theme: ${label}. Tap for ${{ system: "Day", light: "Night", dark: "Auto" }[theme]}.`} aria-label={`Theme: ${label}`}>
-      <span aria-hidden="true">{icon}</span> {label}
+    <button className="icon-btn theme-toggle" onClick={() => setTheme(next[theme])} title={`Theme: ${label}. Tap for ${{ system: "Day", light: "Night", dark: "Auto" }[theme]}.`} aria-label={`Theme: ${label}`}>
+      <Icon name={icon} />
     </button>
   );
 }

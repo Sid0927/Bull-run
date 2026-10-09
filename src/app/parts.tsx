@@ -39,7 +39,8 @@ import {
   type Seat,
   type TradeKind,
 } from "../engine/index.ts";
-import { BullLogo, CompanyBadge } from "./logos.tsx";
+import { CompanyBadge } from "./logos.tsx";
+import { Avatar, Confetti, Icon } from "./ui.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 
 export const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -77,20 +78,23 @@ export function cardImpact(s: GameState, seat: Seat, id: number): number {
 
 export function RoundTracker({ s }: { s: GameState }) {
   const n = s.config.rounds;
+  const isDiv = (r: number) => (DIVIDEND_ROUNDS as readonly number[]).includes(r);
+  const isIpo = (r: number) => r === IPO_ROUND && ipoEnabled(s.config);
+  const ended = s.phase.kind === "ended";
   return (
-    <ol className="rounds" aria-label="Round tracker">
-      <li className={s.round === 0 ? "now" : "past"} title="Round 0: the opening">
-        0
-      </li>
-      {Array.from({ length: 12 }, (_, i) => i + 1).map((r) => (
-        <li
-          key={r}
-          className={[r === s.round ? "now" : r < s.round ? "past" : "", r > n ? "unused" : "", (DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "div" : "", r === n ? "final" : "", r === IPO_ROUND && ipoEnabled(s.config) ? "ipo" : ""].join(" ")}
-          title={`${(DIVIDEND_ROUNDS as readonly number[]).includes(r) ? "Dividend round. " : ""}${r === IPO_ROUND && ipoEnabled(s.config) ? "Zomato IPO at the start. " : ""}${r === n ? "Final round." : ""}`}
-        >
-          {r}
-        </li>
-      ))}
+    <ol className="rail" aria-label={ended ? "Game over" : `Round ${s.round} of ${n}`} style={{ ["--n" as string]: n + 1 }}>
+      {Array.from({ length: n + 1 }, (_, r) => {
+        const state = ended || r < s.round ? "past" : r === s.round ? "now" : "next";
+        const marks = [isDiv(r) && "Dividends at the end", isIpo(r) && "Zomato IPO at the start", r === n && "Final round"].filter(Boolean).join(" · ");
+        return (
+          <li key={r} className={`rail-step ${state} ${r === n ? "final" : ""}`} title={`${r === 0 ? "Round 0: the opening" : `Round ${r}`}${marks ? ` — ${marks}` : ""}`} aria-current={state === "now" ? "step" : undefined}>
+            <span className="rail-dot">{r}</span>
+            <span className="rail-mark" aria-hidden="true">
+              {isIpo(r) ? <Icon name="rocket" size={12} /> : isDiv(r) ? "₹" : r === n ? <Icon name="flag" size={12} /> : ""}
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -251,33 +255,56 @@ export function Players({ s, viewer }: { s: GameState; viewer: Seat | null }) {
   return (
     <section className="panel">
       <h2>Players</h2>
-      <table className="players">
-        <tbody>
-          {s.players.map((p, i) => (
-            <tr key={i} className={i === who ? "active" : ""}>
-              <td>
-                {p.name}
-                {s.startPlayer === i && <span className="tag" title="Started round 1">1st</span>}
-                {p.shortBanned && <span className="tag warn">no shorts</span>}
-                {s.pendingNews[i] !== null && <span className="tag" title="Takes effect at the start of their next turn">card face-down</span>}
-              </td>
-              <td className="holdings">
-                {COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, i).length).map((c) => (
-                  <span key={c} className="chip" title={`${COMPANIES[c].short}: ${p.shares[c]} shares${openShorts(s, c, i).length ? `, ${openShorts(s, c, i).length} short` : ""}`}>
-                    <CompanyBadge c={c} size={16} />
+      <ul className="player-list">
+        {s.players.map((p, i) => {
+          const worth = netWorth(s, i).sharesValue;
+          const held = COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, i).length);
+          return (
+            <li key={i} className={`player-card ${i === who ? "active" : ""} ${i === viewer ? "me" : ""}`}>
+              <div className="player-top">
+                <Avatar name={p.name} seat={i} size={36} ring={i === who} />
+                <div className="player-name">
+                  <b>
+                    {p.name}
+                    {i === viewer && <span className="tag">you</span>}
+                  </b>
+                  <span className="muted small">
+                    {i === who && s.phase.kind !== "ended" ? "Thinking… · " : ""}
+                    {p.hand.length} cards
+                    {s.startPlayer === i && " · started round 1"}
+                  </span>
+                </div>
+                <div className="player-money">
+                  <span className="num">{i === viewer ? rs(p.cash) : "₹ ••••"}</span>
+                  <span className="muted small">cash</span>
+                </div>
+              </div>
+              <div className="holdings">
+                {held.length === 0 && <span className="muted small">No shares yet</span>}
+                {held.map((c) => (
+                  <span key={c} className="chip" style={coStyle(c)} title={`${COMPANIES[c].short}: ${p.shares[c]} shares${openShorts(s, c, i).length ? `, ${openShorts(s, c, i).length} short` : ""}`}>
+                    <CompanyBadge c={c} size={18} />
                     {p.shares[c] > 0 && <b>{p.shares[c]}</b>}
-                    {openShorts(s, c, i).length > 0 && <span className="short-chip">short ×{openShorts(s, c, i).length}</span>}
-                    {s.chairmen[c] === i && <span className="chair" title="Chairman">★</span>}
+                    {openShorts(s, c, i).length > 0 && <span className="short-chip">S×{openShorts(s, c, i).length}</span>}
+                    {s.chairmen[c] === i && (
+                      <span className="chair" title="Chairman">
+                        ★
+                      </span>
+                    )}
                   </span>
                 ))}
-              </td>
-              <td className="num" title="Shares at current prices (public)">{rs(netWorth(s, i).sharesValue)}</td>
-              <td className="num">{i === viewer ? rs(p.cash) : "cash hidden"}</td>
-              <td className="num muted">{p.hand.length} cards</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+              <div className="player-foot small">
+                <span>
+                  Shares worth <b className="num">{rs(worth)}</b>
+                </span>
+                {p.shortBanned && <span className="tag warn">no shorts</span>}
+                {s.pendingNews[i] !== null && s.pendingNews[i] !== undefined && <span className="tag">card face-down</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -295,23 +322,30 @@ export function Market({ s }: { s: GameState }) {
   );
 }
 
-export const TYPE_LABEL = { positive: "▲ Positive", negative: "▼ Negative", double: "⇅ Double-edged", market: "★ Market-wide" } as const;
+export const TYPE_LABEL = { positive: "Positive", negative: "Negative", double: "Double-edged", market: "Market-wide" } as const;
+const TYPE_ICON = { positive: "▲", negative: "▼", double: "⇅", market: "★" } as const;
 
-export function NewsCardView({ id, children, impact }: { id: number; children?: ReactNode; impact?: number }) {
+/** A news card, laid out like a clipping from the business pages. */
+export function NewsCardView({ id, children, impact, picked }: { id: number; children?: ReactNode; impact?: number; picked?: boolean }) {
   const k = card(id);
   return (
-    <div className={`card ${k.type}`}>
-      <div className="card-type">{TYPE_LABEL[k.type]}</div>
+    <div className={`card ${k.type} ${picked ? "picked" : ""}`}>
+      <div className="card-mast">
+        <span className="card-type">
+          <span aria-hidden="true">{TYPE_ICON[k.type]}</span> {TYPE_LABEL[k.type]}
+        </span>
+        <span className="card-no">No. {id}</span>
+      </div>
       <div className="card-title">{k.title}</div>
       <div className="effects">
         {k.type === "market" ? (
           <span className="eff">
-            All companies <b>{signed(Object.values(k.effects)[0]!)}</b>
+            <span className="eff-co">All companies</span> <b className={Object.values(k.effects)[0]! > 0 ? "up" : "down"}>{signed(Object.values(k.effects)[0]!)}</b>
           </span>
         ) : (
           (Object.entries(k.effects) as [CompanyId, number][]).map(([c, v]) => (
             <span key={c} className="eff">
-              <CompanyBadge c={c} size={16} /> {COMPANIES[c].short} <b>{signed(v)}</b>
+              <CompanyBadge c={c} size={18} /> <span className="eff-co">{COMPANIES[c].short}</span> <b className={v > 0 ? "up" : "down"}>{signed(v)}</b>
             </span>
           ))
         )}
@@ -321,7 +355,11 @@ export function NewsCardView({ id, children, impact }: { id: number; children?: 
           For you {impact === 0 ? "±₹0" : signedRs(impact)}
         </div>
       )}
-      <div className="card-no">#{id}</div>
+      {picked && (
+        <span className="picked-mark" aria-hidden="true">
+          <Icon name="check" size={16} />
+        </span>
+      )}
       {children}
     </div>
   );
@@ -359,12 +397,28 @@ export function Private({ s, seat, play }: { s: GameState; seat: Seat; play: (a:
   else if (s.phase.kind === "turn") body = <Turn s={s} seat={seat} play={play} />;
   return (
     <section className="panel private">
-      <h2>
-        {p.name} <span className="cash">{rs(p.cash)}</span>
-      </h2>
+      <DeskHead s={s} seat={seat} />
       {body}
       {s.phase.kind === "turn" && !s.debt && <MyPosition s={s} seat={seat} />}
     </section>
+  );
+}
+
+/** The top of your desk: who you are and the cash you have. */
+export function DeskHead({ s, seat, note }: { s: GameState; seat: Seat; note?: string }) {
+  const p = s.players[seat];
+  return (
+    <div className="desk-head">
+      <Avatar name={p.name} seat={seat} size={40} />
+      <div className="desk-who">
+        <b>{p.name}</b>
+        <span className="muted small">{note ?? "Your desk"}</span>
+      </div>
+      <div className="desk-cash">
+        <span className="muted small">Cash</span>
+        <span className="cash">{rs(p.cash)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -377,10 +431,16 @@ export function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a:
   const cost = listed.reduce((n, c) => n + (orders[c] ?? 0) * price(s, c), 0);
   return (
     <>
-      <p className="small">Round 0 — buy up to {OPENING_MAX_SHARES} shares in total at the starting prices (if a company is oversubscribed, shares are shared out in seat order), and place one news card face-down. Everything is revealed together.</p>
+      <div className="step-head">
+        <span className="step-no">1</span>
+        <div>
+          <b>Buy up to {OPENING_MAX_SHARES} shares</b>
+          <span className="muted small">At the starting prices. Oversubscribed companies are shared out in seat order.</span>
+        </div>
+      </div>
       <div className="orders">
         {listed.map((c) => (
-          <div key={c} style={coStyle(c)} className="order">
+          <div key={c} style={coStyle(c)} className={`order ${(orders[c] ?? 0) > 0 ? "has" : ""}`}>
             <span className="row-co">
               <CompanyBadge c={c} size={18} /> {COMPANIES[c].short} <span className="muted">{rs(price(s, c))}</span>
             </span>
@@ -396,20 +456,33 @@ export function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a:
           </div>
         ))}
       </div>
-      <p className="small">
-        {total}/{OPENING_MAX_SHARES} shares · up to {rs(cost)} (less if oversubscribed)
-      </p>
-      <h3>Your hand — pick the card to place</h3>
+      <div className="meter" aria-label={`${total} of ${OPENING_MAX_SHARES} shares`}>
+        {Array.from({ length: OPENING_MAX_SHARES }, (_, i) => (
+          <span key={i} className={i < total ? "on" : ""} />
+        ))}
+        <span className="meter-text small">
+          {total === 0 ? "No shares yet — buying none is allowed" : `${total} of ${OPENING_MAX_SHARES} · up to ${rs(cost)}${cost > p.cash ? " — more than your cash" : ""}`}
+        </span>
+      </div>
+      <div className="step-head">
+        <span className="step-no">2</span>
+        <div>
+          <b>Place one news card face-down</b>
+          <span className="muted small">Everything is revealed together.</span>
+        </div>
+      </div>
       <div className="cards">
         {p.hand.map((id) => (
-          <div key={id} className={`pickable ${pick === id ? "picked" : ""}`} onClick={() => setPick(id)}>
-            <NewsCardView id={id} />
-          </div>
+          <button key={id} type="button" className="pickable" aria-pressed={pick === id} onClick={() => setPick(id)}>
+            <NewsCardView id={id} picked={pick === id} />
+          </button>
         ))}
       </div>
-      <button className="primary sticky-cta" disabled={pick === null} onClick={() => pick !== null && play({ type: "openingOrder", player: seat, orders, card: pick })}>
-        Seal my orders
-      </button>
+      <div className="dock">
+        <button className="primary big" disabled={pick === null || cost > p.cash} onClick={() => pick !== null && play({ type: "openingOrder", player: seat, orders, card: pick })}>
+          {pick === null ? "Pick a card to place" : cost > p.cash ? "Not enough cash" : "Seal my orders"}
+        </button>
+      </div>
     </>
   );
 }
@@ -423,7 +496,15 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
   const cost = qty * bid;
   return (
     <>
-      <h3>Zomato IPO — your sealed bid</h3>
+      <div className="step-head">
+        <span className="step-no">
+          <Icon name="rocket" size={16} />
+        </span>
+        <div>
+          <b>Zomato IPO — your sealed bid</b>
+          <span className="muted small">Price band {rs(band[0])}–{rs(band[band.length - 1])}</span>
+        </div>
+      </div>
       <p className="small">
         Bid for 0–{max} shares at one price. All bids are revealed together. The listing price is the highest price at which the shares bid at that
         price or more reach 12 (the lowest price if they never do). Bids above it are filled in full, bids at it share what is left one at a time clockwise
@@ -454,9 +535,11 @@ export function IpoBidForm({ s, seat, play }: { s: GameState; seat: Seat; play: 
         {qty === 0 ? "No bid." : `Up to ${rs(cost)} if filled in full; you pay the listing price, which may be lower.`}
         {cost > cash && <span className="error"> You have {rs(cash)}.</span>}
       </p>
-      <button className="primary sticky-cta" disabled={cost > cash} onClick={() => play({ type: "ipoBid", player: seat, qty, price: qty ? bid : 0 })}>
-        Seal my bid
-      </button>
+      <div className="dock">
+        <button className="primary big" disabled={cost > cash} onClick={() => play({ type: "ipoBid", player: seat, qty, price: qty ? bid : 0 })}>
+          {qty === 0 ? "Seal my bid (no shares)" : "Seal my bid"}
+        </button>
+      </div>
     </>
   );
 }
@@ -473,36 +556,55 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   const left = 2 - ph.actionsUsed;
   return (
     <>
-      <h3>1 · Trade <span className="muted small">({left} of 2 actions left)</span></h3>
+      <div className="step-head">
+        <span className="step-no">1</span>
+        <div>
+          <b>Trade</b>
+          <span className="muted small">Up to 2 actions — {left} left</span>
+        </div>
+        <span className="pips" aria-hidden="true">
+          <span className={left >= 1 ? "on" : ""} />
+          <span className={left >= 2 ? "on" : ""} />
+        </span>
+      </div>
       {left > 0 ? (
         <div className="trade">
-          <div className="seg">
+          <div className="seg seg-fill kinds" role="group" aria-label="Trade">
             {(["buy", "sell", "short", "cover"] as TradeKind[]).map((k) => (
-              <button key={k} className={k === kind ? "on" : ""} onClick={() => setKind(k)}>
+              <button key={k} className={`kind-${k} ${k === kind ? "on" : ""}`} aria-pressed={k === kind} onClick={() => setKind(k)}>
                 {k}
               </button>
             ))}
           </div>
-          <div className="seg wrap">
+          <div className="seg co-grid" role="group" aria-label="Company">
             {COMPANY_IDS.filter((c) => s.companies[c].listed).map((c) => (
-              <button key={c} className={`co-btn ${c === company ? "on" : ""}`} style={coStyle(c)} onClick={() => setCompany(c)}>
-                <CompanyBadge c={c} size={16} /> {COMPANIES[c].short}
+              <button key={c} className={`co-btn ${c === company ? "on" : ""}`} style={coStyle(c)} aria-pressed={c === company} onClick={() => setCompany(c)}>
+                <CompanyBadge c={c} size={20} />
+                <span className="co-btn-text">
+                  <span>{COMPANIES[c].short}</span>
+                  <span className="num small">{s.companies[c].bankrupt ? "bust" : rs(price(s, c))}</span>
+                </span>
               </button>
             ))}
           </div>
-          <div className="seg">
-            {[1, 2, 3].map((n) => (
-              <button key={n} className={n === qty ? "on" : ""} onClick={() => setQty(n)}>
-                {n}
-              </button>
-            ))}
+          <div className="field inline">
+            <span className="field-label">Shares</span>
+            <div className="seg seg-fill" role="group" aria-label="Number of shares">
+              {[1, 2, 3].map((n) => (
+                <button key={n} className={n === qty ? "on" : ""} aria-pressed={n === qty} onClick={() => setQty(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="preview">
+          <div className={`preview kind-${kind}`}>
             {pv.ok ? (
               <>
-                <div>
-                  {kind === "buy" || kind === "cover" ? "Pay" : "Receive"} <b>{rs(pv.preview.total)}</b> ({pv.preview.prices.map(rs).join(" + ") || "nothing"})
+                <div className="preview-main">
+                  <span className="muted">{kind === "buy" || kind === "cover" ? "You pay" : "You receive"}</span>
+                  <b className="preview-total">{rs(pv.preview.total)}</b>
                 </div>
+                {pv.preview.prices.length > 1 && <div className="small muted">{pv.preview.prices.map(rs).join(" + ")}</div>}
                 {pv.preview.crossings.map((x, i) => (
                   <div key={i} className="small crossing">
                     {x}
@@ -515,22 +617,27 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
             )}
             {pv.ok && !legal.ok && <div className="small error">{legal.error}</div>}
           </div>
-          <button className="primary" disabled={!legal.ok} onClick={() => play(action)}>
+          <button className={`primary big confirm-${kind}`} disabled={!legal.ok} onClick={() => play(action)}>
             Confirm {kind} {qty} {COMPANIES[company].short}
           </button>
         </div>
       ) : (
-        <p className="small muted">Both actions used.</p>
+        <p className="done-note">
+          <Icon name="check" size={16} /> Both actions used — now play a card.
+        </p>
       )}
-      <h3>
-        2 · Play a news card{" "}
-        <span className="muted small">{s.config.delayedNews ? "(mandatory; goes face-down and takes effect at the start of your next turn)" : "(mandatory, applies at once)"}</span>
-      </h3>
+      <div className="step-head">
+        <span className="step-no">2</span>
+        <div>
+          <b>Play a news card</b>
+          <span className="muted small">{s.config.delayedNews ? "Required. It goes face-down and takes effect at the start of your next turn." : "Required. It applies at once."}</span>
+        </div>
+      </div>
       <div className="cards">
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
-            <button className="play" onClick={() => play({ type: "playNews", player: seat, card: id })}>
-              Play
+            <button className="play primary" onClick={() => play({ type: "playNews", player: seat, card: id })}>
+              Play this card
             </button>
           </NewsCardView>
         ))}
@@ -543,21 +650,29 @@ export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   const p = s.players[seat];
   return (
     <>
-      <h3>{s.phase.kind === "openingDraw" ? "Draw back up to 4" : "3 · Draw a card"}</h3>
+      <div className="step-head">
+        <span className="step-no">{s.phase.kind === "openingDraw" ? <Icon name="plus" size={16} /> : 3}</span>
+        <div>
+          <b>{s.phase.kind === "openingDraw" ? "Draw back up to 4" : "Draw a card"}</b>
+          <span className="muted small">Take one from the market, or draw blind from the deck.</span>
+        </div>
+      </div>
       <div className="cards">
         {s.market.map((id, slot) =>
           id === null ? null : (
             <NewsCardView key={slot} id={id} impact={cardImpact(s, seat, id)}>
-              <button className="play" onClick={() => play({ type: "draw", player: seat, from: "market", slot })}>
+              <button className="play primary" onClick={() => play({ type: "draw", player: seat, from: "market", slot })}>
                 Take
               </button>
             </NewsCardView>
           ),
         )}
         <div className="card back">
-          <div className="card-title">Deck</div>
-          <div className="muted small">{s.deck.length || s.discard.length} cards</div>
-          <button className="play" onClick={() => play({ type: "draw", player: seat, from: "deck" })}>
+          <div className="deck-face" aria-hidden="true">
+            <span>?</span>
+          </div>
+          <div className="deck-count small">{s.deck.length || s.discard.length} cards in the deck</div>
+          <button className="play primary" onClick={() => play({ type: "draw", player: seat, from: "deck" })}>
             Draw blind
           </button>
         </div>
@@ -585,7 +700,7 @@ export function ForcedSale({ s, seat, play }: { s: GameState; seat: Seat; play: 
   const d = s.debt!;
   return (
     <>
-      <p>
+      <p className="alert">
         You owe <b>{rs(d.amount)}</b> for a {d.reason} and have <b>{rs(p.cash)}</b>. Sell shares of your choice at current prices (thresholds apply) until you can pay. If you run out of shares you pay everything you have, the bank absorbs the rest, and you may not open shorts again.
       </p>
       <div className="orders">
@@ -646,31 +761,52 @@ export function MyPosition({ s, seat }: { s: GameState; seat: Seat }) {
   );
 }
 
-export function EndScreen({ s, onNew }: { s: GameState; onNew: () => void }) {
+export function EndScreen({ s, viewer, onNew }: { s: GameState; viewer: Seat | null; onNew: () => void }) {
+  const st = s.standings!;
+  const podium = [st[1], st[0], st[2]].filter(Boolean);
+  const mine = viewer === null ? null : st.find((x) => x.seat === viewer);
+  const winners = st.filter((x) => x.rank === 1).map((x) => x.name);
   return (
-    <section className="panel">
-      <h2>Final standings</h2>
+    <section className="panel end">
+      {mine?.rank === 1 && <Confetti />}
+      <div className="end-head">
+        <Icon name="trophy" size={34} />
+        <div>
+          <p className="eyebrow">Closing bell</p>
+          <h2>{mine ? (mine.rank === 1 ? (winners.length > 1 ? "A shared win!" : "You won the market!") : `You finished #${mine.rank}`) : `${winners.join(" & ")} won`}</h2>
+        </div>
+      </div>
+      <div className="podium" aria-hidden="true">
+        {podium.map((x) => (
+          <div key={x.seat} className={`podium-col p${x.rank}`}>
+            <Avatar name={x.name} seat={x.seat} size={x.rank === 1 ? 52 : 40} ring={x.rank === 1} />
+            <b className="podium-name">{x.name}</b>
+            <span className="num small">{rs(x.netWorth)}</span>
+            <div className="podium-block">{x.rank}</div>
+          </div>
+        ))}
+      </div>
       <table className="standings">
         <thead>
           <tr>
             <th></th>
             <th>Player</th>
-            <th>Cash</th>
-            <th>Shares</th>
-            <th>Shorts</th>
-            <th>Net worth</th>
+            <th className="num">Cash</th>
+            <th className="num">Shares</th>
+            <th className="num">Shorts</th>
+            <th className="num">Net worth</th>
           </tr>
         </thead>
         <tbody>
-          {s.standings!.map((x) => (
-            <tr key={x.seat} className={x.rank === 1 ? "winner" : ""}>
+          {st.map((x) => (
+            <tr key={x.seat} className={`${x.rank === 1 ? "winner" : ""} ${x.seat === viewer ? "me" : ""}`}>
               <td>
-                <span className={`rank r${x.rank}`}>{x.rank === 1 ? "Winner" : `#${x.rank}`}</span>
+                <span className={`rank r${x.rank}`}>{x.rank === 1 ? "1st" : `#${x.rank}`}</span>
               </td>
               <td>{x.name}</td>
               <td className="num">{rs(x.cash)}</td>
               <td className="num">{rs(x.sharesValue)}</td>
-              <td className="num">−{rs(x.shortsCost)}</td>
+              <td className="num">{x.shortsCost ? `−${rs(x.shortsCost)}` : "—"}</td>
               <td className="num">
                 <b>{rs(x.netWorth)}</b>
               </td>
@@ -679,8 +815,8 @@ export function EndScreen({ s, onNew }: { s: GameState; onNew: () => void }) {
         </tbody>
       </table>
       <p className="small muted">Net worth = cash + shares × current price − cost to cover open shorts. Ties go to more cash; still tied is a shared win.</p>
-      <button className="primary" onClick={onNew}>
-        New game
+      <button className="primary big" onClick={onNew}>
+        Back to my games
       </button>
     </section>
   );
