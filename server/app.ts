@@ -386,8 +386,11 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
           },
           alive,
         });
-        if (!alive()) {
+        // Signed out or switched off while this was opening: the disconnect missed it, so end it here.
+        const still = alive() && (await store.sessionUser(cookieOf(req) ?? ""));
+        if (!alive() || !still || still.id !== user.id) {
           stop();
+          if (alive()) res.end();
           return;
         }
         // A comment every 25s keeps proxies from closing a quiet connection.
