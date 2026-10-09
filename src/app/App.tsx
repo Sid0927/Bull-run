@@ -743,7 +743,6 @@ function Admin({ me }: { me: Me }) {
           <ul className="login-list">
             {logins
               .filter((l) => !failedOnly || l.result !== "ok")
-              .slice(0, 100)
               .map((l) => (
                 <li key={l.id} className={`login-row ${l.result}`}>
                   <Avatar name={l.username} size={30} />

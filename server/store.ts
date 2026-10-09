@@ -139,7 +139,8 @@ export class MemoryStore implements Store {
   }
   async recordLogin(e: Omit<LoginEvent, "id" | "at">) {
     const at = new Date().toISOString();
-    this.loginLog.push({ ...e, id: this.loginLog.length + 1, at });
+    this.loginLog.push({ ...e, id: (this.loginLog.at(-1)?.id ?? 0) + 1, at });
+    if (this.loginLog.length > 2000) this.loginLog.splice(0, this.loginLog.length - 2000);
     if (e.result === "ok" && e.userId !== null) {
       const u = this.users.find((x) => x.id === e.userId);
       if (u) u.lastLoginAt = u.lastSeenAt = at;
@@ -355,6 +356,8 @@ export class PgStore implements Store {
   }
   async recordLogin(e: Omit<LoginEvent, "id" | "at">) {
     await this.q("INSERT INTO login_events (user_id, username, result, device) VALUES ($1, $2, $3, $4)", [e.userId, e.username, e.result, e.device]);
+    // Now and then, clear out history older than 90 days, so it stays bounded between restarts.
+    if (Math.random() < 0.02) await this.q("DELETE FROM login_events WHERE at < now() - interval '90 days'");
     if (e.result === "ok" && e.userId !== null) await this.q("UPDATE users SET last_login_at = now(), last_seen_at = now() WHERE id = $1", [e.userId]);
   }
   async logins(limit: number) {

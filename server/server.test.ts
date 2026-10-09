@@ -19,7 +19,7 @@ before(async () => {
   store = pgUrl ? new PgStore(pgUrl) : new MemoryStore();
   await store.init();
   await ensureAdmin(store, "boss", "boss-password", () => {});
-  const { server } = createApp({ store });
+  const { server } = createApp({ store, trustProxy: true });
   await new Promise<void>((r) => server.listen(0, r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => server.close();
@@ -251,6 +251,11 @@ describe("fixes from the security review", () => {
     const c = users.find((u) => u.username === "chitra")!;
     assert.ok(c.lastLoginAt && c.devices >= 1);
     assert.equal((await players[0].call("/api/admin/logins")).status, 403);
+    // A flood of guesses leaves one "blocked" line per name and address, not hundreds.
+    for (let i = 0; i < 25; i++)
+      await fetch(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.77" }, body: JSON.stringify({ username: "flood", password: "x" }) });
+    const after = (await admin.call("/api/admin/logins")).data as { username: string; result: string }[];
+    assert.equal(after.filter((l) => l.username === "flood" && l.result === "blocked").length, 1);
   });
 
   test("wrong passwords from one address don't lock the player out elsewhere", async () => {

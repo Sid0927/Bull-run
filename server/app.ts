@@ -14,6 +14,11 @@ export interface AppOptions {
   staticDir?: string;
   /** Mark the session cookie Secure (behind HTTPS in production). */
   secureCookies?: boolean;
+  /**
+   * Behind a proxy that adds the caller's address to X-Forwarded-For (Render does). Without one,
+   * that header is whatever the caller typed, so it is ignored.
+   */
+  trustProxy?: boolean;
   log?: (msg: string) => void;
 }
 
@@ -55,6 +60,8 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     return [os, browser].filter(Boolean).join(" · ") || "Unknown device";
   }
 
+  const blockedNoted = new Map<string, number>();
+
   // Last-seen times are written at most every two minutes per person, not on every request.
   const touched = new Map<number, number>();
   function touch(userId: number) {
@@ -65,6 +72,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   }
 
   function clientIp(req: IncomingMessage): string {
+    if (!opts.trustProxy) return req.socket.remoteAddress ?? "";
     const xff = String(req.headers["x-forwarded-for"] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     return xff.at(-1) ?? req.socket.remoteAddress ?? "";
   }
@@ -193,7 +201,14 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       const attempt = async (result: "ok" | "wrong" | "blocked" | "off", userId: number | null) =>
         store.recordLogin({ userId, username: username.slice(0, 40) || "(blank)", result, device: deviceOf(req) }).catch(() => {});
       if (limiter.blocked(...keys) || ipLimiter.blocked(`ip:${ip}`)) {
-        await attempt("blocked", (await store.userByName(username))?.id ?? null);
+        // One "blocked" line per name and address every ten minutes, so a flood of guesses can't
+        // bury the real sign-ins in the history.
+        const key = `${username.toLowerCase()}|${ip}`;
+        if (Date.now() - (blockedNoted.get(key) ?? 0) > 600_000) {
+          blockedNoted.set(key, Date.now());
+          if (blockedNoted.size > 5000) blockedNoted.clear();
+          await attempt("blocked", null);
+        }
         throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
       }
       limiter.fail(...keys); // counted before checking, so parallel guesses can't slip past

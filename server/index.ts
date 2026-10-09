@@ -33,7 +33,7 @@ if (!adminUser || !adminPass) {
 } else await ensureAdmin(store, adminUser, adminPass, log);
 
 const staticDir = fileURLToPath(new URL("../dist", import.meta.url));
-const { server } = createApp({ store, staticDir, secureCookies: production, log });
+const { server } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, log });
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, () => log(`Listening on port ${port}${url ? "" : " (memory store: nothing is saved)"}`));
 
