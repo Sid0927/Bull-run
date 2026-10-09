@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CHAIRMAN_MULTIPLIER,
+  CHAIRMAN_SHARES,
   COMPANIES,
+  DIVIDEND_BANDS,
+  dividendPerShare,
   COMPANY_IDS,
   DIVIDEND_ROUNDS,
   GAME_LENGTHS,
@@ -37,6 +40,7 @@ import {
   type TradeKind,
 } from "../engine/index.ts";
 import { useGame } from "./useGame.ts";
+import { Rulebook } from "./Rulebook.tsx";
 import { BullLogo, CompanyBadge } from "./logos.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 
@@ -72,9 +76,22 @@ function cardImpact(s: GameState, seat: Seat, id: number): number {
 
 export function App() {
   const g = useGame();
-  if (!g.live) return <Setup onStart={g.start} onLoad={g.loadRecord} />;
-  return <Game {...g} live={g.live} />;
+  const [rules, setRules] = useState(() => location.hash === "#rules");
+  const openRules = () => {
+    setRules(true);
+    window.scrollTo(0, 0);
+  };
+  // The rulebook sits over the game, so closing it returns to exactly where play was.
+  return (
+    <>
+      {rules && <Rulebook onClose={() => setRules(false)} />}
+      <div hidden={rules}>{!g.live ? <Setup onStart={g.start} onLoad={g.loadRecord} onRules={openRules} /> : <Game {...g} live={g.live} onRules={openRules} />}</div>
+    </>
+  );
 }
+
+/** The bigger-dividends test rule: its table and the lower starting cash that goes with it. */
+const BIG_DIVIDENDS = { dividendBands: [{ from: 400, pays: 40 }, { from: 225, pays: 30 }, { from: 110, pays: 20 }, { from: 50, pays: 10 }], startingCash: 1000 };
 
 // ─── Setup ──────────────────────────────────────────────────────────────────────────────
 
@@ -84,7 +101,7 @@ const START_LAYOUTS = {
   handover: { label: "Handover original", prices: { ...HANDOVER_START_PRICES } as Partial<Record<CompanyId, number>> },
 } as const;
 
-function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: (r: GameRecord) => void }) {
+function Setup({ onStart, onLoad, onRules }: { onStart: (c: GameConfig) => void; onLoad: (r: GameRecord) => void; onRules: () => void }) {
   const [count, setCount] = useState(4);
   const [names, setNames] = useState(["", "", "", "", ""]);
   const [rounds, setRounds] = useState<GameLength>(9);
@@ -92,13 +109,14 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
   const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("tiered");
   const [ipo, setIpo] = useState(true);
   const [delayed, setDelayed] = useState(false);
+  const [bigDividends, setBigDividends] = useState(false);
   const [error, setError] = useState("");
 
   function start() {
     const players = names.slice(0, count).map((n, i) => n.trim() || `Player ${i + 1}`);
     if (new Set(players).size !== players.length) return setError("Give every player a different name.");
     const startPrices = START_LAYOUTS[layout].prices;
-    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}), ...(ipo ? {} : { ipo: false }), ...(delayed ? { delayedNews: true } : {}) });
+    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}), ...(ipo ? {} : { ipo: false }), ...(delayed ? { delayedNews: true } : {}), ...(bigDividends ? BIG_DIVIDENDS : {}) });
   }
 
   function load(file: File) {
@@ -118,6 +136,9 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
         <div>
           <h1>Bull Run</h1>
           <p className="muted">Play-test edition · 3–5 players on one device</p>
+          <button className="link" onClick={onRules}>
+            How to play — read the rules
+          </button>
         </div>
       </div>
       <div className="hero-strip" aria-hidden="true">
@@ -181,6 +202,10 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
           <input type="checkbox" id="delayed" checked={delayed} onChange={(e) => setDelayed(e.target.checked)} />
           Test rule: news takes effect one lap later (played face-down)
         </label>
+        <label className="check">
+          <input type="checkbox" id="big-dividends" checked={bigDividends} onChange={(e) => setBigDividends(e.target.checked)} />
+          Test rule: bigger dividends (₹10/20/30/40 from ₹50) with ₹1,000 starting cash
+        </label>
         <label>
           Seed
           <input value={seed} inputMode="numeric" onChange={(e) => setSeed(e.target.value.replace(/[^0-9-]/g, ""))} />
@@ -219,7 +244,7 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
 
 // ─── Game ───────────────────────────────────────────────────────────────────────────────
 
-function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: NonNullable<ReturnType<typeof useGame>["live"]> }) {
+function Game({ live, act, undo, quit, onRules }: ReturnType<typeof useGame> & { live: NonNullable<ReturnType<typeof useGame>["live"]>; onRules: () => void }) {
   const { state: s, events, record } = live;
   const who = actor(s);
   const [viewer, setViewer] = useState<Seat | null>(null);
@@ -259,6 +284,7 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
         </span>
         <RoundTracker s={s} />
         <div className="tools">
+          <button onClick={onRules}>Rules</button>
           <button
             onClick={copyRecord}
             disabled={sealing}
@@ -305,13 +331,15 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
       <div className="layout">
         <Board s={s} hist={hist} />
         <aside className="side">
-          {s.phase.kind === "ended" ? (
-            <EndScreen s={s} onNew={quit} />
-          ) : who === null ? null : !shown ? (
-            <PassDevice s={s} seat={who} onReady={() => setViewer(who)} />
-          ) : (
-            <Private s={s} seat={who} play={play} />
-          )}
+          <div className="action-slot">
+            {s.phase.kind === "ended" ? (
+              <EndScreen s={s} onNew={quit} />
+            ) : who === null ? null : !shown ? (
+              <PassDevice s={s} seat={who} onReady={() => setViewer(who)} />
+            ) : (
+              <Private s={s} seat={who} play={play} />
+            )}
+          </div>
           <Players s={s} viewer={shown ? who : null} />
           <Market s={s} />
           <Log events={events} />
@@ -387,11 +415,23 @@ function Sparkline({ points, now, label }: { points: PricePoint[]; now: number |
 
 // ─── Board ──────────────────────────────────────────────────────────────────────────────
 
-function band(p: number): string {
-  if (p >= 400) return "b3";
-  if (p >= 225) return "b2";
-  if (p >= 120) return "b1";
-  return "b0";
+/** Shade a space by how much a share pays there, under the game's own dividend table. */
+function bandsOf(s: GameState) {
+  return [...(s.config.dividendBands ?? DIVIDEND_BANDS)].sort((a, b) => a.from - b.from);
+}
+function band(s: GameState, p: number): string {
+  const i = bandsOf(s).filter((b) => p > 0 && p >= b.from).length;
+  return `b${Math.min(3, i)}`;
+}
+function dividendLegend(s: GameState): string {
+  const bs = bandsOf(s);
+  return bs
+    .map((b, i) => {
+      const next = bs[i + 1];
+      const top = next ? TRACK.filter((p) => p < next.from).at(-1)! : TRACK.at(-1)!;
+      return `${rs(b.from)}–${rs(top)} ${rs(b.pays)}`;
+    })
+    .join(" · ");
 }
 
 function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]> }) {
@@ -425,11 +465,11 @@ function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]
                 const here = st.listed && st.priceIndex === i;
                 const tokens = shorts.filter((t) => t.openIndex === i);
                 return (
-                  <li key={i} className={`space ${band(p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${!co.ipo && p === startPrice(s.config, c) ? "start" : ""}`}>
+                  <li key={i} className={`space ${band(s, p)} ${here ? "here" : ""} ${i === 0 ? "bust" : ""} ${i === TOP ? "ceiling" : ""} ${!co.ipo && p === startPrice(s.config, c) ? "start" : ""}`}>
                     <span className="val">{i === 0 ? "BUST" : p}</span>
                     {tokens.map((t) => (
                       <span key={t.id} className="short-token" title={`${s.players[t.owner].name}'s short, opened at ${rs(p)}${capIndex(t.openIndex) === null ? ", no cap" : `, closes at ${rs(TRACK[capIndex(t.openIndex)!])}`}`}>
-                        S·{s.players[t.owner].name.slice(0, 2)}
+                        S{t.owner + 1}·{s.players[t.owner].name.slice(0, 1)}
                       </span>
                     ))}
                     {here && <span className="marker" aria-label="current price" />}
@@ -452,15 +492,20 @@ function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]
                 ))}
               </div>
               <div className="muted small">Bank {bankShares(s, c)} · shorts {shorts.length}/3</div>
+              {st.listed && !st.bankrupt && (
+                <div className="small" title="Dividend a share if it were paid now">
+                  Pays {rs(dividendPerShare(c, price(s, c), s.config.dividendBands))}
+                </div>
+              )}
               <div className="small">Chairman: {ch === null ? "—" : s.players[ch].name}</div>
             </div>
           </div>
         );
       })}
       <div className="legend small muted">
-        Dividend bands: <span className="sw b0" /> below ₹120 · <span className="sw b1" /> ₹120–200 ₹10 · <span className="sw b2" /> ₹225–350 ₹20 ·{" "}
-        <span className="sw b3" /> ₹400–500 ₹30 (HUL, HDFC Bank double). Chairman (6+ shares) gets {CHAIRMAN_MULTIPLIER}× the per-share dividend.
-        {ipoEnabled(s.config) && ` Zomato lists by sealed bids at the start of round ${IPO_ROUND} and pays no dividend.`}
+        Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double; Zomato pays none. The chairman ({CHAIRMAN_SHARES}+ shares) gets{" "}
+        {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
+        {ipoEnabled(s.config) && ` Zomato lists by sealed bids at the start of round ${IPO_ROUND}.`}
       </div>
     </section>
     </div>

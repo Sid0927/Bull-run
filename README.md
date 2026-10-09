@@ -14,6 +14,15 @@ software used to test its rules before printing:
 
 The app and the simulator call the same engine, so they cannot disagree about a rule.
 
+## Play it
+
+- **Website:** every push to `main` builds the game and publishes it with GitHub Pages
+  (`.github/workflows/pages.yml`), at `https://sid0927.github.io/Bull-run/` once Pages is switched
+  on: repository **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a
+  private repository needs a paid GitHub plan; otherwise make the repository public.
+- **Rules:** the instructions book is in the game (**Rules** in the header, or **How to play** on the
+  setup screen, or open the site with `#rules`). Every number in it is read from the engine.
+
 ## Commands
 
 ```bash
