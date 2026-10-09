@@ -6,6 +6,7 @@ import {
   ACTIONS_PER_TURN,
   ALL_CARDS,
   CHAIRMAN_MULTIPLIER,
+  CO_CHAIRMAN_MULTIPLIER,
   CHAIRMAN_SHARES,
   COMPANIES,
   COMPANY_IDS,
@@ -372,7 +373,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>Every shareholder is paid the per-share amount for each share. Oracle Group and bankrupt companies pay nothing.</li>
             <li>
               The <b>chairman</b> is the one player holding at least {CHAIRMAN_SHARES} of a company's shares; the title moves the moment
-              holdings change. If two players hold {CHAIRMAN_SHARES} each, there is no chairman. At each payout the chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the
+              holdings change. If two players hold {CHAIRMAN_SHARES} each, neither is chairman; instead they are <b>co-chairmen</b> and each gets a bonus of {CO_CHAIRMAN_MULTIPLIER}× the per-share dividend. At each payout the chairman also gets a bonus of {CHAIRMAN_MULTIPLIER}× the
               per-share dividend, on top of the dividend on their own shares.
             </li>
             <li>
@@ -382,7 +383,8 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           </ul>
           <div className="example">
             <b>Example.</b> End of round 6. HUL is at ₹250, so it pays {rs(EX_HUL / 2)} doubled to {rs(EX_HUL)}. Asha holds 7 HUL: she is chairman and gets 7 ×{" "}
-            {rs(EX_HUL)} + {CHAIRMAN_MULTIPLIER} × {rs(EX_HUL)} = {rs(7 * EX_HUL + CHAIRMAN_MULTIPLIER * EX_HUL)}. Chitra has 2 HUL shorts and pays {rs(2 * EX_HUL)}.
+            {rs(EX_HUL)} + {CHAIRMAN_MULTIPLIER} × {rs(EX_HUL)} = {rs(7 * EX_HUL + CHAIRMAN_MULTIPLIER * EX_HUL)}. Chitra has 2 HUL shorts and pays {rs(2 * EX_HUL)}. If instead Asha and Bilal held {CHAIRMAN_SHARES} HUL each, each would get {CHAIRMAN_SHARES} × {rs(EX_HUL)} + {CO_CHAIRMAN_MULTIPLIER} × {rs(EX_HUL)} ={" "}
+            {rs(CHAIRMAN_SHARES * EX_HUL + CO_CHAIRMAN_MULTIPLIER * EX_HUL)}.
           </div>
         </section>
 

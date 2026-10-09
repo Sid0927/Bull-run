@@ -6,7 +6,7 @@ import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { AdminDesks, Board, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { AdminDesks, Board, chairOf, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
 
 type Tab = "play" | "board" | "players" | "cards" | "log";
@@ -289,7 +289,7 @@ function CompactBoard({ s, hist }: { s: GameState; hist: Record<string, PricePoi
                   <span>Out {out}</span>
                   {!st.bankrupt && <span>Pays {rs(paysNow(s, c))}</span>}
                   {shorts.length > 0 && <span className="short-chip">short ×{shorts.length}</span>}
-                  {ch !== null && <span className="chair">★ {s.players[ch].name}</span>}
+                  {chairOf(s, c) && <span className="chair">★ {chairOf(s, c)}</span>}
                 </div>
                 <Sparkline points={hist[c]} now={s.phase.kind === "ended" ? null : price(s, c)} label={`${co.short} price history`} />
               </>

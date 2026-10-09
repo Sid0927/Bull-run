@@ -4,6 +4,7 @@ import {
   ALL_CARDS,
   HANDOVER_START_PRICES,
   dividendPerShare,
+  coChairmen,
   IPO_CARDS,
   ipoBook,
   COMPANY_IDS,
@@ -474,6 +475,29 @@ describe("dividends", () => {
     assert.equal(r.state.players[0].cash, STARTING_CASH + 7 * 60 + 3 * 60);
     assert.equal(r.state.players[1].cash, STARTING_CASH + 2 * 20);
     assert.equal(r.state.players[2].cash, STARTING_CASH - 60);
+  });
+
+  test("two players with 6 each are co-chairmen and both get 2× the per-share dividend", () => {
+    const s = midGame({ round: 3 });
+    const quiet = NEWS_CARDS.filter((k) => !k.effects.HUL).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    setPrice(s, "HUL", 225); // ₹30 doubled to ₹60
+    s.players[0].shares.HUL = 6;
+    s.players[1].shares.HUL = 6;
+    s.chairmen.HUL = null;
+    assert.deepEqual(coChairmen(s, "HUL"), [0, 1]);
+    const r = endRound(s);
+    assert.equal(r.state.players[0].cash, STARTING_CASH + 6 * 60 + 2 * 60);
+    assert.equal(r.state.players[1].cash, STARTING_CASH + 6 * 60 + 2 * 60);
+    // Under the rules games began with before 9 Oct, a tie paid no bonus.
+    const old = midGame({ round: 3 });
+    old.config.coChairmanMultiplier = 0;
+    old.deck = [...old.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => old.deck.includes(x))];
+    setPrice(old, "HUL", 225);
+    old.players[0].shares.HUL = 6;
+    old.players[1].shares.HUL = 6;
+    old.chairmen.HUL = null;
+    assert.equal(endRound(old).state.players[0].cash, STARTING_CASH + 6 * 60);
   });
 
   test("short sellers pay after every dividend is paid out, whatever order the companies are in", () => {

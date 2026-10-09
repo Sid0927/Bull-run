@@ -158,6 +158,15 @@ The band and bid limit come from simulation: ₹90–120 with 4 shares a bid was
 in 85% of 4-player games and always listed at the floor. ₹60–90 with 6 shares fills far more
 often. Simulator flags: `--no-ipo`; band and limit are `ipoBand` / `ipoMaxBid` in `runBatch`.
 
+## Co-chairmen (9 Oct 2026)
+
+When two players hold 6 shares of a company each there is still no single chairman, but both are
+co-chairmen and each gets a bonus of 2× the per-share dividend (a sole chairman gets 3×).
+`CO_CHAIRMAN_MULTIPLIER`; simulator `--co-chair <n>` (0 = the old rule). Rule set 3 in
+`server/rules.ts`: games begun earlier keep paying nothing on a tie. In 2,000 simulated 4-player
+games a co-chairman payout happened in a quarter of games; the gap between first and last moved
+from ₹1,409 to ₹1,419, so it changes nothing about balance and simply stops a tie being wasted.
+
 ## Trade limits (simulated 9 Oct 2026, kept as they are)
 
 Simulator options `--actions <n>`, `--max-qty <n>` and `--split` (an action may be spread across

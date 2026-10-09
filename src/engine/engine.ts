@@ -7,6 +7,7 @@
 import {
   ACTIONS_PER_TURN,
   CHAIRMAN_MULTIPLIER,
+  CO_CHAIRMAN_MULTIPLIER,
   CHAIRMAN_SHARES,
   COMPANIES,
   COMPANY_IDS,
@@ -162,6 +163,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   if (config.driftAtOrBelow !== undefined && !Number.isInteger(config.driftAtOrBelow)) throw new IllegalAction("The drift level must be a whole number.");
   if (config.driftMode !== undefined && config.driftMode !== "down" && config.driftMode !== "toStart") throw new IllegalAction('The drift mode must be "down" or "toStart".');
   if (config.chairmanMultiplier !== undefined && !(Number.isInteger(config.chairmanMultiplier) && config.chairmanMultiplier >= 0)) throw new IllegalAction("The chairman multiplier must be a whole number.");
+  if (config.coChairmanMultiplier !== undefined && !(Number.isInteger(config.coChairmanMultiplier) && config.coChairmanMultiplier >= 0)) throw new IllegalAction("The co-chairman multiplier must be a whole number.");
   if (config.ipoMaxBid !== undefined && !(Number.isInteger(config.ipoMaxBid) && config.ipoMaxBid >= 0)) throw new IllegalAction("The IPO bid limit must be a whole number.");
   for (const [c, p] of Object.entries(config.startPrices ?? {})) {
     if (!COMPANY_IDS.includes(c as CompanyId)) throw new IllegalAction(`No company ${c}.`);
@@ -310,6 +312,15 @@ function relist(ctx: Ctx, c: CompanyId) {
   ctx.events.push({ kind: "relist", company: c, text: `${cname(c)} re-lists at ${fmt(TRACK[RELIST_INDEX])} with all 12 shares in the bank` });
 }
 
+/** The two players who hold 6 each, when a company has two co-chairmen instead of a chairman. */
+export function coChairmen(s: GameState, c: CompanyId): Seat[] {
+  if (s.chairmen[c] !== null || s.companies[c].bankrupt) return [];
+  const holders = s.players.map((p, i) => [i, p.shares[c]] as const).filter(([, n]) => n >= CHAIRMAN_SHARES);
+  return holders.length === 2 ? holders.map(([i]) => i) : [];
+}
+
+export const coChairmanMultiplierOf = (c: GameConfig) => c.coChairmanMultiplier ?? CO_CHAIRMAN_MULTIPLIER;
+
 function syncChairmen(ctx: Ctx) {
   const { s } = ctx;
   for (const c of COMPANY_IDS) {
@@ -321,7 +332,7 @@ function syncChairmen(ctx: Ctx) {
     const text =
       now === null
         ? holders.length > 1
-          ? `${cname(c)} chairman token removed: ${holders.map(([i]) => s.players[i].name).join(" and ")} hold 6 each`
+          ? `${holders.map(([i]) => s.players[i].name).join(" and ")} hold 6 ${cname(c)} each: no single chairman${coChairmanMultiplierOf(s.config) ? `, they share it as co-chairmen` : ""}`
           : `${cname(c)} chairman token removed from ${s.players[was!].name}`
         : `${s.players[now].name} becomes ${cname(c)} chairman`;
     ctx.events.push({ kind: "chairman", company: c, from: was, to: now, text });
@@ -967,6 +978,13 @@ function payDividends(ctx: Ctx) {
       s.players[ch].cash += (s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER) * d;
       paid.push({ player: ch, amount: (s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER) * d, why: "chairman" });
     }
+    // Two players with 6 each: no chairman, but each gets the co-chairman bonus.
+    const co = coChairmanMultiplierOf(s.config);
+    if (co > 0)
+      for (const seat of coChairmen(s, c)) {
+        s.players[seat].cash += co * d;
+        paid.push({ player: seat, amount: co * d, why: "chairman" });
+      }
     ledger.push({ c, d, paid });
   }
   for (const { c, d, paid } of ledger) {

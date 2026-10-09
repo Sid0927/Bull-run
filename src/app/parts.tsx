@@ -18,6 +18,8 @@ import {
   bankShares,
   capIndex,
   card,
+  coChairmanMultiplierOf,
+  coChairmen,
   netWorth,
   openShorts,
   outstanding,
@@ -78,6 +80,15 @@ export function cardImpact(s: GameState, seat: Seat, id: number): number {
   }
   return v;
 }
+
+/** Who chairs a company: one name, two co-chairmen, or nobody (null). */
+export function chairOf(s: GameState, c: CompanyId): string | null {
+  const ch = s.chairmen[c];
+  if (ch !== null) return s.players[ch].name;
+  const co = coChairmanMultiplierOf(s.config) > 0 ? coChairmen(s, c) : [];
+  return co.length ? `${co.map((i) => s.players[i].name).join(" & ")} (co-chairmen)` : null;
+}
+const isCoChair = (s: GameState, c: CompanyId, seat: Seat) => coChairmanMultiplierOf(s.config) > 0 && coChairmen(s, c).includes(seat);
 
 export function RoundTracker({ s }: { s: GameState }) {
   const n = s.config.rounds;
@@ -236,14 +247,15 @@ export function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, Price
                   Pays {rs(paysNow(s, c))}
                 </div>
               )}
-              <div className="small">Chairman: {ch === null ? "—" : s.players[ch].name}</div>
+              <div className="small">Chairman: {chairOf(s, c) ?? "—"}</div>
             </div>
           </div>
         );
       })}
       <div className="legend small muted">
         Dividend a share: {dividendLegend(s)}, nothing below. HUL and HDFC Bank pay double{s.config.ipoPaysDividend ? "" : "; Oracle Group pays none"}. The chairman ({CHAIRMAN_SHARES}+ shares) also gets a bonus of{" "}
-        {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend, on top of their own shares' dividends. Each open short pays the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
+        {s.config.chairmanMultiplier ?? CHAIRMAN_MULTIPLIER}× the per-share dividend, on top of their own shares' dividends
+        {coChairmanMultiplierOf(s.config) > 0 && `; if two players hold ${CHAIRMAN_SHARES} each, both get ${coChairmanMultiplierOf(s.config)}× instead`}. Each open short pays the per-share dividend. Paid at the end of rounds {DIVIDEND_ROUNDS.filter((r) => r <= s.config.rounds).join(", ")}.
         {ipoEnabled(s.config) && ` Oracle Group lists by sealed bids at the start of round ${IPO_ROUND}.`}
       </div>
     </section>
@@ -292,6 +304,11 @@ export function Players({ s, viewer, reveal }: { s: GameState; viewer: Seat | nu
                     {s.chairmen[c] === i && (
                       <span className="chair" title="Chairman">
                         ★
+                      </span>
+                    )}
+                    {isCoChair(s, c, i) && (
+                      <span className="chair" title="Co-chairman">
+                        ☆
                       </span>
                     )}
                   </span>
@@ -759,6 +776,7 @@ export function MyPosition({ s, seat }: { s: GameState; seat: Seat }) {
                   <td className="row-co">
                     <CompanyBadge c={c} size={16} /> {COMPANIES[c].short}
                     {s.chairmen[c] === seat && <span className="tag">Chairman</span>}
+                    {isCoChair(s, c, seat) && <span className="tag">Co-chairman</span>}
                   </td>
                   <td className="num">{p.shares[c] ? `${p.shares[c]} × ${rs(price(s, c))}` : ""}</td>
                   <td className="small muted">

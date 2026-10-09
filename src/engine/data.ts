@@ -24,6 +24,8 @@ export const MAX_QTY_PER_ACTION = 3;
 export const SHORT_CAP_STEPS = 5;
 export const CHAIRMAN_SHARES = 6;
 export const CHAIRMAN_MULTIPLIER = 3; // was 5 in the handover; lowered 8 Oct 2026
+/** When two players hold 6 each there is no chairman, and each gets this multiple instead (9 Oct 2026). */
+export const CO_CHAIRMAN_MULTIPLIER = 2;
 export const DIVIDEND_ROUNDS = [3, 6, 9, 12] as const;
 export const GAME_LENGTHS = [6, 9, 12] as const;
 export type GameLength = (typeof GAME_LENGTHS)[number];
