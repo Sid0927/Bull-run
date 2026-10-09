@@ -64,7 +64,7 @@ Changes after the first simulations (8 Oct 2026):
 - **Starting cash is ₹1,200** (was ₹1,500): closer finishes and fewer automatic chairmanships in simulation.
 - **5 players: 9 rounds is recommended.** 12 is still allowed; the setup screen says so.
 - Play-test variants, off by default, available in the simulator (`--start`, `--cash`,
-  `--drift`, `--drift-mode`, `--chairman <multiple>`) and partly in the app: a tiered starting-price layout, starting
+  `--drift`, `--drift-mode`, `--chairman <multiple>`, `--dividends 400:40,225:30,110:20,50:10`) and partly in the app: a tiered starting-price layout, starting
   cash, and end-of-round drift for companies nobody holds.
 
 ## Zomato IPO (added 9 Oct 2026)

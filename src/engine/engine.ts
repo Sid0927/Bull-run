@@ -928,7 +928,7 @@ function payDividends(ctx: Ctx) {
   const ledger: { c: CompanyId; d: number; paid: { player: Seat; amount: number; why: "shares" | "chairman" | "short" }[] }[] = [];
   for (const c of COMPANY_IDS) {
     if (!isLive(s, c)) continue;
-    const d = dividendPerShare(c, price(s, c));
+    const d = dividendPerShare(c, price(s, c), s.config.dividendBands);
     if (d === 0) continue;
     const paid: { player: Seat; amount: number; why: "shares" | "chairman" | "short" }[] = [];
     s.players.forEach((p, i) => {

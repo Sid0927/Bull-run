@@ -34,6 +34,8 @@ export interface GameConfig {
   delayedNews?: boolean;
   /** Play-test variant: the chairman's bonus as a multiple of the per-share dividend (default 3). */
   chairmanMultiplier?: number;
+  /** Play-test variant: a different dividend table (before the HUL/HDFC Bank doubling). */
+  dividendBands?: { from: number; pays: number }[];
 }
 
 export interface Player {

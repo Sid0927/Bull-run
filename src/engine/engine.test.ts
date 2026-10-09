@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   ALL_CARDS,
+  dividendPerShare,
   IPO_CARDS,
   ipoBook,
   COMPANY_IDS,
@@ -579,6 +580,17 @@ describe("play-test variants", () => {
     }
     assert.equal(s.phase.kind, "ended");
     assert.ok(s.pendingNews.every((x) => x === null));
+  });
+
+  test("a different dividend table can be set", () => {
+    const bands = [{ from: 400, pays: 40 }, { from: 225, pays: 30 }, { from: 110, pays: 20 }, { from: 10, pays: 10 }];
+    assert.equal(dividendPerShare("INFY", 10, bands), 10);
+    assert.equal(dividendPerShare("INFY", 100, bands), 10);
+    assert.equal(dividendPerShare("INFY", 110, bands), 20);
+    assert.equal(dividendPerShare("ONGC", 350, bands), 30);
+    assert.equal(dividendPerShare("HUL", 400, bands), 80);
+    assert.equal(dividendPerShare("ZOM", 400, bands), 0);
+    assert.equal(dividendPerShare("SUN", 0, bands), 0);
   });
 
   test("starting cash can be set", () => {

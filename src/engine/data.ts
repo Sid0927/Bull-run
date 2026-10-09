@@ -82,8 +82,21 @@ export function baseDividend(price: number): number {
   return 0;
 }
 
-export function dividendPerShare(company: CompanyId, price: number): number {
-  if (COMPANIES[company].noDividend) return 0;
+/** A dividend table: each band is the lowest price it starts at and what it pays a share. */
+export type DividendBands = { from: number; pays: number }[];
+
+export const DIVIDEND_BANDS: DividendBands = [
+  { from: 400, pays: 30 },
+  { from: 225, pays: 20 },
+  { from: 120, pays: 10 },
+];
+
+export function dividendPerShare(company: CompanyId, price: number, bands?: DividendBands): number {
+  if (COMPANIES[company].noDividend || price <= 0) return 0;
+  if (bands) {
+    const band = [...bands].sort((a, b) => b.from - a.from).find((b) => price >= b.from);
+    return (band?.pays ?? 0) * (COMPANIES[company].doubleDividend ? 2 : 1);
+  }
   return baseDividend(price) * (COMPANIES[company].doubleDividend ? 2 : 1);
 }
 
