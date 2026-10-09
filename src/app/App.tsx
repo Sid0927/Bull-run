@@ -36,9 +36,38 @@ import {
   type TradeKind,
 } from "../engine/index.ts";
 import { useGame } from "./useGame.ts";
+import { BullLogo, CompanyBadge } from "./logos.tsx";
+import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 
 const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${-n}`);
+const signedRs = (n: number) => (n > 0 ? `+${rs(n)}` : n < 0 ? `−${rs(-n)}` : "±₹0");
+/** Company colours are theme tokens (--co-HUL…), so dark mode gets its own validated steps. */
+const coStyle = (c: CompanyId) => ({ ["--co" as string]: `var(--co-${c})` });
+
+/** Up/down/flat as an arrow and a word as well as a colour, so it never relies on colour alone. */
+function Change({ d }: { d: number | null }) {
+  if (d === null) return null;
+  const dir = d > 0 ? "up" : d < 0 ? "down" : "flat";
+  return (
+    <span className={`chg ${dir}`}>
+      <span aria-hidden="true">{d > 0 ? "▲" : d < 0 ? "▼" : "■"}</span> {d === 0 ? "flat" : signedRs(d)}
+    </span>
+  );
+}
+
+/** Rupee effect of a card on a seat's position at today's prices (ignores caps and thresholds). */
+function cardImpact(s: GameState, seat: Seat, id: number): number {
+  let v = 0;
+  for (const [c, steps] of Object.entries(card(id).effects) as [CompanyId, number][]) {
+    const st = s.companies[c];
+    if (!st.listed || st.bankrupt) continue;
+    const to = Math.max(0, Math.min(TOP, st.priceIndex + steps));
+    const net = s.players[seat].shares[c] - openShorts(s, c, seat).length;
+    v += (TRACK[to] - TRACK[st.priceIndex]) * net;
+  }
+  return v;
+}
 
 export function App() {
   const g = useGame();
@@ -82,9 +111,18 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
 
   return (
     <main className="setup">
-      <h1>
-        Bull Run <span className="muted">play-test</span>
-      </h1>
+      <div className="hero">
+        <BullLogo size={56} />
+        <div>
+          <h1>Bull Run</h1>
+          <p className="muted">Play-test edition · 3–5 players on one device</p>
+        </div>
+      </div>
+      <div className="hero-strip" aria-hidden="true">
+        {COMPANY_IDS.map((c) => (
+          <CompanyBadge key={c} c={c} size={28} />
+        ))}
+      </div>
       <section className="panel">
         <div className="field">
           Players
@@ -181,6 +219,7 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
   const [viewer, setViewer] = useState<Seat | null>(null);
   const [flash, setFlash] = useState("");
   const shown = who !== null && viewer === who;
+  const hist = useMemo(() => priceHistory(s, events), [s, events]);
 
   // A new actor hides everything private until they say it is them.
   useEffect(() => {
@@ -205,7 +244,9 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
   return (
     <div className="game">
       <header className="top">
-        <strong className="brand">Bull Run</strong>
+        <span className="brand">
+          <BullLogo size={30} /> Bull Run
+        </span>
         <RoundTracker s={s} />
         <div className="tools">
           <button onClick={copyRecord} title="Seed and action log; loading it replays the game exactly">
@@ -234,15 +275,21 @@ function Game({ live, act, undo, quit }: ReturnType<typeof useGame> & { live: No
         </div>
       )}
 
+      <Ticker s={s} hist={hist} />
+      {flash && (
+        <div className="toast" role="status" onClick={() => setFlash("")}>
+          {flash} <span className="muted small">(tap to dismiss)</span>
+        </div>
+      )}
       <div className="layout">
-        <Board s={s} />
+        <Board s={s} hist={hist} />
         <aside className="side">
           {s.phase.kind === "ended" ? (
             <EndScreen s={s} onNew={quit} />
           ) : who === null ? null : !shown ? (
             <PassDevice s={s} seat={who} onReady={() => setViewer(who)} />
           ) : (
-            <Private s={s} seat={who} play={play} flash={flash} clear={() => setFlash("")} />
+            <Private s={s} seat={who} play={play} />
           )}
           <Players s={s} viewer={shown ? who : null} />
           <Market s={s} />
@@ -273,6 +320,50 @@ function RoundTracker({ s }: { s: GameState }) {
   );
 }
 
+// ─── Ticker ─────────────────────────────────────────────────────────────────────────────
+
+function Ticker({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]> }) {
+  const live = COMPANY_IDS.filter((c) => s.companies[c].listed);
+  return (
+    <div className="ticker" aria-label="Prices and change this round">
+      <span className="tick tick-label">{s.phase.kind === "ended" ? "Final round" : s.round === 0 ? "Opening" : `Round ${s.round}`}</span>
+      {live.map((c) => (
+        <span key={c} className="tick">
+          <CompanyBadge c={c} size={18} />
+          <span className="tick-name">{COMPANIES[c].short}</span>
+          <b className="tick-price">{s.companies[c].bankrupt ? "BUST" : rs(price(s, c))}</b>
+          <Change d={changeSinceLastRound(s, hist[c], c)} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** One company's price at each round end; 2px line, endpoint dot, a native tooltip per point. */
+function Sparkline({ points, now, label }: { points: PricePoint[]; now: number | null; label: string }) {
+  const pts = now === null ? points : [...points, { round: (points.at(-1)?.round ?? 0) + 0.5, price: now }];
+  if (pts.length < 2) return <div className="spark-empty small muted">No history yet</div>;
+  const W = 120, H = 34, P = 4;
+  const xs = pts.map((p) => p.round), ys = pts.map((p) => p.price);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const X = (r: number) => P + ((r - x0) / Math.max(1e-9, x1 - x0)) * (W - 2 * P);
+  const Y = (v: number) => (y1 === y0 ? H / 2 : H - P - ((v - y0) / (y1 - y0)) * (H - 2 * P));
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${X(p.round).toFixed(1)},${Y(p.price).toFixed(1)}`).join(" ");
+  const last = pts[pts.length - 1];
+  return (
+    <svg className="spark" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label}: ${pts.map((p) => rs(p.price)).join(", ")}`}>
+      <line x1={P} x2={W - P} y1={H - P} y2={H - P} className="spark-base" />
+      <path d={d} fill="none" stroke="var(--co)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((p, i) => (
+        <circle key={i} cx={X(p.round)} cy={Y(p.price)} r="7" fill="transparent">
+          <title>{`${p.round % 1 ? "Now" : p.round === 0 ? "Start" : `End of round ${p.round}`}: ${rs(p.price)}`}</title>
+        </circle>
+      ))}
+      <circle cx={X(last.round)} cy={Y(last.price)} r="3.5" fill="var(--co)" stroke="var(--panel)" strokeWidth="2" />
+    </svg>
+  );
+}
+
 // ─── Board ──────────────────────────────────────────────────────────────────────────────
 
 function band(p: number): string {
@@ -282,7 +373,7 @@ function band(p: number): string {
   return "b0";
 }
 
-function Board({ s }: { s: GameState }) {
+function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, PricePoint[]> }) {
   const spaces = [...TRACK.keys()].reverse();
   const tracks = COMPANY_IDS.filter((c) => !COMPANIES[c].ipo || ipoEnabled(s.config));
   return (
@@ -295,10 +386,15 @@ function Board({ s }: { s: GameState }) {
         const ch = s.chairmen[c];
         const shorts = openShorts(s, c);
         return (
-          <div key={c} className={`track ${st.listed ? "" : "unlisted"}`} style={{ ["--co" as string]: co.colour }}>
+          <div key={c} className={`track ${st.listed ? "" : "unlisted"}`} style={coStyle(c)}>
             <div className="track-head">
-              <div className="co-name">{co.short}</div>
-              <div className="muted small">{co.sector}</div>
+              <div className="co-title">
+                <CompanyBadge c={c} size={26} />
+                <div>
+                  <div className="co-name">{co.short}</div>
+                  <div className="muted small">{co.sector}</div>
+                </div>
+              </div>
               {co.doubleDividend && <div className="tag">Double dividend</div>}
               {co.noDividend && <div className="tag">No dividend</div>}
             </div>
@@ -322,6 +418,8 @@ function Board({ s }: { s: GameState }) {
             </ol>
             <div className="track-foot">
               <div className="big">{!st.listed ? `IPO R${IPO_ROUND}` : st.bankrupt ? "Bankrupt" : rs(price(s, c))}</div>
+              <Change d={changeSinceLastRound(s, hist[c], c)} />
+              {st.listed && <Sparkline points={hist[c]} now={s.phase.kind === "ended" ? null : price(s, c)} label={`${co.short} price history`} />}
               <div title="Shares held by players minus open shorts">
                 Outstanding <b>{out}</b>
               </div>
@@ -366,13 +464,16 @@ function Players({ s, viewer }: { s: GameState; viewer: Seat | null }) {
               </td>
               <td className="holdings">
                 {COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, i).length).map((c) => (
-                  <span key={c} className="chip" style={{ ["--co" as string]: COMPANIES[c].colour }}>
-                    {COMPANIES[c].short} {p.shares[c] || ""}
-                    {openShorts(s, c, i).length ? ` S${openShorts(s, c, i).length}` : ""}
+                  <span key={c} className="chip" title={`${COMPANIES[c].short}: ${p.shares[c]} shares${openShorts(s, c, i).length ? `, ${openShorts(s, c, i).length} short` : ""}`}>
+                    <CompanyBadge c={c} size={16} />
+                    {p.shares[c] > 0 && <b>{p.shares[c]}</b>}
+                    {openShorts(s, c, i).length > 0 && <span className="short-chip">short ×{openShorts(s, c, i).length}</span>}
+                    {s.chairmen[c] === i && <span className="chair" title="Chairman">★</span>}
                   </span>
                 ))}
               </td>
-              <td className="num">{i === viewer ? rs(p.cash) : "₹ hidden"}</td>
+              <td className="num" title="Shares at current prices (public)">{rs(netWorth(s, i).sharesValue)}</td>
+              <td className="num">{i === viewer ? rs(p.cash) : "cash hidden"}</td>
               <td className="num muted">{p.hand.length} cards</td>
             </tr>
           ))}
@@ -397,23 +498,30 @@ function Market({ s }: { s: GameState }) {
 
 const TYPE_LABEL = { positive: "▲ Positive", negative: "▼ Negative", double: "⇅ Double-edged", market: "★ Market-wide" } as const;
 
-function NewsCardView({ id, children }: { id: number; children?: ReactNode }) {
+function NewsCardView({ id, children, impact }: { id: number; children?: ReactNode; impact?: number }) {
   const k = card(id);
   return (
     <div className={`card ${k.type}`}>
       <div className="card-type">{TYPE_LABEL[k.type]}</div>
       <div className="card-title">{k.title}</div>
       <div className="effects">
-        {(Object.entries(k.effects) as [CompanyId, number][]).length === 6 ? (
-          <span className="eff">All {signed(Object.values(k.effects)[0]!)}</span>
+        {k.type === "market" ? (
+          <span className="eff">
+            All companies <b>{signed(Object.values(k.effects)[0]!)}</b>
+          </span>
         ) : (
           (Object.entries(k.effects) as [CompanyId, number][]).map(([c, v]) => (
-            <span key={c} className="eff" style={{ ["--co" as string]: COMPANIES[c].colour }}>
-              {COMPANIES[c].short} <b>{signed(v)}</b>
+            <span key={c} className="eff">
+              <CompanyBadge c={c} size={16} /> {COMPANIES[c].short} <b>{signed(v)}</b>
             </span>
           ))
         )}
       </div>
+      {impact !== undefined && (
+        <div className={`impact ${impact > 0 ? "up" : impact < 0 ? "down" : "flat"}`} title="Effect on your holdings and shorts at today's prices">
+          For you {impact === 0 ? "±₹0" : signedRs(impact)}
+        </div>
+      )}
       <div className="card-no">#{id}</div>
       {children}
     </div>
@@ -455,7 +563,7 @@ function PassDevice({ s, seat, onReady }: { s: GameState; seat: Seat; onReady: (
   );
 }
 
-function Private({ s, seat, play, flash, clear }: { s: GameState; seat: Seat; play: (a: Action) => void; flash: string; clear: () => void }) {
+function Private({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
   const p = s.players[seat];
   let body: ReactNode;
   if (s.debt) body = <ForcedSale s={s} seat={seat} play={play} />;
@@ -468,12 +576,8 @@ function Private({ s, seat, play, flash, clear }: { s: GameState; seat: Seat; pl
       <h2>
         {p.name} <span className="cash">{rs(p.cash)}</span>
       </h2>
-      {flash && (
-        <p className="error" onClick={clear}>
-          {flash}
-        </p>
-      )}
       {body}
+      {s.phase.kind === "turn" && !s.debt && <MyPosition s={s} seat={seat} />}
     </section>
   );
 }
@@ -490,9 +594,9 @@ function Opening({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action
       <p className="small">Round 0 — buy up to {OPENING_MAX_SHARES} shares in total at the starting prices (if a company is oversubscribed, shares are shared out in seat order), and place one news card face-down. Everything is revealed together.</p>
       <div className="orders">
         {listed.map((c) => (
-          <div key={c} style={{ ["--co" as string]: COMPANIES[c].colour }} className="order">
-            <span>
-              {COMPANIES[c].short} <span className="muted">{rs(price(s, c))}</span>
+          <div key={c} style={coStyle(c)} className="order">
+            <span className="row-co">
+              <CompanyBadge c={c} size={18} /> {COMPANIES[c].short} <span className="muted">{rs(price(s, c))}</span>
             </span>
             <span className="stepper">
               <button aria-label={`One fewer ${COMPANIES[c].short}`} onClick={() => setOrders({ ...orders, [c]: Math.max(0, (orders[c] ?? 0) - 1) })}>
@@ -595,8 +699,8 @@ function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
           </div>
           <div className="seg wrap">
             {COMPANY_IDS.filter((c) => s.companies[c].listed).map((c) => (
-              <button key={c} className={c === company ? "on" : ""} style={{ ["--co" as string]: COMPANIES[c].colour }} onClick={() => setCompany(c)}>
-                {COMPANIES[c].short}
+              <button key={c} className={`co-btn ${c === company ? "on" : ""}`} style={coStyle(c)} onClick={() => setCompany(c)}>
+                <CompanyBadge c={c} size={16} /> {COMPANIES[c].short}
               </button>
             ))}
           </div>
@@ -635,14 +739,13 @@ function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
       <h3>2 · Play a news card <span className="muted small">(mandatory, applies at once)</span></h3>
       <div className="cards">
         {p.hand.map((id) => (
-          <NewsCardView key={id} id={id}>
+          <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
             <button className="play" onClick={() => play({ type: "playNews", player: seat, card: id })}>
               Play
             </button>
           </NewsCardView>
         ))}
       </div>
-      <MyPosition s={s} seat={seat} />
     </>
   );
 }
@@ -655,7 +758,7 @@ function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
       <div className="cards">
         {s.market.map((id, slot) =>
           id === null ? null : (
-            <NewsCardView key={slot} id={id}>
+            <NewsCardView key={slot} id={id} impact={cardImpact(s, seat, id)}>
               <button className="play" onClick={() => play({ type: "draw", player: seat, from: "market", slot })}>
                 Take
               </button>
@@ -690,9 +793,9 @@ function ForcedSale({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Act
       </p>
       <div className="orders">
         {COMPANY_IDS.filter((c) => p.shares[c] > 0 && !s.companies[c].bankrupt).map((c) => (
-          <div key={c} className="order" style={{ ["--co" as string]: COMPANIES[c].colour }}>
-            <span>
-              {COMPANIES[c].short} × {p.shares[c]} <span className="muted">{rs(price(s, c))}</span>
+          <div key={c} className="order" style={coStyle(c)}>
+            <span className="row-co">
+              <CompanyBadge c={c} size={18} /> {COMPANIES[c].short} × {p.shares[c]} <span className="muted">{rs(price(s, c))}</span>
             </span>
             <button onClick={() => play({ type: "forcedSell", player: seat, company: c, qty: 1 })}>Sell 1</button>
           </div>
@@ -704,10 +807,45 @@ function ForcedSale({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Act
 
 function MyPosition({ s, seat }: { s: GameState; seat: Seat }) {
   const nw = netWorth(s, seat);
+  const p = s.players[seat];
+  const rows = COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, seat).length);
   return (
-    <p className="small muted">
-      Net worth now {rs(nw.netWorth)} = cash {rs(nw.cash)} + shares {rs(nw.sharesValue)} − shorts to cover {rs(nw.shortsCost)}
-    </p>
+    <div className="position">
+      <h3>Your position</h3>
+      {rows.length === 0 ? (
+        <p className="small muted">No shares or shorts yet.</p>
+      ) : (
+        <table>
+          <tbody>
+            {rows.map((c) => {
+              const shorts = openShorts(s, c, seat);
+              return (
+                <tr key={c}>
+                  <td className="row-co">
+                    <CompanyBadge c={c} size={16} /> {COMPANIES[c].short}
+                    {s.chairmen[c] === seat && <span className="tag">Chairman</span>}
+                  </td>
+                  <td className="num">{p.shares[c] ? `${p.shares[c]} × ${rs(price(s, c))}` : ""}</td>
+                  <td className="small muted">
+                    {shorts.map((t) => {
+                      const cap = capIndex(t.openIndex);
+                      return (
+                        <div key={t.id}>
+                          short from {rs(TRACK[t.openIndex])}, {cap === null ? "no cap" : `forced at ${rs(TRACK[cap])}`}
+                        </div>
+                      );
+                    })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="small muted">
+        Net worth {rs(nw.netWorth)} = cash {rs(nw.cash)} + shares {rs(nw.sharesValue)} − shorts to cover {rs(nw.shortsCost)}
+      </p>
+    </div>
   );
 }
 
@@ -729,7 +867,9 @@ function EndScreen({ s, onNew }: { s: GameState; onNew: () => void }) {
         <tbody>
           {s.standings!.map((x) => (
             <tr key={x.seat} className={x.rank === 1 ? "winner" : ""}>
-              <td>{x.rank === 1 ? "🏆" : x.rank}</td>
+              <td>
+                <span className={`rank r${x.rank}`}>{x.rank === 1 ? "Winner" : `#${x.rank}`}</span>
+              </td>
               <td>{x.name}</td>
               <td className="num">{rs(x.cash)}</td>
               <td className="num">{rs(x.sharesValue)}</td>

@@ -117,6 +117,9 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
   >;
   // Average of the largest distance from the starting price reached in each game.
   const swing = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
+  const listedGames = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
+  const startSum = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
+  const belowStart = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
   let roundEnds = 0;
   const sh = { opened: 0, covered: 0, forced: 0, bankrupt: 0, debts: 0, lastResort: 0, lastResortGames: 0, shortfalls: 0 };
   const cash: { sum: number; n: number }[] = [];
@@ -150,13 +153,14 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
     const bankruptHere = new Set<CompanyId>(), topHere = new Set<CompanyId>(), chairHere = new Set<CompanyId>();
     let lastResortHere = false;
     const maxDev = Object.fromEntries(COMPANY_IDS.map((c) => [c, 0])) as Record<CompanyId, number>;
+    // Each company's own starting point this game: its start price, or the IPO listing price.
+    const startOf = Object.fromEntries(COMPANY_IDS.map((c) => [c, opts.startPrices?.[c] ?? COMPANIES[c].startPrice])) as Record<CompanyId, number>;
     for (const e of game.events) {
       switch (e.kind) {
         case "bankrupt": bankrupt[e.company].events++; bankruptHere.add(e.company); break;
         case "price": {
           if (e.to === 500) topHere.add(e.company);
-          const start = opts.startPrices?.[e.company] ?? COMPANIES[e.company].startPrice;
-          maxDev[e.company] = Math.max(maxDev[e.company], Math.abs(e.to - start));
+          maxDev[e.company] = Math.max(maxDev[e.company], Math.abs(e.to - startOf[e.company]));
           break;
         }
         case "shortOpened": sh.opened++; break;
@@ -166,6 +170,7 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         case "shortfall": sh.shortfalls++; break;
         case "trade": if (e.trade === "cover") sh.covered += e.prices.length; break;
         case "ipoListing": {
+          startOf[e.company] = e.listingPrice;
           ipo.games++;
           ipo.listing += e.listingPrice;
           ipo.after += e.afterPop;
@@ -198,7 +203,14 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
           break;
       }
     }
-    for (const c of COMPANY_IDS) swing[c] += maxDev[c];
+    for (const c of COMPANY_IDS) {
+      swing[c] += maxDev[c];
+      if (game.state.companies[c].listed) {
+        listedGames[c]++;
+        startSum[c] += startOf[c];
+        if (TRACK[game.state.companies[c].priceIndex] < startOf[c]) belowStart[c]++;
+      }
+    }
     bankruptHere.forEach((c) => bankrupt[c].games++);
     topHere.forEach((c) => top[c]++);
     chairHere.forEach((c) => chair[c].games++);
@@ -223,8 +235,10 @@ export function runBatch(opts: BatchOptions, onProgress?: (done: number) => void
         const xs = [...finals[c]].sort((a, b) => a - b);
         const dist: Record<number, number> = {};
         for (const x of xs) dist[x] = (dist[x] ?? 0) + 1;
-        const start = opts.startPrices?.[c] ?? COMPANIES[c].startPrice;
-        return [c, { start, avgSwing: Math.round(swing[c] / G), endedBelowStartPct: pct(xs.filter((x) => x < start).length), avgFinal: Math.round(xs.reduce((a, b) => a + b, 0) / G), medianFinal: xs[Math.floor(G / 2)], finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
+        // The IPO company's start is its average listing price; games where it never listed are left out.
+        const n = Math.max(1, listedGames[c]);
+        const start = Math.round(startSum[c] / n);
+        return [c, { start, avgSwing: Math.round(swing[c] / G), endedBelowStartPct: Math.round((1000 * belowStart[c]) / n) / 10, avgFinal: Math.round(xs.reduce((a, b) => a + b, 0) / G), medianFinal: xs[Math.floor(G / 2)], finalDistribution: dist, bankruptGamesPct: pct(bankrupt[c].games), bankruptcies: bankrupt[c].events, reached500GamesPct: pct(top[c]) }];
       }),
     ) as Report["companies"],
     chairmen: Object.fromEntries(

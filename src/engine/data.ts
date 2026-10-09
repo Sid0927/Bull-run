@@ -38,6 +38,7 @@ export interface Company {
   sector: string;
   startPrice: number;
   doubleDividend: boolean;
+  /** Identity colour (light theme). Validated with the board order for colour-blind separation. */
   colour: string;
   /** Lists mid-game through the IPO instead of starting on the board. */
   ipo?: boolean;
@@ -46,14 +47,14 @@ export interface Company {
 }
 
 export const COMPANIES: Record<CompanyId, Company> = {
-  HUL: { id: "HUL", name: "Hindustan Unilever", short: "HUL", sector: "FMCG", startPrice: 150, doubleDividend: true, colour: "#2f6fdb" },
-  HDFC: { id: "HDFC", name: "HDFC Bank", short: "HDFC Bank", sector: "Banking", startPrice: 120, doubleDividend: true, colour: "#8a3ffc" },
-  INFY: { id: "INFY", name: "Infosys", short: "Infosys", sector: "Tech", startPrice: 100, doubleDividend: false, colour: "#0f9d8a" },
-  ONGC: { id: "ONGC", name: "ONGC", short: "ONGC", sector: "Energy", startPrice: 100, doubleDividend: false, colour: "#d4691e" },
-  DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 80, doubleDividend: false, colour: "#b8860b" },
-  SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 60, doubleDividend: false, colour: "#d23f6b" },
+  HUL: { id: "HUL", name: "Hindustan Unilever", short: "HUL", sector: "FMCG", startPrice: 150, doubleDividend: true, colour: "#2a78d6" },
+  HDFC: { id: "HDFC", name: "HDFC Bank", short: "HDFC Bank", sector: "Banking", startPrice: 120, doubleDividend: true, colour: "#eb6834" },
+  INFY: { id: "INFY", name: "Infosys", short: "Infosys", sector: "Tech", startPrice: 100, doubleDividend: false, colour: "#1baf7a" },
+  ONGC: { id: "ONGC", name: "ONGC", short: "ONGC", sector: "Energy", startPrice: 100, doubleDividend: false, colour: "#eda100" },
+  DLF: { id: "DLF", name: "DLF", short: "DLF", sector: "Real Estate", startPrice: 80, doubleDividend: false, colour: "#e87ba4" },
+  SUN: { id: "SUN", name: "Sun Pharma", short: "Sun Pharma", sector: "Pharma", startPrice: 60, doubleDividend: false, colour: "#008300" },
   // startPrice is only a placeholder: the IPO's listing price is set by the bids.
-  ZOM: { id: "ZOM", name: "Zomato", short: "Zomato", sector: "New-age tech", startPrice: 100, doubleDividend: false, colour: "#5b8c1a", ipo: true, noDividend: true },
+  ZOM: { id: "ZOM", name: "Zomato", short: "Zomato", sector: "New-age tech", startPrice: 100, doubleDividend: false, colour: "#4a3aa7", ipo: true, noDividend: true },
 };
 
 /** The IPO: Zomato lists at the start of this round, sold by sealed bids. */
