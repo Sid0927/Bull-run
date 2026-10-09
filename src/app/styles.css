@@ -929,3 +929,4 @@ body::before {
 }
 .card .play { white-space: nowrap; }
 .impact { white-space: nowrap; }
+.time-line { display: block; }

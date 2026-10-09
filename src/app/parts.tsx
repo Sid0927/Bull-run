@@ -46,7 +46,7 @@ import {
 } from "../engine/index.ts";
 import { waitingOn } from "../shared/view.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { Avatar, Confetti, Icon, clock } from "./ui.tsx";
+import { Avatar, Confetti, Icon, clock, fullTime } from "./ui.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 
 export const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -403,7 +403,7 @@ export function Log({ events, times }: { events: GameEvent[]; times?: (string | 
         {events.map((e, i) => (
           <li key={i} className={`ev ${e.kind}`}>
             {times?.[i] && (times[i] !== times[i - 1] || e.kind === "roundStart") && (
-              <time className="log-time" dateTime={times[i]!} title={new Date(times[i]!).toLocaleString("en-IN")}>
+              <time className="log-time" dateTime={times[i]!} title={fullTime(times[i]!)}>
                 {clock(times[i])}
               </time>
             )}

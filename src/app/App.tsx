@@ -6,7 +6,7 @@ import { GameScreen } from "./GameScreen.tsx";
 import { BullLogo } from "./logos.tsx";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
-import { Avatar, AvatarStack, Icon, TickerTape, When, clock } from "./ui.tsx";
+import { Avatar, AvatarStack, Icon, TickerTape, When, clock, fullTime } from "./ui.tsx";
 
 type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" };
 
@@ -686,16 +686,23 @@ function Admin({ me }: { me: Me }) {
                       {!u.active && " · switched off"}
                     </span>
                     <span className="muted small user-times">
-                      {u.lastLoginAt ? (
+                      {u.lastLoginAt || u.lastSeenAt || u.devices > 0 ? (
                         <>
-                          Signed in <When at={u.lastLoginAt} />
                           {u.lastSeenAt && (
-                            <>
-                              {" "}
-                              · active <When at={u.lastSeenAt} />
-                            </>
+                            <span className="time-line">
+                              Last active <When at={u.lastSeenAt} />
+                            </span>
                           )}
-                          {u.devices > 0 && ` · ${u.devices} device${u.devices === 1 ? "" : "s"} signed in`}
+                          <span className="time-line">
+                            {u.lastLoginAt ? (
+                              <>
+                                Last signed in <When at={u.lastLoginAt} />
+                              </>
+                            ) : (
+                              "Signed in before sign-ins were recorded"
+                            )}
+                            {u.devices > 0 && ` · ${u.devices} device${u.devices === 1 ? "" : "s"}`}
+                          </span>
                         </>
                       ) : (
                         "Never signed in"
@@ -756,7 +763,7 @@ function Admin({ me }: { me: Me }) {
                     <span className="muted small">{l.device}</span>
                   </span>
                   <span className={`pill login-${l.result}`}>{LOGIN_RESULT[l.result]}</span>
-                  <time className="login-time small muted" dateTime={l.at} title={new Date(l.at).toLocaleString("en-IN")}>
+                  <time className="login-time small muted" dateTime={l.at} title={fullTime(l.at)}>
                     {clock(l.at)}
                   </time>
                 </li>

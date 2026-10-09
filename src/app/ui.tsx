@@ -128,18 +128,23 @@ export function Confetti() {
 
 // ─── Times ──────────────────────────────────────────────────────────────────────────────
 
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+/** Every time is shown in Indian time, whatever the phone is set to, so all players see the same clock. */
+const TZ = "Asia/Kolkata";
+const dayOf = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: TZ });
 
-/** "14:05" today, "Thu 14:05" this week, "3 Oct, 14:05" before that. */
+/** "2:05 pm" today, "Thu 2:05 pm" this week, "3 Oct, 2:05 pm" before that. */
 export function clock(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
-  const hm = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  if (sameDay(d, now)) return hm;
-  if (now.getTime() - d.getTime() < 6 * 86400000) return `${d.toLocaleDateString("en-IN", { weekday: "short" })} ${hm}`;
-  return `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${hm}`;
+  const hm = d.toLocaleTimeString("en-IN", { timeZone: TZ, hour: "numeric", minute: "2-digit", hour12: true });
+  if (dayOf(d) === dayOf(now)) return hm;
+  if (now.getTime() - d.getTime() < 6 * 86400000) return `${d.toLocaleDateString("en-IN", { timeZone: TZ, weekday: "short" })} ${hm}`;
+  return `${d.toLocaleDateString("en-IN", { timeZone: TZ, day: "numeric", month: "short" })}, ${hm}`;
 }
+
+/** The full date and time in Indian time, for hover titles. */
+export const fullTime = (iso: string) => `${new Date(iso).toLocaleString("en-IN", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" })} IST`;
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago". */
 export function ago(iso: string | null): string {
@@ -152,12 +157,13 @@ export function ago(iso: string | null): string {
   return `${d} day${d === 1 ? "" : "s"} ago`;
 }
 
-/** A time that reads relatively and shows the exact moment on hover. */
+/** A time as the clock time and how long ago, e.g. "2:05 pm (3 h ago)"; the full date on hover. */
 export function When({ at }: { at: string | null }) {
   if (!at) return null;
+  const rel = ago(at);
   return (
-    <time dateTime={at} title={new Date(at).toLocaleString("en-IN")}>
-      {ago(at)}
+    <time dateTime={at} title={`${new Date(at).toLocaleString("en-IN", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" })} IST`}>
+      {rel === "just now" ? rel : `${clock(at)} (${rel})`}
     </time>
   );
 }
