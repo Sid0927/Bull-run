@@ -36,3 +36,6 @@ const staticDir = fileURLToPath(new URL("../dist", import.meta.url));
 const { server } = createApp({ store, staticDir, secureCookies: production, log });
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, () => log(`Listening on port ${port}${url ? "" : " (memory store: nothing is saved)"}`));
+
+// Last line of defence: log a stray failure rather than let it take every game down with the server.
+process.on("unhandledRejection", (e) => console.error("Unhandled rejection:", e));

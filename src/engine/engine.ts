@@ -615,7 +615,9 @@ function forcedSell(ctx: Ctx, c: CompanyId, qty: number) {
     company: c,
     prices,
     total,
-    text: `${s.players[seat].name} sells ${qty} ${cname(c)} to raise cash at ${prices.map(fmt).join(", ") || "nothing"} — receives ${fmt(total)}`,
+    text: prices.length
+      ? `${s.players[seat].name} sells ${prices.length} ${cname(c)} to raise cash at ${prices.map(fmt).join(", ")} — receives ${fmt(total)}`
+      : `${s.players[seat].name} tries to sell ${cname(c)} to raise cash, but the first share takes it to ₹0: nothing is sold`,
   });
   syncChairmen(ctx);
   resolveDebt(ctx);

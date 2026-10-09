@@ -38,6 +38,7 @@ export class Hub {
   private live = new Map<number, Live>();
   private loading = new Map<number, Promise<Live | null>>();
   private locks = new Map<number, Promise<unknown>>();
+  private inFlight = new Map<number, number>();
   private listeners = new Map<number, Set<Listener>>();
 
   constructor(private store: Store) {}
@@ -45,7 +46,15 @@ export class Hub {
   /** Run `fn` for one game at a time, so two phones acting at once cannot interleave. */
   private exclusive<T>(gameId: number, fn: () => Promise<T>): Promise<T> {
     const prev = this.locks.get(gameId) ?? Promise.resolve();
-    const next = prev.then(fn, fn);
+    // Counted while queued or running, so the cache never drops a game a move is being made in.
+    this.inFlight.set(gameId, (this.inFlight.get(gameId) ?? 0) + 1);
+    const run = () =>
+      fn().finally(() => {
+        const n = (this.inFlight.get(gameId) ?? 1) - 1;
+        if (n > 0) this.inFlight.set(gameId, n);
+        else this.inFlight.delete(gameId);
+      });
+    const next = prev.then(run, run);
     this.locks.set(
       gameId,
       next.catch(() => {}),
@@ -95,7 +104,7 @@ export class Hub {
     if (this.live.size <= CACHE_LIMIT) return;
     for (const id of this.live.keys()) {
       if (this.live.size <= CACHE_LIMIT) break;
-      if (!this.listeners.get(id)?.size && !this.loading.has(id)) this.live.delete(id);
+      if (!this.listeners.get(id)?.size && !this.loading.has(id) && !this.inFlight.has(id)) this.live.delete(id);
     }
   }
 
@@ -145,6 +154,11 @@ export class Hub {
   }
 
   /** Push the latest to everyone watching a game, each with their own view. */
+  /** Send the latest to every watcher without waiting, and never let a failure take the server down. */
+  private push(gameId: number) {
+    this.broadcast(gameId).catch((e) => console.error(`Could not send game ${gameId} to its watchers:`, e));
+  }
+
   private async broadcast(gameId: number) {
     const set = this.listeners.get(gameId);
     if (!set?.size) return;
@@ -161,9 +175,14 @@ export class Hub {
         l.end();
         continue;
       }
-      const u = await this.update(game, seated, user, l.sent);
-      l.sent = u.events.from + u.events.list.length;
-      l.send(u);
+      try {
+        const u = await this.update(game, seated, user, l.sent);
+        l.sent = u.events.from + u.events.list.length;
+        l.send(u);
+      } catch (e) {
+        // One watcher's failure must not stop the others getting the move.
+        console.error(`Could not send game ${gameId} to user ${l.userId}:`, e);
+      }
     }
   }
 
@@ -229,7 +248,7 @@ export class Hub {
       if (g.status !== "lobby") throw new GameError("That game has already started.");
       if (seated.length >= g.maxPlayers) throw new GameError("That game is full.");
       await this.store.addPlayer(g.id, user.id);
-      void this.broadcast(g.id);
+      this.push(g.id);
       return g;
     });
   }
@@ -241,7 +260,7 @@ export class Hub {
       if (g.createdBy === user.id) {
         await this.store.updateGame(g.id, { status: "abandoned" });
       } else await this.store.removePlayer(g.id, user.id);
-      void this.broadcast(g.id);
+      this.push(g.id);
     });
   }
 
@@ -257,7 +276,7 @@ export class Hub {
       await this.store.updateGame(g.id, { status: "playing", seed }); // one write: never "playing" without a seed
       const now = new Date().toISOString();
       this.live.set(g.id, { state, events: [...events], times: events.map(() => now), seq: 0, lastMoveAt: null });
-      void this.broadcast(g.id);
+      this.push(g.id);
     });
   }
 
@@ -281,8 +300,10 @@ export class Hub {
       live.times.push(...r.events.map(() => now));
       live.lastMoveAt = now;
       live.seq++;
+      // If anything replaced the cached copy while the move was being saved, this one is the truth.
+      this.live.set(g.id, live);
       if (r.state.phase.kind === "ended") await this.store.updateGame(g.id, { status: "ended" });
-      void this.broadcast(g.id);
+      this.push(g.id);
     });
   }
 
@@ -293,8 +314,8 @@ export class Hub {
       if (g.status === "ended") throw new GameError("That game has finished; it stays in the players' history.");
       if (g.status === "abandoned") return;
       await this.store.updateGame(gameId, { status: "abandoned" });
-      await this.broadcast(gameId);
       this.live.delete(gameId);
+      this.push(gameId);
     });
   }
 }
