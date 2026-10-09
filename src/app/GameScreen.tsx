@@ -20,6 +20,10 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState<Tab>("play");
   const [busy, setBusy] = useState(false);
+  // A "can't reach the server" notice is out of date once the connection is back.
+  useEffect(() => {
+    if (connected) setToast((t) => (t.startsWith("Can't reach") ? "" : t));
+  }, [connected]);
   // A new section starts at its top, not wherever the last one was scrolled to.
   useEffect(() => window.scrollTo(0, 0), [tab]);
 
@@ -87,7 +91,7 @@ export function GameScreen({ id, me }: { id: number; me: Me; onRules: () => void
         <div className="empty-state">
           <Icon name="flag" size={32} />
           <h1 className="page-title">Game {u.game.code}</h1>
-          <p>This game was abandoned by the admin.</p>
+          <p>{u.game.startedAt ? "This game was ended by the admin before it finished." : "This game was cancelled before it started."}</p>
           <a className="button primary" href="#/">
             Back to my games
           </a>

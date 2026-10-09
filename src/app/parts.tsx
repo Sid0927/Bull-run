@@ -827,14 +827,15 @@ export function EndScreen({ s, viewer, onNew }: { s: GameState; viewer: Seat | n
           </div>
         ))}
       </div>
+      <div className="table-scroll">
       <table className="standings">
         <thead>
           <tr>
             <th></th>
             <th>Player</th>
-            <th className="num">Cash</th>
-            <th className="num">Shares</th>
-            <th className="num">Shorts</th>
+            <th className="num detail">Cash</th>
+            <th className="num detail">Shares</th>
+            <th className="num detail">Shorts</th>
             <th className="num">Net worth</th>
           </tr>
         </thead>
@@ -844,10 +845,15 @@ export function EndScreen({ s, viewer, onNew }: { s: GameState; viewer: Seat | n
               <td>
                 <span className={`rank r${x.rank}`}>{x.rank === 1 ? "1st" : `#${x.rank}`}</span>
               </td>
-              <td>{x.name}</td>
-              <td className="num">{rs(x.cash)}</td>
-              <td className="num">{rs(x.sharesValue)}</td>
-              <td className="num">{x.shortsCost ? `−${rs(x.shortsCost)}` : "—"}</td>
+              <td className="standing-name">
+                {x.name}
+                <span className="phone-detail small muted">
+                  {rs(x.cash)} cash · {rs(x.sharesValue)} shares{x.shortsCost ? ` · −${rs(x.shortsCost)} shorts` : ""}
+                </span>
+              </td>
+              <td className="num detail">{rs(x.cash)}</td>
+              <td className="num detail">{rs(x.sharesValue)}</td>
+              <td className="num detail">{x.shortsCost ? `−${rs(x.shortsCost)}` : "—"}</td>
               <td className="num">
                 <b>{rs(x.netWorth)}</b>
               </td>
@@ -855,6 +861,7 @@ export function EndScreen({ s, viewer, onNew }: { s: GameState; viewer: Seat | n
           ))}
         </tbody>
       </table>
+      </div>
       <p className="small muted">Net worth = cash + shares × current price − cost to cover open shorts. Ties go to more cash; still tied is a shared win.</p>
       <button className="primary big" onClick={onNew}>
         Back to my games

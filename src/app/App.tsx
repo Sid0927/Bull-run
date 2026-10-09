@@ -412,7 +412,6 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
       <input
         id="join-code"
         value={value}
-        maxLength={5}
         inputMode="text"
         autoCapitalize="characters"
         autoComplete="off"

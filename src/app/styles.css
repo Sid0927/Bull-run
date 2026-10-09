@@ -859,3 +859,20 @@ body {
 .login-wrong, .login-blocked, .login-off { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .login-time { font-family: var(--font-num); white-space: nowrap; }
 @media (max-width: 480px) { .login-row { flex-wrap: wrap; } .login-row .pill { order: 3; } }
+
+/* ── Narrow-screen fixes ──────────────────────────────────────────── */
+.end > * { min-width: 0; }
+.podium { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.phone-detail { display: none; }
+@media (max-width: 520px) {
+  .standings .detail { display: none; }
+  .phone-detail { display: block; font-weight: 400; }
+  .standings td, .standings th { padding: 8px 4px; }
+}
+.player-card { grid-template-columns: minmax(0, 1fr); }
+.player-top { min-width: 0; }
+.player-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-money { flex: none; }
+.lobby-hero > div:first-child { min-width: 0; }
+.page-title { overflow-wrap: anywhere; }
+.rules-table.narrow { min-width: min(22rem, 100%); }
