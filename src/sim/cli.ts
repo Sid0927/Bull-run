@@ -21,6 +21,7 @@ const opts = {
   driftAtOrBelow: arg("drift", "") ? Number(arg("drift", "")) : undefined,
   driftMode: arg("drift-mode", "down") as "down" | "toStart",
   ipo: !process.argv.includes("--no-ipo"),
+  delayedNews: process.argv.includes("--delayed-news"),
 };
 
 /** --start SUN=150,INFY=120 */

@@ -90,13 +90,14 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
   const [seed, setSeed] = useState(() => String(Math.floor(Math.random() * 1e9)));
   const [layout, setLayout] = useState<keyof typeof START_LAYOUTS>("handover");
   const [ipo, setIpo] = useState(true);
+  const [delayed, setDelayed] = useState(false);
   const [error, setError] = useState("");
 
   function start() {
     const players = names.slice(0, count).map((n, i) => n.trim() || `Player ${i + 1}`);
     if (new Set(players).size !== players.length) return setError("Give every player a different name.");
     const startPrices = START_LAYOUTS[layout].prices;
-    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}), ...(ipo ? {} : { ipo: false }) });
+    onStart({ players, rounds, seed: Number(seed) | 0, ...(startPrices ? { startPrices } : {}), ...(ipo ? {} : { ipo: false }), ...(delayed ? { delayedNews: true } : {}) });
   }
 
   function load(file: File) {
@@ -174,6 +175,10 @@ function Setup({ onStart, onLoad }: { onStart: (c: GameConfig) => void; onLoad: 
         <label className="check">
           <input type="checkbox" id="ipo" checked={ipo} onChange={(e) => setIpo(e.target.checked)} />
           Zomato IPO at the start of round {IPO_ROUND}
+        </label>
+        <label className="check">
+          <input type="checkbox" id="delayed" checked={delayed} onChange={(e) => setDelayed(e.target.checked)} />
+          Test rule: news takes effect one lap later (played face-down)
         </label>
         <label>
           Seed
@@ -461,6 +466,7 @@ function Players({ s, viewer }: { s: GameState; viewer: Seat | null }) {
                 {p.name}
                 {s.startPlayer === i && <span className="tag" title="Started round 1">1st</span>}
                 {p.shortBanned && <span className="tag warn">no shorts</span>}
+                {s.pendingNews[i] !== null && <span className="tag" title="Takes effect at the start of their next turn">card face-down</span>}
               </td>
               <td className="holdings">
                 {COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, i).length).map((c) => (
@@ -736,7 +742,10 @@ function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
       ) : (
         <p className="small muted">Both actions used.</p>
       )}
-      <h3>2 · Play a news card <span className="muted small">(mandatory, applies at once)</span></h3>
+      <h3>
+        2 · Play a news card{" "}
+        <span className="muted small">{s.config.delayedNews ? "(mandatory; goes face-down and takes effect at the start of your next turn)" : "(mandatory, applies at once)"}</span>
+      </h3>
       <div className="cards">
         {p.hand.map((id) => (
           <NewsCardView key={id} id={id} impact={cardImpact(s, seat, id)}>
@@ -773,6 +782,14 @@ function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) =
           </button>
         </div>
       </div>
+      {s.pendingNews[seat] !== null && (
+        <>
+          <h3>Your face-down card <span className="muted small">(takes effect at the start of your next turn)</span></h3>
+          <div className="cards">
+            <NewsCardView id={s.pendingNews[seat]!} />
+          </div>
+        </>
+      )}
       <h3>Your hand</h3>
       <div className="cards">
         {p.hand.map((id) => (

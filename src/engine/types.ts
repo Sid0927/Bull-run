@@ -27,6 +27,11 @@ export interface GameConfig {
   /** Play-test variants for the IPO: the price band and the most shares one player may bid for. */
   ipoBand?: number[];
   ipoMaxBid?: number;
+  /**
+   * Play-test variant: news resolves one lap later. A played card goes face-down and takes effect
+   * at the start of its owner's next turn. Cards still face-down when the game ends are discarded.
+   */
+  delayedNews?: boolean;
 }
 
 export interface Player {
@@ -106,6 +111,10 @@ export interface GameState {
   standings: Standing[] | null;
   /** Where each company started: its start price, or its listing price once it has listed. */
   homeIndex: Record<CompanyId, number>;
+  /** Delayed-news variant: each seat's face-down card waiting to take effect, or null. */
+  pendingNews: (number | null)[];
+  /** The public tape: the most recent trades, newest last. */
+  tape: { seat: Seat; round: number; kind: TradeKind; company: CompanyId; qty: number }[];
 }
 
 export type TradeKind = "buy" | "sell" | "short" | "cover";
@@ -128,6 +137,7 @@ export type GameEvent = { text: string } & (
   | { kind: "ceiling"; company: CompanyId }
   | { kind: "trade"; player: Seat; trade: TradeKind | "forcedSell"; company: CompanyId; prices: number[]; total: number }
   | { kind: "news"; player: Seat; card: number }
+  | { kind: "newsPending"; player: Seat }
   | { kind: "shortOpened"; player: Seat; company: CompanyId; shortId: number; price: number }
   | { kind: "shortClosed"; player: Seat; company: CompanyId; shortId: number; price: number; how: "cover" | "forced" | "bankrupt" }
   | { kind: "debt"; player: Seat; amount: number }

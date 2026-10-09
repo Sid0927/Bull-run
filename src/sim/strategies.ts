@@ -207,8 +207,41 @@ export const dividendPlayer: Strategy = {
   },
 };
 
+// ─── Follower: reads the tape ───────────────────────────────────────────────────────────
+
+/**
+ * Copies what the player before it just did: buys what they bought, shorts what they shorted.
+ * It stands in for a table reading a player's trades as a clue to the card they hold, which is
+ * the reaction the delayed-news rule gives everybody a lap to make.
+ */
+export const followerPlayer: Strategy = {
+  name: "follower",
+  candidates(s, seat, rng) {
+    const ph = s.phase;
+    if (s.debt || ph.kind !== "turn" || ph.step !== "trade") return favourPlayer.candidates(s, seat, rng);
+    const p = s.players[seat];
+    const n = s.players.length;
+    const prev = (seat - 1 + n) % n;
+    const theirs = s.tape.filter((t) => t.seat === prev && t.round >= s.round - 1);
+    const out: Action[] = [];
+    if (ph.actionsUsed < 2) {
+      for (const t of [...theirs].reverse()) {
+        if (t.kind === "buy") for (let q = Math.min(3, t.qty); q >= 1; q--) if (p.cash - q * price(s, t.company) * 1.2 > 100) out.push(trade(seat, "buy", t.company, q));
+        if (t.kind === "short" || t.kind === "sell") {
+          if (p.shares[t.company]) out.push(trade(seat, "sell", t.company, Math.min(3, p.shares[t.company])));
+          out.push(trade(seat, "short", t.company, 1));
+        }
+      }
+    }
+    if (out.length === 0) return favourPlayer.candidates(s, seat, rng);
+    out.push(playNews(s, seat, bestCard(s, seat)));
+    return out;
+  },
+};
+
 export const STRATEGIES: Record<string, Strategy> = {
   random: randomPlayer,
   favour: favourPlayer,
   dividend: dividendPlayer,
+  follower: followerPlayer,
 };

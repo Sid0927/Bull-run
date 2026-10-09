@@ -92,6 +92,13 @@ The band and bid limit come from simulation: ₹90–120 with 4 shares a bid was
 in 85% of 4-player games and always listed at the floor. ₹60–90 with 6 shares fills far more
 often. Simulator flags: `--no-ipo`; band and limit are `ipoBand` / `ipoMaxBid` in `runBatch`.
 
+## Test rule: news one lap later (off by default)
+
+A played news card goes face-down and takes effect at the start of its owner's next turn,
+before they trade. Cards still face-down when the game ends are discarded. Setup screen:
+"Test rule: news takes effect one lap later". Simulator: `--delayed-news`. The `follower`
+computer player copies the previous player's trades, to stand in for a table reacting.
+
 Engine-level choices the rules did not reach:
 
 - **Caps are checked after each trade action completes**, not between the shares inside it, so

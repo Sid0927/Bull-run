@@ -43,6 +43,7 @@ export function invariantErrors(s: GameState): string[] {
     ...s.discard,
     ...(s.market.filter((x) => x !== null) as number[]),
     ...s.players.flatMap((p) => p.hand),
+    ...s.pendingNews.filter((x): x is number => x !== null),
     ...(s.phase.kind === "opening" ? s.phase.submissions.flatMap((x) => (x ? [x.card] : [])) : []),
   ];
   const expected = NEWS_CARDS.length + (s.companies[IPO_COMPANY].listed ? IPO_CARDS.length : 0);

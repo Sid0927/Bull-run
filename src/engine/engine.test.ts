@@ -547,6 +547,40 @@ describe("play-test variants", () => {
     assert.throws(() => newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: -5 }), /Starting cash/);
   });
 
+  test("delayed news: the card goes face-down and takes effect at the start of its owner's next turn", () => {
+    let s = midGame();
+    s.config.delayedNews = true;
+    setPrice(s, "INFY", 100);
+    const quiet = ALL_CARDS.filter((k) => !k.effects.INFY).map((k) => k.id);
+    s.deck = [...s.deck.filter((x) => !quiet.includes(x)), ...quiet.filter((x) => s.deck.includes(x))];
+    give(s, 0, AI_VIRAL);
+    s = ok(s, play(0, AI_VIRAL)).state;
+    assert.equal(price(s, "INFY"), 100); // nothing yet
+    assert.equal(s.pendingNews[0], AI_VIRAL);
+    s = ok(s, { type: "draw", player: 0, from: "deck" }).state;
+    for (const i of [1, 2]) {
+      give(s, i, s.deck[s.deck.length - 1]);
+      s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
+      s = ok(s, { type: "draw", player: i, from: "deck" }).state;
+    }
+    // Back to Asha: her card resolves before she trades.
+    assert.equal(price(s, "INFY"), 130);
+    assert.equal(s.pendingNews[0], null);
+    assert.ok(s.discard.includes(AI_VIRAL));
+  });
+
+  test("delayed news: cards still face-down at the end of the game are discarded", () => {
+    let s = midGame({ round: 6, rounds: 6 });
+    s.config.delayedNews = true;
+    for (let i = 0; i < 3; i++) {
+      give(s, i, s.deck[s.deck.length - 1]);
+      s = ok(s, play(i, s.players[i].hand[s.players[i].hand.length - 1])).state;
+      s = ok(s, { type: "draw", player: i, from: "deck" }).state;
+    }
+    assert.equal(s.phase.kind, "ended");
+    assert.ok(s.pendingNews.every((x) => x === null));
+  });
+
   test("starting cash can be set", () => {
     const { state } = newGame({ players: ["A", "B", "C"], rounds: 6, seed: 1, startingCash: 1200 });
     assert.ok(state.players.every((p) => p.cash === 1200));

@@ -187,6 +187,8 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
     startPlayer: null,
     debt: null,
     standings: null,
+    pendingNews: players.map(() => null),
+    tape: [],
     homeIndex: Object.fromEntries(COMPANY_IDS.map((c) => [c, indexOfPrice(startPrice(config, c))])) as Record<CompanyId, number>,
   };
   return {
@@ -491,6 +493,7 @@ function trade(ctx: Ctx, seat: Seat, kind: TradeKind, c: CompanyId, qty: number,
     text: `${s.players[seat].name} ${verb} ${qty} ${cname(c)} ${noun} at ${prices.map(fmt).join(", ") || "nothing"} — ${kind === "buy" || kind === "cover" ? "pays" : "receives"} ${fmt(total)}`,
   });
   if (s.phase.kind === "turn") s.phase.actionsUsed += 1;
+  s.tape = [...s.tape, { seat, round: s.round, kind, company: c, qty }].slice(-12);
   syncChairmen(ctx);
   settle(ctx);
 }
@@ -598,10 +601,20 @@ function playNews(ctx: Ctx, seat: Seat, id: number) {
   const p = s.players[seat];
   if (!p.hand.includes(id)) throw new IllegalAction("That card is not in your hand.");
   p.hand = p.hand.filter((x) => x !== id);
+  s.phase.step = "draw";
+  if (s.config.delayedNews) {
+    s.pendingNews[seat] = id;
+    ctx.events.push({ kind: "newsPending", player: seat, text: `${p.name} places a news card face-down; it takes effect at the start of their next turn` });
+    return;
+  }
+  resolveNews(ctx, seat, id, "plays");
+}
+
+function resolveNews(ctx: Ctx, seat: Seat, id: number, verb: "plays" | "reveals") {
+  const s = ctx.s;
   s.discard.push(id);
   const nc = card(id);
-  ctx.events.push({ kind: "news", player: seat, card: id, text: `${p.name} plays “${nc.title}” (#${id})` });
-  s.phase.step = "draw";
+  ctx.events.push({ kind: "news", player: seat, card: id, text: `${s.players[seat].name} ${verb} “${nc.title}” (#${id})` });
   for (const c of COMPANY_IDS) {
     const steps = nc.effects[c] ?? 0;
     if (!steps || !s.companies[c].listed) continue;
@@ -612,6 +625,17 @@ function playNews(ctx: Ctx, seat: Seat, id: number) {
     movePrice(ctx, c, steps, "news", nc.title);
   }
   settle(ctx);
+}
+
+/** Start a player's turn; in the delayed-news variant their face-down card takes effect first. */
+function beginTurn(ctx: Ctx, player: Seat, turnInRound: number) {
+  const s = ctx.s;
+  s.phase = { kind: "turn", player, turnInRound, actionsUsed: 0, step: "trade" };
+  const pending = s.pendingNews[player];
+  if (pending !== null && pending !== undefined) {
+    s.pendingNews[player] = null;
+    resolveNews(ctx, player, pending, "reveals");
+  }
 }
 
 // ─── Drawing ────────────────────────────────────────────────────────────────────────────
@@ -775,7 +799,7 @@ function beginRound(ctx: Ctx, r: number) {
 }
 
 function startTurns(ctx: Ctx) {
-  ctx.s.phase = { kind: "turn", player: ctx.s.startPlayer!, turnInRound: 0, actionsUsed: 0, step: "trade" };
+  beginTurn(ctx, ctx.s.startPlayer!, 0);
 }
 
 // ─── The IPO ────────────────────────────────────────────────────────────────────────────
@@ -859,7 +883,7 @@ function nextTurn(ctx: Ctx) {
   const ph = s.phase as Extract<GameState["phase"], { kind: "turn" }>;
   const n = s.players.length;
   if (ph.turnInRound + 1 < n) {
-    s.phase = { kind: "turn", player: (ph.player + 1) % n, turnInRound: ph.turnInRound + 1, actionsUsed: 0, step: "trade" };
+    beginTurn(ctx, (ph.player + 1) % n, ph.turnInRound + 1);
     return;
   }
   endRound(ctx);
@@ -949,6 +973,12 @@ export function standings(s: GameState): Standing[] {
 
 function endGame(ctx: Ctx) {
   const s = ctx.s;
+  s.pendingNews.forEach((id, seat) => {
+    if (id === null) return;
+    s.discard.push(id);
+    s.pendingNews[seat] = null;
+    ctx.events.push({ kind: "newsPending", player: seat, text: `${s.players[seat].name}'s face-down card is discarded unplayed: the game is over` });
+  });
   s.standings = standings(s);
   s.phase = { kind: "ended" };
   const winners = s.standings.filter((x) => x.rank === 1);
