@@ -240,6 +240,19 @@ describe("fixes from the security review", () => {
     assert.equal(ended, true);
   });
 
+  test("the admin sees every sign-in, failed ones included, and when each player was last on", async () => {
+    await fetch(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1", "X-Forwarded-For": "198.51.100.40" }, body: JSON.stringify({ username: "chitra", password: "nope-nope" }) });
+    await players[2].login("chitra", "chitra-pw1");
+    const log = (await admin.call("/api/admin/logins")).data as { username: string; result: string; device: string }[];
+    assert.ok(log.some((l) => l.username === "chitra" && l.result === "wrong" && l.device === "iPhone · Safari"));
+    assert.ok(log.some((l) => l.username === "chitra" && l.result === "ok"));
+    assert.ok(!JSON.stringify(log).includes("nope-nope"), "a password was recorded");
+    const users = (await admin.call("/api/admin/users")).data as { username: string; lastLoginAt: string | null; devices: number }[];
+    const c = users.find((u) => u.username === "chitra")!;
+    assert.ok(c.lastLoginAt && c.devices >= 1);
+    assert.equal((await players[0].call("/api/admin/logins")).status, 403);
+  });
+
   test("wrong passwords from one address don't lock the player out elsewhere", async () => {
     const attacker = new Client();
     for (let i = 0; i < 6; i++) {

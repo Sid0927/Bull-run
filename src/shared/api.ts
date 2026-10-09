@@ -47,4 +47,17 @@ export interface AdminUser {
   isAdmin: boolean;
   active: boolean;
   createdAt: string;
+  lastLoginAt: string | null;
+  lastSeenAt: string | null;
+  /** Devices currently signed in. */
+  devices: number;
+}
+
+export interface LoginRecord {
+  id: number;
+  userId: number | null;
+  username: string;
+  result: "ok" | "wrong" | "blocked" | "off";
+  device: string;
+  at: string;
 }

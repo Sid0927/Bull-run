@@ -47,6 +47,23 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   const log = opts.log ?? (() => {});
 
   /** Render's proxy appends the real address as the last X-Forwarded-For entry; earlier ones are the client's to forge. */
+  /** A plain description of the device a request came from, for the admin's sign-in history. */
+  function deviceOf(req: IncomingMessage): string {
+    const ua = String(req.headers["user-agent"] ?? "");
+    const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac OS X|Macintosh/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+    const browser = /Edg\//.test(ua) ? "Edge" : /SamsungBrowser/.test(ua) ? "Samsung Internet" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
+    return [os, browser].filter(Boolean).join(" · ") || "Unknown device";
+  }
+
+  // Last-seen times are written at most every two minutes per person, not on every request.
+  const touched = new Map<number, number>();
+  function touch(userId: number) {
+    const now = Date.now();
+    if (now - (touched.get(userId) ?? 0) < 120_000) return;
+    touched.set(userId, now);
+    store.touchUser(userId).catch(() => {});
+  }
+
   function clientIp(req: IncomingMessage): string {
     const xff = String(req.headers["x-forwarded-for"] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     return xff.at(-1) ?? req.socket.remoteAddress ?? "";
@@ -64,7 +81,16 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   }
 
   const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin });
-  const adminView = (u: User): AdminUser => ({ id: u.id, username: u.username, isAdmin: u.isAdmin, active: u.active, createdAt: u.createdAt });
+  const adminView = (u: User, devices = 0): AdminUser => ({
+    id: u.id,
+    username: u.username,
+    isAdmin: u.isAdmin,
+    active: u.active,
+    createdAt: u.createdAt,
+    lastLoginAt: u.lastLoginAt,
+    lastSeenAt: u.lastSeenAt,
+    devices,
+  });
 
   function cookieOf(req: IncomingMessage): string | null {
     const raw = req.headers.cookie ?? "";
@@ -91,7 +117,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     const token = cookieOf(req);
     if (!token) return null;
     const u = await store.sessionUser(token);
-    return u && u.active ? u : null;
+    if (!u || !u.active) return null;
+    touch(u.id);
+    return u;
   }
 
   async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -162,13 +190,22 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       // 5 tries per name from one address (so a stranger can't lock a player out), and a looser
       // cap per address that a success doesn't reset (a table on one Wi-Fi shares an address).
       const keys = [`u:${username.toLowerCase()}|${ip}`];
-      if (limiter.blocked(...keys) || ipLimiter.blocked(`ip:${ip}`)) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+      const attempt = async (result: "ok" | "wrong" | "blocked" | "off", userId: number | null) =>
+        store.recordLogin({ userId, username: username.slice(0, 40) || "(blank)", result, device: deviceOf(req) }).catch(() => {});
+      if (limiter.blocked(...keys) || ipLimiter.blocked(`ip:${ip}`)) {
+        await attempt("blocked", (await store.userByName(username))?.id ?? null);
+        throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+      }
       limiter.fail(...keys); // counted before checking, so parallel guesses can't slip past
       ipLimiter.fail(`ip:${ip}`);
       const u = await store.userByName(username);
       // Always do the slow hash, so the time taken doesn't reveal whether the name exists.
       const ok = await checkPassword(String(b.password ?? "").slice(0, 200), u?.passwordHash ?? DUMMY_HASH);
-      if (!u || !u.active || !ok) throw new HttpError(401, "That username and password don't match.");
+      if (!u || !u.active || !ok) {
+        await attempt(u && ok ? "off" : "wrong", u?.id ?? null);
+        throw new HttpError(401, "That username and password don't match.");
+      }
+      await attempt("ok", u.id);
       limiter.clear(...keys);
       const token = newToken();
       await store.createSession(token, u.id, new Date(Date.now() + SESSION_DAYS * 86400_000));
@@ -199,7 +236,11 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     // ── Admin ──
     if (path.startsWith("/api/admin/")) {
       if (!user.isAdmin) throw new HttpError(403, "Only the admin can do that.");
-      if (path === "/api/admin/users" && method === "GET") return json(res, 200, (await store.listUsers()).map(adminView));
+      if (path === "/api/admin/users" && method === "GET") {
+        const counts = await store.sessionCounts();
+        return json(res, 200, (await store.listUsers()).map((u) => adminView(u, counts.get(u.id) ?? 0)));
+      }
+      if (path === "/api/admin/logins" && method === "GET") return json(res, 200, await store.logins(200));
       if (path === "/api/admin/users" && method === "POST") {
         const b = await body(req);
         const username = String(b.username ?? "").trim();

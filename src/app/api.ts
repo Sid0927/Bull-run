@@ -1,6 +1,6 @@
 /** Talking to the game server (same site, so the sign-in cookie goes along). */
 import type { Action } from "../engine/index.ts";
-import type { AdminUser, GameSummary, GameUpdate, Me } from "../shared/api.ts";
+import type { AdminUser, GameSummary, GameUpdate, LoginRecord, Me } from "../shared/api.ts";
 
 export class ApiError extends Error {
   constructor(
@@ -43,6 +43,7 @@ export const api = {
   createUser: (username: string, password: string, isAdmin: boolean) => call<AdminUser>("/api/admin/users", { username, password, isAdmin }),
   updateUser: (id: number, patch: { password?: string; active?: boolean }) => call<AdminUser>(`/api/admin/users/${id}`, patch),
   allGames: () => call<GameSummary[]>("/api/admin/games"),
+  logins: () => call<LoginRecord[]>("/api/admin/logins"),
   abandon: (id: number) => call<{ ok: true }>(`/api/admin/games/${id}/abandon`, {}),
 };
 

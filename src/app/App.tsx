@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { DIVIDEND_ROUNDS, GAME_LENGTHS, IPO_ROUND, STARTING_CASH } from "../engine/index.ts";
-import type { AdminUser, GameSummary, Me } from "../shared/api.ts";
+import type { AdminUser, GameSummary, LoginRecord, Me } from "../shared/api.ts";
 import { ApiError, api } from "./api.ts";
 import { GameScreen } from "./GameScreen.tsx";
 import { BullLogo } from "./logos.tsx";
@@ -221,6 +221,8 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
 }
 
 // ─── Lobby ──────────────────────────────────────────────────────────────────────────────
+
+const LOGIN_RESULT: Record<LoginRecord["result"], string> = { ok: "Signed in", wrong: "Wrong password", blocked: "Blocked: too many tries", off: "Account switched off" };
 
 const STATUS: Record<GameSummary["status"], string> = { lobby: "Waiting room", playing: "In play", ended: "Finished", abandoned: "Abandoned" };
 
@@ -575,14 +577,21 @@ function Admin({ me }: { me: Me }) {
   const [resetPw, setResetPw] = useState("");
   const [confirmAbandon, setConfirmAbandon] = useState<number | null>(null);
   const [show, setShow] = useState<"all" | GameSummary["status"]>("all");
+  const [logins, setLogins] = useState<LoginRecord[]>([]);
+  const [failedOnly, setFailedOnly] = useState(false);
   const load = useCallback(() => {
     api.users().then(setUsers, (e) => setMsg({ ok: false, text: e.message }));
     api.allGames().then(setGames, () => {});
+    api.logins().then(setLogins, () => {});
   }, []);
   useEffect(() => {
     load();
-    // Keep the list of games current while the page is open.
-    const t = setInterval(() => api.allGames().then(setGames, () => {}), 15000);
+    // Keep the games, accounts and sign-ins current while the page is open.
+    const t = setInterval(() => {
+      api.allGames().then(setGames, () => {});
+      api.users().then(setUsers, () => {});
+      api.logins().then(setLogins, () => {});
+    }, 15000);
     return () => clearInterval(t);
   }, [load]);
   const shown = games.filter((g) => show === "all" || g.status === show);
@@ -671,6 +680,22 @@ function Admin({ me }: { me: Me }) {
                       {u.isAdmin ? " Admin" : " Player"}
                       {!u.active && " · switched off"}
                     </span>
+                    <span className="muted small user-times">
+                      {u.lastLoginAt ? (
+                        <>
+                          Signed in <When at={u.lastLoginAt} />
+                          {u.lastSeenAt && (
+                            <>
+                              {" "}
+                              · active <When at={u.lastSeenAt} />
+                            </>
+                          )}
+                          {u.devices > 0 && ` · ${u.devices} device${u.devices === 1 ? "" : "s"} signed in`}
+                        </>
+                      ) : (
+                        "Never signed in"
+                      )}
+                    </span>
                   </span>
                 </span>
                 <span className="row">
@@ -701,6 +726,39 @@ function Admin({ me }: { me: Me }) {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="panel">
+        <h2>
+          <Icon name="key" /> Sign-in history <span className="count">{logins.length}</span>
+        </h2>
+        <p className="muted small">Every attempt to sign in, newest first, kept for 90 days. Passwords are never recorded.</p>
+        <label className="check-row">
+          <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed attempts only
+          <span className="count">{logins.filter((l) => l.result !== "ok").length}</span>
+        </label>
+        {logins.length === 0 ? (
+          <p className="muted">No sign-ins yet.</p>
+        ) : (
+          <ul className="login-list">
+            {logins
+              .filter((l) => !failedOnly || l.result !== "ok")
+              .slice(0, 100)
+              .map((l) => (
+                <li key={l.id} className={`login-row ${l.result}`}>
+                  <Avatar name={l.username} size={30} />
+                  <span className="login-who">
+                    <b>{l.username}</b>
+                    <span className="muted small">{l.device}</span>
+                  </span>
+                  <span className={`pill login-${l.result}`}>{LOGIN_RESULT[l.result]}</span>
+                  <time className="login-time small muted" dateTime={l.at} title={new Date(l.at).toLocaleString("en-IN")}>
+                    {clock(l.at)}
+                  </time>
+                </li>
+              ))}
+          </ul>
+        )}
       </section>
 
       <section className="panel">

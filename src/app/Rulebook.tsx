@@ -244,6 +244,49 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <p>
             Each company named on a revealed card moves once, by the steps the card gives it. When the deck runs out, shuffle the played cards into a new deck. A news effect on a company that is bankrupt, or that has not listed yet, is ignored.
           </p>
+                  <h3>The trades you can make</h3>
+          <div className="table-scroll">
+            <table className="rules-table">
+              <thead>
+                <tr>
+                  <th>Trade</th>
+                  <th>What it means</th>
+                  <th>You need</th>
+                  <th>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>Buy</b></td>
+                  <td>Buy shares from the bank at the current price</td>
+                  <td>The cash, and shares left (each company has {SHARES_PER_COMPANY})</td>
+                  <td>Can push it up</td>
+                </tr>
+                <tr>
+                  <td><b>Sell</b></td>
+                  <td>Sell shares you own back to the bank</td>
+                  <td>That many shares</td>
+                  <td>Can push it down</td>
+                </tr>
+                <tr>
+                  <td><b>Short</b></td>
+                  <td>Sell shares you don't own: take the price in cash now, buy them back later</td>
+                  <td>A free short (at most {SHORTS_PER_COMPANY} open per company, across all players)</td>
+                  <td>Can push it down</td>
+                </tr>
+                <tr>
+                  <td><b>Cover</b></td>
+                  <td>Close one of your shorts by paying the current price</td>
+                  <td>An open short in that company, and the cash</td>
+                  <td>Can push it up</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="muted small">
+            You can't: trade more than {MAX_QTY_PER_ACTION} shares in one trade, make a third trade, put two companies in one trade, short in the opening or short{" "}
+            Oracle Group before round {IPO_ROUND + 1}, buy Oracle Group before it lists, or trade a bankrupt company before it re-lists.
+          </p>
         </section>
 
         <section id="prices">

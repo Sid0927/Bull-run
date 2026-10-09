@@ -16,6 +16,19 @@ export interface User {
   isAdmin: boolean;
   active: boolean;
   createdAt: string;
+  /** Last successful sign-in, and the last time they used the app (null if never). */
+  lastLoginAt: string | null;
+  lastSeenAt: string | null;
+}
+
+/** One attempt to sign in. Never holds a password. */
+export interface LoginEvent {
+  id: number;
+  userId: number | null;
+  username: string;
+  result: "ok" | "wrong" | "blocked" | "off";
+  device: string;
+  at: string;
 }
 
 export interface Game {
@@ -58,6 +71,12 @@ export interface Store {
   sessionUser(token: string): Promise<User | null>;
   deleteSession(token: string): Promise<void>;
   deleteSessionsFor(userId: number): Promise<void>;
+  /** How many live sessions (signed-in devices) each user has. */
+  sessionCounts(): Promise<Map<number, number>>;
+  recordLogin(e: Omit<LoginEvent, "id" | "at">): Promise<void>;
+  logins(limit: number): Promise<LoginEvent[]>;
+  /** Note that a user is using the app now. */
+  touchUser(userId: number): Promise<void>;
   createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }): Promise<Game>;
   gameById(id: number): Promise<Game | null>;
   gameByCode(code: string): Promise<Game | null>;
@@ -79,6 +98,7 @@ export class MemoryStore implements Store {
   private games: Game[] = [];
   private players: { gameId: number; userId: number; seat: number }[] = [];
   private log = new Map<number, TimedAction[]>();
+  private loginLog: LoginEvent[] = [];
 
   async init() {}
   async close() {}
@@ -92,7 +112,7 @@ export class MemoryStore implements Store {
     return [...this.users];
   }
   async createUser(username: string, passwordHash: string, isAdmin: boolean) {
-    const u: User = { id: this.users.length + 1, username, passwordHash, isAdmin, active: true, createdAt: new Date().toISOString() };
+    const u: User = { id: this.users.length + 1, username, passwordHash, isAdmin, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null };
     this.users.push(u);
     return u;
   }
@@ -110,6 +130,27 @@ export class MemoryStore implements Store {
   }
   async deleteSession(token: string) {
     this.sessions.delete(token);
+  }
+  async sessionCounts() {
+    const m = new Map<number, number>();
+    const now = new Date();
+    for (const s of this.sessions.values()) if (s.expiresAt > now) m.set(s.userId, (m.get(s.userId) ?? 0) + 1);
+    return m;
+  }
+  async recordLogin(e: Omit<LoginEvent, "id" | "at">) {
+    const at = new Date().toISOString();
+    this.loginLog.push({ ...e, id: this.loginLog.length + 1, at });
+    if (e.result === "ok" && e.userId !== null) {
+      const u = this.users.find((x) => x.id === e.userId);
+      if (u) u.lastLoginAt = u.lastSeenAt = at;
+    }
+  }
+  async logins(limit: number) {
+    return this.loginLog.slice(-limit).reverse();
+  }
+  async touchUser(userId: number) {
+    const u = this.users.find((x) => x.id === userId);
+    if (u) u.lastSeenAt = new Date().toISOString();
   }
   async deleteSessionsFor(userId: number) {
     for (const [t, s] of this.sessions) if (s.userId === userId) this.sessions.delete(t);
@@ -211,7 +252,20 @@ CREATE TABLE IF NOT EXISTS game_actions (
   action JSONB NOT NULL,
   PRIMARY KEY (game_id, seq)
 );
+CREATE TABLE IF NOT EXISTS login_events (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  username TEXT NOT NULL,
+  result TEXT NOT NULL,
+  device TEXT NOT NULL,
+  at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_events_at ON login_events (at DESC);
+-- Sign-in history is kept for 90 days.
+DELETE FROM login_events WHERE at < now() - interval '90 days';
 -- Columns added after the first release; run after every table exists.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 -- Games created before rule sets were recorded were all played under rule set 1.
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
@@ -230,6 +284,8 @@ const toUser = (r: Row): User => ({
   isAdmin: r.is_admin as boolean,
   active: r.active as boolean,
   createdAt: new Date(r.created_at as string).toISOString(),
+  lastLoginAt: r.last_login_at ? new Date(r.last_login_at as string).toISOString() : null,
+  lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at as string).toISOString() : null,
 });
 const toGame = (r: Row): Game => ({
   id: r.id as number,
@@ -292,6 +348,27 @@ export class PgStore implements Store {
   }
   async deleteSessionsFor(userId: number) {
     await this.q("DELETE FROM sessions WHERE user_id = $1", [userId]);
+  }
+  async sessionCounts() {
+    const rows = await this.q("SELECT user_id, count(*)::int AS n FROM sessions WHERE expires_at > now() GROUP BY user_id");
+    return new Map(rows.map((r) => [r.user_id as number, r.n as number]));
+  }
+  async recordLogin(e: Omit<LoginEvent, "id" | "at">) {
+    await this.q("INSERT INTO login_events (user_id, username, result, device) VALUES ($1, $2, $3, $4)", [e.userId, e.username, e.result, e.device]);
+    if (e.result === "ok" && e.userId !== null) await this.q("UPDATE users SET last_login_at = now(), last_seen_at = now() WHERE id = $1", [e.userId]);
+  }
+  async logins(limit: number) {
+    return (await this.q("SELECT * FROM login_events ORDER BY at DESC, id DESC LIMIT $1", [limit])).map((r) => ({
+      id: r.id as number,
+      userId: (r.user_id as number | null) ?? null,
+      username: r.username as string,
+      result: r.result as LoginEvent["result"],
+      device: r.device as string,
+      at: new Date(r.at as string).toISOString(),
+    }));
+  }
+  async touchUser(userId: number) {
+    await this.q("UPDATE users SET last_seen_at = now() WHERE id = $1", [userId]);
   }
   async createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }) {
     const [r] = await this.q("INSERT INTO games (code, created_by, status, rounds, max_players, rules) VALUES ($1, $2, 'lobby', $3, $4, $5) RETURNING *", [g.code, g.createdBy, g.rounds, g.maxPlayers, CURRENT_RULES]);
