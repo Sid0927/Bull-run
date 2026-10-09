@@ -118,7 +118,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             <li>
               <span className="quick-no">1</span>
               <b>Trade</b>
-              <span>Up to {ACTIONS_PER_TURN} actions: buy, sell, short or cover up to {MAX_QTY_PER_ACTION} shares of one company each.</span>
+              <span>Make up to {ACTIONS_PER_TURN} trades. Each trade is one company and 1–{MAX_QTY_PER_ACTION} shares: buy, sell, short (bet it falls) or cover (close a short).</span>
             </li>
             <li>
               <span className="quick-no">2</span>
@@ -229,7 +229,9 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
           <p>From round 1, each round every player takes one turn. On your turn, in this order:</p>
           <ol>
             <li>
-              <b>Trade</b>: take up to {ACTIONS_PER_TURN} actions. One action is to <b>buy</b>, <b>sell</b>, <b>short</b> or <b>cover</b> up to {MAX_QTY_PER_ACTION} shares of one company. Both actions may be on the same company, and you may hold and short the same company.
+              <b>Trade</b>: make up to {ACTIONS_PER_TURN} trades (you may make fewer, or none). Each trade is in one company, for 1 to {MAX_QTY_PER_ACTION} shares, and
+              is one of: <b>buy</b>, <b>sell</b> shares you own, <b>short</b> (bet the price falls) or <b>cover</b> (close a short). For example: buy 3 HUL, then buy
+              2 Infosys. Both trades may be in the same company, and you may hold and short the same company.
             </li>
             <li>
               <b>Play news</b>: place one card from your hand face-down. It is not optional. Nobody else sees it, and it does nothing yet: it is revealed and
