@@ -6,7 +6,7 @@ import { api, follow } from "./api.ts";
 import { go } from "./App.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
 import { CompanyBadge } from "./logos.tsx";
-import { AdminDesks, Board, chairOf, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
+import { AdminDesks, Board, chairOf, turnDoneThisRound, Change, DeskHead, lastRound, EndScreen, Log, Market, MyPosition, NewsCardView, Players, Private, RoundTracker, Sparkline, Ticker, band, cardImpact, coStyle, paysNow, rs } from "./parts.tsx";
 import { Avatar, Icon, type IconName } from "./ui.tsx";
 
 type Tab = "play" | "board" | "players" | "cards" | "log";
@@ -231,7 +231,7 @@ function Waiting({ s, seat, who }: { s: GameState; seat: Seat; who: string }) {
       {s.pendingNews[seat] !== null && s.pendingNews[seat] !== undefined && (
         <>
           <h3>
-            Your face-down card <span className="muted small">({lastRound(s) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span>
+            Your face-down card <span className="muted small">({lastRound(s) && turnDoneThisRound(s, seat) ? "the game ends before it is revealed" : "takes effect at the start of your next turn"})</span>
           </h3>
           <div className="cards">
             <NewsCardView id={s.pendingNews[seat]!} />

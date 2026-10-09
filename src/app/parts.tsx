@@ -18,6 +18,9 @@ import {
   bankShares,
   capIndex,
   card,
+  maxQtyOf,
+  tradeRoom,
+  ACTIONS_PER_TURN,
   coChairmanMultiplierOf,
   coChairmen,
   netWorth,
@@ -41,6 +44,7 @@ import {
   type Seat,
   type TradeKind,
 } from "../engine/index.ts";
+import { waitingOn } from "../shared/view.ts";
 import { CompanyBadge } from "./logos.tsx";
 import { Avatar, Confetti, Icon, clock } from "./ui.tsx";
 import { changeSinceLastRound, priceHistory, type PricePoint } from "./history.ts";
@@ -266,7 +270,8 @@ export function Board({ s, hist }: { s: GameState; hist: Record<CompanyId, Price
 // ─── Public panels ──────────────────────────────────────────────────────────────────────
 
 export function Players({ s, viewer, reveal }: { s: GameState; viewer: Seat | null; reveal?: boolean }) {
-  const who = actor(s);
+  // Everyone the game is waiting on: one player on a turn, possibly several in the opening or IPO.
+  const thinking = new Set(waitingOn(s));
   return (
     <section className="panel">
       <h2>Players</h2>
@@ -275,16 +280,16 @@ export function Players({ s, viewer, reveal }: { s: GameState; viewer: Seat | nu
           const worth = netWorth(s, i).sharesValue;
           const held = COMPANY_IDS.filter((c) => p.shares[c] || openShorts(s, c, i).length);
           return (
-            <li key={i} className={`player-card ${i === who ? "active" : ""} ${i === viewer ? "me" : ""}`}>
+            <li key={i} className={`player-card ${thinking.has(i) ? "active" : ""} ${i === viewer ? "me" : ""}`}>
               <div className="player-top">
-                <Avatar name={p.name} seat={i} size={36} ring={i === who} />
+                <Avatar name={p.name} seat={i} size={36} ring={thinking.has(i)} />
                 <div className="player-name">
                   <b>
                     {p.name}
                     {i === viewer && <span className="tag">you</span>}
                   </b>
                   <span className="muted small">
-                    {i === who && s.phase.kind !== "ended" ? "Thinking… · " : ""}
+                    {thinking.has(i) ? "Thinking… · " : ""}
                     {p.hand.length} cards
                     {s.startPlayer === i && " · started round 1"}
                   </span>
@@ -590,24 +595,28 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   const [kind, setKind] = useState<TradeKind>("buy");
   const [company, setCompany] = useState<CompanyId>(() => COMPANY_IDS.find((c) => s.companies[c].listed && !s.companies[c].bankrupt) ?? "HUL");
   const [qty, setQty] = useState(1);
+  const room0 = tradeRoom(s);
+  if (room0 > 0 && qty > room0) setQty(room0);
   const action: Extract<Action, { type: "trade" }> = { type: "trade", player: seat, kind, company, qty };
   const pv = useMemo(() => previewTrade(s, action), [s, kind, company, qty]); // eslint-disable-line react-hooks/exhaustive-deps
   const legal = useMemo(() => apply(s, action), [s, kind, company, qty]); // eslint-disable-line react-hooks/exhaustive-deps
-  const left = 2 - ph.actionsUsed;
+  // Trades left this turn, and the most shares one trade may be, under this game's rules.
+  const left = Math.max(0, (s.config.actionsPerTurn ?? ACTIONS_PER_TURN) - (s.config.splitActions ? Math.ceil(ph.actionsUsed / maxQtyOf(s.config)) : ph.actionsUsed));
+  const room = tradeRoom(s);
   return (
     <>
       <div className="step-head">
         <span className="step-no">1</span>
         <div>
           <b>Trade</b>
-          <span className="muted small">Up to 2 actions — {left} left</span>
+          <span className="muted small">Up to {s.config.actionsPerTurn ?? ACTIONS_PER_TURN} trades — {left} left</span>
         </div>
         <span className="pips" aria-hidden="true">
           <span className={left >= 1 ? "on" : ""} />
           <span className={left >= 2 ? "on" : ""} />
         </span>
       </div>
-      {left > 0 ? (
+      {room > 0 ? (
         <div className="trade">
           <div className="seg seg-fill kinds" role="group" aria-label="Trade">
             {(["buy", "sell", "short", "cover"] as TradeKind[]).map((k) => (
@@ -630,7 +639,7 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
           <div className="field inline">
             <span className="field-label">Shares</span>
             <div className="seg seg-fill" role="group" aria-label="Number of shares">
-              {[1, 2, 3].map((n) => (
+              {Array.from({ length: Math.max(1, room) }, (_, i) => i + 1).map((n) => (
                 <button key={n} className={n === qty ? "on" : ""} aria-pressed={n === qty} onClick={() => setQty(n)}>
                   {n}
                 </button>
@@ -651,6 +660,16 @@ export function Turn({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
                   </div>
                 ))}
                 {pv.preview.bankrupts && <div className="small error">This bankrupts the company.</div>}
+                {pv.preview.forcedCloses.map((f, i) => (
+                  <div key={i} className={`small ${f.player === seat ? "error" : "crossing"}`}>
+                    Forces {f.player === seat ? "your" : `${s.players[f.player].name}'s`} {COMPANIES[f.company].short} short closed at {rs(f.price)}
+                  </div>
+                ))}
+                {pv.preview.traderOwes > 0 && (
+                  <div className="small error">
+                    You won't have the cash for that: you'd have to sell shares to raise {rs(pv.preview.traderOwes)}.
+                  </div>
+                )}
               </>
             ) : (
               <div className="small muted">{pv.error}</div>
@@ -735,6 +754,20 @@ export function Draw({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Ac
   );
 }
 
+/** What the next share sold would fetch: one step lower if the sale takes the count below a threshold. */
+function nextSalePrice(s: GameState, c: CompanyId): number {
+  const i = s.companies[c].priceIndex;
+  return (THRESHOLDS as readonly number[]).includes(outstanding(s, c)) ? TRACK[Math.max(0, i - 1)] : TRACK[i];
+}
+
+/** Whether this seat has already had its turn in the current round. */
+export function turnDoneThisRound(s: GameState, seat: Seat): boolean {
+  if (s.phase.kind !== "turn" || s.startPlayer === null) return false;
+  const n = s.players.length;
+  const pos = (seat - s.startPlayer + n) % n;
+  return pos < s.phase.turnInRound;
+}
+
 export function ForcedSale({ s, seat, play }: { s: GameState; seat: Seat; play: (a: Action) => void }) {
   const p = s.players[seat];
   const d = s.debt!;
@@ -747,9 +780,18 @@ export function ForcedSale({ s, seat, play }: { s: GameState; seat: Seat; play: 
         {COMPANY_IDS.filter((c) => p.shares[c] > 0 && !s.companies[c].bankrupt).map((c) => (
           <div key={c} className="order" style={coStyle(c)}>
             <span className="row-co">
-              <CompanyBadge c={c} size={18} /> {COMPANIES[c].short} × {p.shares[c]} <span className="muted">{rs(price(s, c))}</span>
+              <CompanyBadge c={c} size={18} /> {COMPANIES[c].short} × {p.shares[c]}{" "}
+              <span className="muted">next one sells at {rs(nextSalePrice(s, c))}</span>
             </span>
-            <button onClick={() => play({ type: "forcedSell", player: seat, company: c, qty: 1 })}>Sell 1</button>
+            <span className="row">
+              {[1, 2, 3]
+                .filter((n) => n <= p.shares[c])
+                .map((n) => (
+                  <button key={n} onClick={() => play({ type: "forcedSell", player: seat, company: c, qty: n })}>
+                    Sell {n}
+                  </button>
+                ))}
+            </span>
           </div>
         ))}
       </div>

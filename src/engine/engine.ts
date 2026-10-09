@@ -407,6 +407,10 @@ export interface TradePreview {
   total: number; // paid (buy, cover) or received (sell, short)
   crossings: string[];
   bankrupts: boolean;
+  /** Shorts the trade would force closed once it is done, at their cap prices. */
+  forcedCloses: { player: Seat; company: CompanyId; price: number }[];
+  /** What the trader would still owe after those closes, if anything (they would have to sell). */
+  traderOwes: number;
 }
 
 /** Run a trade's share-by-share arithmetic on a copy, without checking cash. */
@@ -416,13 +420,29 @@ export function previewTrade(s: GameState, a: Extract<Action, { type: "trade" }>
   try {
     checkTrade(ctx.s, a.player, a.kind, a.company, a.qty, a.shortIds, false);
     const prices = runTrade(ctx, a.player, a.kind, a.company, a.qty, a.shortIds);
+    const crossings = ctx.events.filter((e) => e.kind === "price" || e.kind === "ceiling").map((e) => e.text);
+    const bankrupts = ctx.events.some((e) => e.kind === "bankrupt");
+    // Then what the real move does next: shorts that reached their cap are forced closed. Other
+    // players' cash may be hidden from whoever is asking, so assume they can pay: the closes all
+    // happen in the end, even if someone has to sell shares first.
+    ctx.s.players.forEach((p, i) => {
+      if (i !== a.player) p.cash = Number.MAX_SAFE_INTEGER / 8;
+    });
+    const before = ctx.events.length;
+    settle(ctx);
+    const forcedCloses = ctx.events
+      .slice(before)
+      .flatMap((e) => (e.kind === "shortClosed" && e.how === "forced" ? [{ player: e.player, company: e.company, price: e.price }] : []));
+    const debt = ctx.s.debt;
     return {
       ok: true,
       preview: {
         prices,
         total: prices.reduce((x, y) => x + y, 0),
-        crossings: ctx.events.filter((e) => e.kind === "price" || e.kind === "ceiling").map((e) => e.text),
-        bankrupts: ctx.events.some((e) => e.kind === "bankrupt"),
+        crossings,
+        bankrupts,
+        forcedCloses,
+        traderOwes: debt && debt.player === a.player ? debt.amount - ctx.s.players[a.player].cash : 0,
       },
     };
   } catch (e) {

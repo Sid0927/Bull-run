@@ -4,6 +4,7 @@ import {
   ALL_CARDS,
   HANDOVER_START_PRICES,
   dividendPerShare,
+  previewTrade,
   coChairmen,
   IPO_CARDS,
   ipoBook,
@@ -441,6 +442,26 @@ describe("chairman", () => {
 });
 
 // ─── Dividends ──────────────────────────────────────────────────────────────────────────
+
+describe("trade preview", () => {
+  test("names the shorts a trade would force closed, and a debt it would leave", () => {
+    const s = midGame();
+    setPrice(s, "INFY", 120);
+    s.players[0].shares.INFY = 2;
+    addShort(s, 1, "INFY", 80); // capped 5 steps up, at ₹130; outstanding is 2 − 1 = 1
+    s.players[1].cash = 50;
+    s.players[1].shares.HUL = 2; // so Bilal has to sell rather than pay all and be let off
+    const a: Action = { type: "trade", player: 0, kind: "buy", company: "INFY", qty: 3 };
+    const pv = previewTrade(s, a);
+    assert.ok(pv.ok);
+    // The 3rd share outstanding moves Infosys to ₹130, the short's cap.
+    assert.deepEqual(pv.preview.forcedCloses, [{ player: 1, company: "INFY", price: 130 }]);
+    assert.equal(pv.preview.traderOwes, 0);
+    const r = ok(s, a);
+    assert.ok(r.events.some((e) => e.kind === "shortClosed" && e.how === "forced" && e.player === 1));
+    assert.equal(r.state.debt?.player, 1); // Bilal can't pay ₹130 with ₹50
+  });
+});
 
 describe("dividends", () => {
   function endRound(s: GameState): ReturnType<typeof ok> {
