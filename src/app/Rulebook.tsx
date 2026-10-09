@@ -32,6 +32,7 @@ import {
   type CompanyId,
 } from "../engine/index.ts";
 import { BullLogo, CompanyBadge } from "./logos.tsx";
+import { Icon } from "./ui.tsx";
 
 const rs = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${-n}`);
@@ -52,9 +53,8 @@ function bandRows() {
 
 const SECTIONS = [
   ["goal", "The goal"],
-  ["box", "What's in the box"],
   ["companies", "The companies"],
-  ["setup", "Setting up"],
+  ["setup", "How a game starts"],
   ["opening", "Round 0: the opening"],
   ["turn", "Your turn"],
   ["prices", "How trading moves prices"],
@@ -71,21 +71,67 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
     <div className="rulebook">
       <div className="rulebook-bar">
         <span className="brand">
-          <BullLogo size={28} /> Bull Run · Rules
+          <BullLogo size={28} />
+          <span className="brand-word">
+            Bull<span>Run</span>
+          </span>
+          <span className="rules-tag">Rulebook</span>
         </span>
         <button className="primary" onClick={onClose}>
-          Back
+          <Icon name="x" size={18} /> Close
         </button>
       </div>
-      <article className="rules">
+      <article
+        className="rules"
+        onClick={(e) => {
+          // Links within the book scroll to their section; the address is left alone, because the app reads it as a route.
+          const a = (e.target as HTMLElement).closest("a");
+          const id = a?.getAttribute("href");
+          if (id?.startsWith("#") && !id.startsWith("#/")) {
+            e.preventDefault();
+            document.getElementById(id.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }}
+      >
         <header className="rules-hero">
-          <BullLogo size={64} />
-          <div>
-            <h1>Bull Run</h1>
-            <p className="lede">A stock market game for 3–5 players. Buy, sell and short shares in seven Indian companies, move their prices with the news you hold, and finish the richest.</p>
-            <p className="muted small">Games of {GAME_LENGTHS.join(", ")} rounds after the opening.</p>
-          </div>
+          <p className="eyebrow">How to play</p>
+          <h1>
+            Bull <span>Run</span>
+          </h1>
+          <p className="lede">
+            A stock market game for 3–5 players. Buy, sell and short shares in seven Indian companies, move their prices with the news you hold, and finish the
+            richest.
+          </p>
+          <ul className="hero-facts">
+            <li>3–5 players</li>
+            <li>{rs(STARTING_CASH)} each</li>
+            <li>{GAME_LENGTHS.join(" / ")} rounds</li>
+          </ul>
         </header>
+
+        <section className="quick" aria-label="The game in 30 seconds">
+          <h2>The game in 30 seconds</h2>
+          <ol className="quick-steps">
+            <li>
+              <span className="quick-no">1</span>
+              <b>Trade</b>
+              <span>Up to {ACTIONS_PER_TURN} actions: buy, sell, short or cover up to {MAX_QTY_PER_ACTION} shares of one company each.</span>
+            </li>
+            <li>
+              <span className="quick-no">2</span>
+              <b>Play news</b>
+              <span>Play one card from your hand. It moves prices for everyone, so time it for your shares.</span>
+            </li>
+            <li>
+              <span className="quick-no">3</span>
+              <b>Draw</b>
+              <span>Take a face-up card from the market, or a blind one from the deck.</span>
+            </li>
+          </ol>
+          <p className="muted small">
+            Buying pushes a price up, selling pushes it down, and every third round pays dividends. After the last round, the richest player wins.
+          </p>
+        </section>
 
         <nav className="toc" aria-label="Contents">
           <h2>Contents</h2>
@@ -104,18 +150,6 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
             Have the highest <b>net worth</b> when the last round ends: your cash, plus your shares at their final prices, minus what it would cost to buy back any
             shares you have sold short. Cash is kept secret behind your screen; the shares you hold are public.
           </p>
-        </section>
-
-        <section id="box">
-          <h2>What's in the box</h2>
-          <ul>
-            <li>A board with seven price tracks of {TRACK.length} spaces, from ₹0 (bankrupt) to {rs(TRACK.at(-1)!)} (the ceiling), and a round tracker</li>
-            <li>{SHARES_PER_COMPANY} share certificates and {SHORTS_PER_COMPANY} short tokens per company, a chairman token and a price marker for each</li>
-            <li>
-              {NEWS_CARDS.length} news cards, plus {IPO_CARDS.length} Zomato cards that join the deck when it lists
-            </li>
-            <li>Banknotes of ₹10, ₹50, ₹100 and ₹500, five player screens and five reference cards</li>
-          </ul>
         </section>
 
         <section id="companies">
@@ -152,17 +186,16 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
         </section>
 
         <section id="setup">
-          <h2>Setting up</h2>
-          <ol>
-            <li>Choose the game length: {GAME_LENGTHS.join(", ")} rounds. Nine is recommended, and with five players twelve runs long.</li>
-            <li>Put each company's marker on its starting price. Zomato's track stays empty until round {IPO_ROUND}.</li>
-            <li>Give each player {rs(STARTING_CASH)} and a screen.</li>
+          <h2>How a game starts</h2>
+          <ul>
+            <li>Choose the length: {GAME_LENGTHS.join(", ")} rounds after the opening. Nine is recommended; with five players twelve runs long.</li>
+            <li>Every company starts at the price in the table above. Zomato's track stays empty until round {IPO_ROUND}.</li>
+            <li>Everyone gets {rs(STARTING_CASH)} and {HAND_SIZE} news cards from a shuffled deck of {NEWS_CARDS.length}.</li>
             <li>
-              Shuffle the {NEWS_CARDS.length} news cards (keep the Zomato cards aside). Deal {HAND_SIZE} to each player and lay {MARKET_SIZE} face-up beside the deck: this is
-              the <b>market</b>.
+              {MARKET_SIZE} more cards are laid face-up: this is the <b>market</b>. Whenever a card is taken from it, the gap is filled from the deck.
             </li>
-            <li>Sit in a fixed order for the whole game.</li>
-          </ol>
+            <li>Players keep the same seat order for the whole game.</li>
+          </ul>
         </section>
 
         <section id="opening">

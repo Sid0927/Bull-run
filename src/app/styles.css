@@ -788,3 +788,28 @@ body {
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --seg-on: #25332e; } }
 :root[data-theme="dark"] { --seg-on: #25332e; }
 .seg-fill button.on { background: var(--seg-on); }
+
+/* ── Rulebook v2 ──────────────────────────────────────────────────── */
+.rules-tag { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.rules-hero { display: grid; justify-items: start; gap: 6px; padding: 28px 0 22px; border-bottom: 1px solid var(--line); }
+.rules-hero h1 { font-size: clamp(54px, 13vw, 80px); line-height: 0.92; }
+.rules-hero h1 span { background: linear-gradient(100deg, var(--accent) 10%, var(--gold) 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.rules-hero .hero-facts { justify-content: flex-start; margin-top: 6px; }
+.quick { margin-top: 22px; padding: 20px; border-radius: 22px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel) 70%); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.quick h2 { font-size: 22px; }
+.rules .quick-steps { list-style: none; padding: 0; margin: 12px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 10px; }
+.quick-steps li { display: grid; gap: 4px; align-content: start; padding: 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); max-width: none; line-height: 1.45; }
+.quick-steps b { font-family: var(--font-display); font-size: 20px; text-transform: uppercase; }
+.quick-steps span:last-child { color: var(--muted); font-size: 14px; }
+.quick-no { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-family: var(--font-num); font-weight: 700; }
+.toc { margin-top: 18px; }
+.toc ol { columns: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); text-decoration: none; font-size: 14px; font-weight: 500; color: var(--ink); }
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.rules section h2 { position: relative; padding-top: 14px; }
+.rules section h2::before { content: ""; position: absolute; top: 0; left: 0; width: 36px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--gold)); }
+.rules section.quick h2::before { display: none; }
+.rules .hero-facts { display: flex; padding: 0; gap: 6px; }
+.rules .hero-facts li { max-width: none; }
+.rules .lede { font-size: 18px; line-height: 1.5; }
