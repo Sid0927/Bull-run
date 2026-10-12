@@ -713,7 +713,8 @@ describe("Oracle Group IPO", () => {
     assert.equal(s.round, 4);
     assert.equal(s.phase.kind, "ipo");
     const faceUp = (x: GameState) => x.market.filter((c) => c !== null) as number[];
-    const poolBefore = s.deck.length + s.discard.length + faceUp(s).length;
+    const poolBefore = s.deck.length + faceUp(s).length;
+    const discardBefore = [...s.discard];
     assert.ok(s.discard.length > 0, "the played pile has cards in it before the IPO");
     const bids: [number, number][] = [[6, 90], [3, 80], [4, 80], [3, 80]];
     bids.forEach(([q, p], i) => {
@@ -724,14 +725,23 @@ describe("Oracle Group IPO", () => {
     assert.deepEqual(s.players.map((p) => p.shares.ORG), [6, 2, 2, 2]);
     assert.equal(s.players[0].cash, STARTING_CASH - 480);
     assert.equal(s.chairmen.ORG, 0);
-    // The face-up cards, the played pile and the deck are shuffled together with Oracle's news,
-    // and a fresh face-up row is dealt.
-    assert.equal(s.discard.length, 0);
+    // The face-up cards and the deck are shuffled together with Oracle's news, a fresh face-up
+    // row is dealt, and the played pile is kept aside.
+    assert.deepEqual(s.discard, discardBefore);
     assert.equal(faceUp(s).length, s.market.length);
     assert.equal(s.deck.length + faceUp(s).length, poolBefore + IPO_CARDS.length);
     for (const k of IPO_CARDS) assert.ok(s.deck.includes(k.id) || s.market.includes(k.id), `#${k.id} is in the deck or face up`);
     const ph = s.phase as GameState["phase"];
     assert.equal(ph.kind === "turn" && ph.player, 1);
+  });
+
+  test("under rules 4 the played pile was reshuffled in too", () => {
+    let s = toRound4();
+    s.config = { ...s.config, ipoReshuffleDiscard: true };
+    const before = s.deck.length + s.discard.length + s.market.filter((c) => c !== null).length;
+    for (const [i, [q, p]] of ([[6, 90], [3, 80], [4, 80], [3, 80]] as [number, number][]).entries()) s = ok(s, { type: "ipoBid", player: i, qty: q, price: p }).state;
+    assert.equal(s.discard.length, 0);
+    assert.equal(s.deck.length + s.market.filter((c) => c !== null).length, before + IPO_CARDS.length);
   });
 
   test("games under the older rules only shuffle Oracle's cards into what is left of the deck", () => {

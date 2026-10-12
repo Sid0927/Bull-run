@@ -51,11 +51,13 @@ export interface GameConfig {
    */
   splitActions?: boolean;
   /**
-   * When the IPO company lists, the face-up cards, the played pile and the deck are shuffled
-   * together with its news cards, and new face-up cards are dealt (default). Off: its news cards
+   * When the IPO company lists, the face-up cards and the deck are shuffled together with its
+   * news cards, and new face-up cards are dealt (default); the played pile is kept aside. Off: its news cards
    * are only shuffled into what is left of the deck (games created before 12 Oct 2026).
    */
   ipoReshuffleAll?: boolean;
+  /** With ipoReshuffleAll: the played pile goes back in too (rules 4 only). Default: it is kept aside. */
+  ipoReshuffleDiscard?: boolean;
 }
 
 export interface Player {

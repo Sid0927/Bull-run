@@ -5,7 +5,7 @@
 import type { GameConfig } from "../src/engine/index.ts";
 
 /** The rules new games are created under. */
-export const CURRENT_RULES = 4;
+export const CURRENT_RULES = 5;
 
 /**
  * 1: news applies at once, ₹1,200 each, dividends ₹10/20/30 from ₹120/225/400 (before 9 Oct 2026).
@@ -13,6 +13,7 @@ export const CURRENT_RULES = 4;
  * 3: as 2, and two players holding 6 each both get a 2× co-chairman bonus (it used to be nobody).
  * 4: as 3, and when Oracle lists the face-up cards, the played pile and the deck are shuffled
  *    together with its news cards and a new face-up row is dealt (they used to go into the deck only).
+ * 5: as 4, but the played pile is kept aside: only the face-up cards and the deck are reshuffled.
  */
 export function rulesConfig(version: number): Partial<GameConfig> {
   if (version === 1)
@@ -29,5 +30,6 @@ export function rulesConfig(version: number): Partial<GameConfig> {
     };
   if (version === 2) return { coChairmanMultiplier: 0, ipoReshuffleAll: false };
   if (version === 3) return { ipoReshuffleAll: false };
+  if (version === 4) return { ipoReshuffleDiscard: true };
   return {};
 }

@@ -197,7 +197,7 @@ export function summarize(events: GameEvent[], s: GameState, viewer: Seat | null
         if (c.kind === "ipo")
           c.lines.push(
             e.text.includes("shuffled together")
-              ? `Its ${e.text.match(/^\d+/)?.[0]} news cards joined the deck: the face-up cards, the played pile and the deck were reshuffled and new face-up cards dealt`
+              ? `Its ${e.text.match(/^\d+/)?.[0]} news cards joined the deck: the face-up cards${e.text.includes("played pile") ? ", the played pile" : ""} and the deck were reshuffled and new face-up cards dealt`
               : e.text.replace("are shuffled", "were shuffled"),
           );
         return;

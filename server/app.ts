@@ -253,6 +253,17 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     if (!user) throw new HttpError(401, "Please sign in.");
 
     if (path === "/api/me" && method === "GET") return json(res, 200, me(user));
+    // A crash on someone's screen, so it shows up in the server log instead of only as a blank page.
+    if (path === "/api/client-error" && method === "POST") {
+      const b = await body(req);
+      const key = `err:${user.id}`;
+      if (!limiter.blocked(key)) {
+        limiter.fail(key);
+        const clip = (x: unknown, n: number) => String(x ?? "").replace(/[\r\n]+/g, " | ").slice(0, n);
+        console.error(`Screen error for ${user.username} at ${clip(b.where, 100)}: ${clip(b.message, 300)} :: ${clip(b.stack, 1500)}`);
+      }
+      return json(res, 200, { ok: true });
+    }
     if (path === "/api/me/password" && method === "POST") {
       const b = await body(req);
       const key = `pw:${user.id}`;
