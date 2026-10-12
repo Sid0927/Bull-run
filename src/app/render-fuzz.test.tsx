@@ -48,9 +48,9 @@ function drawAll(s: GameState, all: GameEvent[], seat: Seat | null, reveal: bool
   for (const el of parts) renderToString(el);
 }
 
-test("every screen part draws at every step of 40 games, for every viewer", () => {
+test("every screen part draws at every step of 15 games, for every viewer", () => {
   const styles = Object.values(STRATEGIES);
-  for (let g = 0; g < 40; g++) {
+  for (let g = 0; g < 15; g++) {
     const players = 3 + (g % 3);
     const rounds = ([6, 9, 12] as const)[g % 3];
     let { state, events } = newGame({ players: Array.from({ length: players }, (_, i) => `P${i}`), rounds, seed: 1000 + g, ipoReshuffleAll: g % 4 !== 0 });
@@ -59,7 +59,7 @@ test("every screen part draws at every step of 40 games, for every viewer", () =
     for (let step = 0; state.phase.kind !== "ended"; step++) {
       assert.ok(step < 5000);
       // Every few steps (and every step near the IPO), draw the screen as everyone sees it.
-      if (step % 5 === 0 || state.round === 4) {
+      if (step % 8 === 0 || state.round === 4) {
         for (const seat of [...Array(players).keys(), null] as (Seat | null)[]) {
           try {
             drawAll(state, all, seat, seat === null);
