@@ -86,6 +86,8 @@ export interface Store {
   seated(gameId: number): Promise<Seated[]>;
   addPlayer(gameId: number, userId: number): Promise<void>;
   removePlayer(gameId: number, userId: number): Promise<void>;
+  /** Give a seat to another account: everything the seat holds and has done becomes theirs. */
+  replacePlayer(gameId: number, seat: number, userId: number): Promise<void>;
   actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
 }
@@ -201,6 +203,10 @@ export class MemoryStore implements Store {
       .filter((p) => p.gameId === gameId)
       .sort((a, b) => a.seat - b.seat)
       .forEach((p, i) => (p.seat = i));
+  }
+  async replacePlayer(gameId: number, seat: number, userId: number) {
+    const p = this.players.find((x) => x.gameId === gameId && x.seat === seat);
+    if (p) p.userId = userId;
   }
   async actions(gameId: number) {
     return [...(this.log.get(gameId) ?? [])];
@@ -426,6 +432,9 @@ export class PgStore implements Store {
       "INSERT INTO game_players (game_id, user_id, seat) VALUES ($1, $2, (SELECT COALESCE(MAX(seat) + 1, 0) FROM game_players WHERE game_id = $1))",
       [gameId, userId],
     );
+  }
+  async replacePlayer(gameId: number, seat: number, userId: number) {
+    await this.q("UPDATE game_players SET user_id = $3 WHERE game_id = $1 AND seat = $2", [gameId, seat, userId]);
   }
   async removePlayer(gameId: number, userId: number) {
     const client = await this.pool.connect();

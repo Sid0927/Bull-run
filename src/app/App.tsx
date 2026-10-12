@@ -460,6 +460,50 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
+/** Give one player's seat to another account: their cash, shares, cards and moves carry on. */
+function SwapPlayer({ g, users, onSwap }: { g: GameSummary; users: AdminUser[]; onSwap: (seat: number, username: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [seat, setSeat] = useState(0);
+  const free = users.filter((u) => u.active && !g.players.some((p) => p.toLowerCase() === u.username.toLowerCase()));
+  const [to, setTo] = useState("");
+  if (!open)
+    return (
+      <button onClick={() => setOpen(true)}>
+        <Icon name="users" size={16} /> Swap player
+      </button>
+    );
+  const pick = to || free[0]?.username || "";
+  return (
+    <span className="row swap">
+      <label>
+        Replace{" "}
+        <select value={seat} onChange={(e) => setSeat(Number(e.target.value))}>
+          {g.players.map((p, i) => (
+            <option key={p} value={i}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        with{" "}
+        <select value={pick} onChange={(e) => setTo(e.target.value)}>
+          {free.length === 0 && <option value="">No other accounts — create one above</option>}
+          {free.map((u) => (
+            <option key={u.id} value={u.username}>
+              {u.username}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="primary" disabled={!pick} onClick={() => onSwap(seat, pick).then(() => setOpen(false))}>
+        Swap
+      </button>
+      <button onClick={() => setOpen(false)}>Cancel</button>
+    </span>
+  );
+}
+
 function GameList({ games, admin }: { games: GameSummary[]; admin?: (g: GameSummary) => ReactNode }) {
   return (
     <ul className="game-list">
@@ -828,8 +872,10 @@ function Admin({ me }: { me: Me }) {
           <GameList
             games={shown}
             admin={(g) =>
-              (g.status === "lobby" || g.status === "playing") &&
-              (confirmAbandon === g.id ? (
+              (g.status === "lobby" || g.status === "playing") && (
+                <>
+                  <SwapPlayer g={g} users={users} onSwap={(seat, name) => attempt(() => api.replaceSeat(g.id, seat, name), `${name} now plays ${g.players[seat]}'s seat in ${g.code}.`)} />
+                  {confirmAbandon === g.id ? (
                 <span className="row confirm">
                   <button className="danger" onClick={() => attempt(() => api.abandon(g.id), `Game ${g.code} abandoned.`).then(() => setConfirmAbandon(null))}>
                     Abandon {g.code}
@@ -840,7 +886,9 @@ function Admin({ me }: { me: Me }) {
                 <button className="danger-outline" onClick={() => setConfirmAbandon(g.id)}>
                   Abandon
                 </button>
-              ))
+              )}
+                </>
+              )
             }
           />
         )}

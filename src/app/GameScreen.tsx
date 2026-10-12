@@ -42,7 +42,11 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
     };
     const onRefused = (status: number, message: string) => {
       if (status === 401) location.reload(); // signed out: back to the sign-in screen
-      else setError(message);
+      else {
+        // Refused mid-game (the admin gave this seat to someone else): stop showing the board.
+        setU(null);
+        setError(status === 403 ? "You are no longer a player in this game." : message);
+      }
     };
     return local ? local.follow(onUpdate, setConnected, onRefused) : follow(id, onUpdate, setConnected, onRefused);
   }, [id, local]);

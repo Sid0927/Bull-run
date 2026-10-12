@@ -45,6 +45,7 @@ export const api = {
   allGames: () => call<GameSummary[]>("/api/admin/games"),
   logins: () => call<LoginRecord[]>("/api/admin/logins"),
   abandon: (id: number) => call<{ ok: true }>(`/api/admin/games/${id}/abandon`, {}),
+  replaceSeat: (id: number, seat: number, username: string) => call<{ from: string; to: string }>(`/api/admin/games/${id}/seat`, { seat, username }),
 };
 
 /**

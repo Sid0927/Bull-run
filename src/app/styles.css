@@ -1052,3 +1052,4 @@ body::before {
 }
 .crash-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .crash-detail { white-space: pre-wrap; text-align: left; max-width: 40rem; }
+.row.swap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .row.swap select { min-height: 40px; }

@@ -322,6 +322,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
         const games = await store.allGames();
         return json(res, 200, await Promise.all(games.map((g) => hub.summary(g, user.id))));
       }
+      const sw = path.match(/^\/api\/admin\/games\/(\d{1,9})\/seat$/);
+      if (sw && method === "POST") {
+        const b = await body(req);
+        const seat = Number(b.seat);
+        if (!Number.isInteger(seat) || seat < 0 || seat > 9 || typeof b.username !== "string") throw new HttpError(400, "Say which seat and which account.");
+        return json(res, 200, await hub.replaceSeat(user, Number(sw[1]), seat, b.username.slice(0, 40)));
+      }
       const ab = path.match(/^\/api\/admin\/games\/(\d{1,9})\/abandon$/);
       if (ab && method === "POST") {
         await hub.abandon(Number(ab[1]));

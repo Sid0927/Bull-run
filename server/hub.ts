@@ -307,6 +307,38 @@ export class Hub {
     });
   }
 
+  /**
+   * The admin hands a seat to another account (a player dropped out, or joined under the wrong
+   * name). The seat keeps its cash, shares, cards and moves; only who plays it changes. The game is
+   * replayed so every name in it is the new one, and the old player's open screens on it are closed.
+   */
+  async replaceSeat(admin: User, gameId: number, seat: number, username: string) {
+    if (!admin.isAdmin) throw new GameError("Only the admin can swap players.", 403);
+    return this.exclusive(gameId, async () => {
+      const g = await this.store.gameById(gameId);
+      if (!g) throw new GameError("No such game.", 404);
+      if (g.status !== "lobby" && g.status !== "playing") throw new GameError("Players can only be swapped in a game that hasn't finished.");
+      const seated = await this.store.seated(gameId);
+      const old = seated.find((p) => p.seat === seat);
+      if (!old) throw new GameError("Nobody is in that seat.", 404);
+      const u = await this.store.userByName(String(username).trim());
+      if (!u || !u.active) throw new GameError("There is no active account with that name. Create it first.", 404);
+      if (seated.some((p) => p.userId === u.id)) throw new GameError(`${u.username} is already in this game.`);
+      await this.store.replacePlayer(gameId, seat, u.id);
+      this.live.delete(gameId); // replayed with the new name next time it is read
+      for (const set of [this.listeners.get(gameId)].filter((x): x is Set<Listener> => !!x)) {
+        for (const l of set) {
+          if (l.userId === old.userId) {
+            set.delete(l);
+            l.end();
+          }
+        }
+      }
+      this.push(gameId);
+      return { from: old.username, to: u.username };
+    });
+  }
+
   async start(user: User, gameId: number) {
     return this.exclusive(gameId, async () => {
       const g = await this.mustSee(gameId, user);

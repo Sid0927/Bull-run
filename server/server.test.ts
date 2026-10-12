@@ -305,3 +305,47 @@ describe("fixes from the security review", () => {
     void attacker;
   });
 });
+
+describe("the admin swaps a player", () => {
+  test("a seat goes to another account mid-game, with everything it holds", async () => {
+    const g: GameSummary = (await players[0].call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    await players[1].call("/api/games/join", { code: g.code });
+    await players[2].call("/api/games/join", { code: g.code });
+    assert.equal((await players[0].call(`/api/games/${g.id}/start`, {})).status, 200);
+    // Everyone writes an opening order, so the seat has shares and a card face-down.
+    for (const [i, p] of players.entries()) {
+      const v = (await p.snapshot(g.id)).view!;
+      assert.equal((await p.call(`/api/games/${g.id}/action`, { action: { type: "openingOrder", player: i, orders: { HUL: 1 }, card: v.players[i].hand[0] } })).status, 200);
+    }
+    const before = (await admin.snapshot(g.id)).view!.players[1];
+
+    assert.equal((await admin.call("/api/admin/users", { username: "Sid", password: "sid-pass-1" })).status, 200);
+    const sid = new Client();
+    await sid.login("Sid", "sid-pass-1");
+    // Only the admin may swap; nobody can be put in twice.
+    assert.equal((await players[0].call(`/api/admin/games/${g.id}/seat`, { seat: 1, username: "Sid" })).status, 403);
+    assert.equal((await admin.call(`/api/admin/games/${g.id}/seat`, { seat: 1, username: "chitra" })).status, 400);
+    assert.equal((await admin.call(`/api/admin/games/${g.id}/seat`, { seat: 1, username: "nobody" })).status, 404);
+    const r = await admin.call(`/api/admin/games/${g.id}/seat`, { seat: 1, username: "sid" });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.deepEqual(r.data, { from: "bilal", to: "Sid" });
+
+    const mine = await sid.snapshot(g.id);
+    assert.equal(mine.mySeat, 1);
+    const now = mine.view!.players[1];
+    assert.equal(now.name, "Sid");
+    assert.equal(now.cash, before.cash);
+    assert.deepEqual(now.shares, before.shares);
+    assert.deepEqual(now.hand, before.hand);
+    assert.ok(mine.events.list.some((e) => e.text.includes("Sid")));
+    assert.ok(!mine.events.list.some((e) => e.text.includes("bilal")));
+    // Bilal is out: the game is no longer theirs to watch or play.
+    const old = await fetch(`${base}/api/games/${g.id}/stream`, { headers: { Cookie: players[1].cookie } });
+    assert.equal(old.status, 403);
+    assert.ok(!((await players[1].call("/api/games")).data as GameSummary[]).some((x) => x.id === g.id));
+    // And Sid plays on from where Bilal left off.
+    const live = await sid.snapshot(g.id);
+    assert.ok(live.waiting.length > 0);
+    await admin.call(`/api/admin/games/${g.id}/abandon`, {});
+  });
+});
