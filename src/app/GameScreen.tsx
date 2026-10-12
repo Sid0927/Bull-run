@@ -224,15 +224,16 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
           {action}
         </div>
         <div className="g-col g-side">
+          {/* Players first: who holds what is what people check most; what happened follows. */}
+          <div className="pane pane-players">
+            <Players s={s} viewer={mySeat} reveal={u.revealed} />
+          </div>
           <div className="pane pane-log">
             <Activity sums={sums} s={s} times={times} />
             <details className="raw-log">
               <summary>Every detail, newest first</summary>
               <Log events={events} times={times} />
             </details>
-          </div>
-          <div className="pane pane-players">
-            <Players s={s} viewer={mySeat} reveal={u.revealed} />
           </div>
         </div>
       </div>

@@ -50,6 +50,12 @@ export interface GameConfig {
    * actionsPerTurn × maxQtyPerAction shares in total, in as many trades as you like.
    */
   splitActions?: boolean;
+  /**
+   * When the IPO company lists, the face-up cards, the played pile and the deck are shuffled
+   * together with its news cards, and new face-up cards are dealt (default). Off: its news cards
+   * are only shuffled into what is left of the deck (games created before 12 Oct 2026).
+   */
+  ipoReshuffleAll?: boolean;
 }
 
 export interface Player {

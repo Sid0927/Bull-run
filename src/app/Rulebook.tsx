@@ -412,7 +412,7 @@ export function Rulebook({ onClose }: { onClose: () => void }) {
               Unsold shares stay in the bank.
             </li>
             <li>Everyone pays the listing price, not their bid.</li>
-            <li>Oracle Group then rises one step for each of {THRESHOLDS.join(", ")} shares sold, and its {IPO_CARDS.length} news cards are shuffled into the deck.</li>
+            <li>Oracle Group then rises one step for each of {THRESHOLDS.join(", ")} shares sold, and its {IPO_CARDS.length} news cards join the deck: the market, the played pile and the deck are shuffled together with them, and a new market of {MARKET_SIZE} cards is dealt. Cards in players' hands and face-down cards stay where they are.</li>
           </ol>
           <div className="example">
             <b>Example</b> (Bilal starts the round). Asha bids 6 @ ₹90; Bilal, Chitra and Dev bid 3, 4 and 3 @ ₹80. At ₹90 only 6 are bid; at ₹80, 16. So Oracle Group lists at

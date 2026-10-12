@@ -712,7 +712,9 @@ describe("Oracle Group IPO", () => {
     let s = toRound4();
     assert.equal(s.round, 4);
     assert.equal(s.phase.kind, "ipo");
-    const deckBefore = s.deck.length;
+    const faceUp = (x: GameState) => x.market.filter((c) => c !== null) as number[];
+    const poolBefore = s.deck.length + s.discard.length + faceUp(s).length;
+    assert.ok(s.discard.length > 0, "the played pile has cards in it before the IPO");
     const bids: [number, number][] = [[6, 90], [3, 80], [4, 80], [3, 80]];
     bids.forEach(([q, p], i) => {
       s = ok(s, { type: "ipoBid", player: i, qty: q, price: p }).state;
@@ -722,9 +724,26 @@ describe("Oracle Group IPO", () => {
     assert.deepEqual(s.players.map((p) => p.shares.ORG), [6, 2, 2, 2]);
     assert.equal(s.players[0].cash, STARTING_CASH - 480);
     assert.equal(s.chairmen.ORG, 0);
-    assert.equal(s.deck.length, deckBefore + IPO_CARDS.length);
+    // The face-up cards, the played pile and the deck are shuffled together with Oracle's news,
+    // and a fresh face-up row is dealt.
+    assert.equal(s.discard.length, 0);
+    assert.equal(faceUp(s).length, s.market.length);
+    assert.equal(s.deck.length + faceUp(s).length, poolBefore + IPO_CARDS.length);
+    for (const k of IPO_CARDS) assert.ok(s.deck.includes(k.id) || s.market.includes(k.id), `#${k.id} is in the deck or face up`);
     const ph = s.phase as GameState["phase"];
     assert.equal(ph.kind === "turn" && ph.player, 1);
+  });
+
+  test("games under the older rules only shuffle Oracle's cards into what is left of the deck", () => {
+    let s = toRound4();
+    s.config = { ...s.config, ipoReshuffleAll: false };
+    const deckBefore = s.deck.length;
+    const discardBefore = s.discard.length;
+    const marketBefore = [...s.market];
+    for (const [i, [q, p]] of ([[6, 90], [3, 80], [4, 80], [3, 80]] as [number, number][]).entries()) s = ok(s, { type: "ipoBid", player: i, qty: q, price: p }).state;
+    assert.equal(s.deck.length, deckBefore + IPO_CARDS.length);
+    assert.equal(s.discard.length, discardBefore);
+    assert.deepEqual(s.market, marketBefore);
   });
 
   test("bids are 0–6 shares at a band price you can afford", () => {

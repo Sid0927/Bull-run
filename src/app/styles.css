@@ -1044,3 +1044,9 @@ body::before {
 .practice-chip a { margin-left: auto; color: inherit; }
 .practice-btn { width: 100%; margin-top: 8px; display: inline-flex; justify-content: center; gap: 8px; }
 .hero-practice { position: relative; z-index: 1; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px; font-weight: 600; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+/* Laptop: players are at the top of the right-hand column, so turn pop-ups sit at the bottom
+   right, over the log (which repeats them anyway), one at a time. */
+@media (min-width: 1101px) {
+  .notes { top: auto; bottom: 16px; }
+  .note:not(:last-child) { display: none; }
+}

@@ -939,8 +939,22 @@ function resolveIpo(ctx: Ctx) {
     text: `${cname(c)} IPO. Bids: ${bidText}. Lists at ${fmt(listingPrice)}; allotted ${gotText}${total < SHARES_PER_COMPANY ? ` (${SHARES_PER_COMPANY - total} stay in the bank)` : ""}`,
   });
   if (reached) movePrice(ctx, c, reached, "opening", `first-day pop: ${total} shares outstanding (${reached} threshold${reached > 1 ? "s" : ""})`);
-  s.deck = ctx.rng.shuffle([...s.deck, ...IPO_CARDS.map((k) => k.id)]);
-  ctx.events.push({ kind: "reshuffle", cards: s.deck.length, text: `${IPO_CARDS.length} ${cname(c)} news cards are shuffled into the deck` });
+  if (s.config.ipoReshuffleAll !== false) {
+    // Everything not in someone's hand goes back: the face-up cards, the played pile and the deck,
+    // shuffled with the new company's news, and a fresh face-up row is dealt from it.
+    const back = [...s.deck, ...s.discard, ...(s.market.filter((x) => x !== null) as number[]), ...IPO_CARDS.map((k) => k.id)];
+    s.discard = [];
+    s.deck = ctx.rng.shuffle(back);
+    s.market = s.market.map(() => s.deck.pop() ?? null);
+    ctx.events.push({
+      kind: "reshuffle",
+      cards: s.deck.length,
+      text: `${IPO_CARDS.length} ${cname(c)} news cards join the deck: the face-up cards, the played pile and the deck are shuffled together and ${s.market.filter((x) => x !== null).length} new face-up cards are dealt`,
+    });
+  } else {
+    s.deck = ctx.rng.shuffle([...s.deck, ...IPO_CARDS.map((k) => k.id)]);
+    ctx.events.push({ kind: "reshuffle", cards: s.deck.length, text: `${IPO_CARDS.length} ${cname(c)} news cards are shuffled into the deck` });
+  }
   syncChairmen(ctx);
   startTurns(ctx);
 }
