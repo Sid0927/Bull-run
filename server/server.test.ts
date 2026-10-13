@@ -7,6 +7,7 @@ import { STRATEGIES } from "../src/sim/strategies.ts";
 import { Rng } from "../src/engine/rng.ts";
 import { createApp, ensureAdmin } from "./app.ts";
 import { MemoryStore, PgStore, type Store } from "./store.ts";
+import { recordingMailer } from "./mail.ts";
 
 // TEST_DATABASE_URL runs the same tests against a real (empty) Postgres database.
 const pgUrl = process.env.TEST_DATABASE_URL;
@@ -15,11 +16,12 @@ let base = "";
 let close: () => void;
 
 let store: Store;
+const mail = recordingMailer();
 before(async () => {
   store = pgUrl ? new PgStore(pgUrl) : new MemoryStore();
   await store.init();
   await ensureAdmin(store, "boss", "boss-password", () => {});
-  const { server } = createApp({ store, trustProxy: true, botDelayMs: 5 });
+  const { server } = createApp({ store, trustProxy: true, botDelayMs: 5, mailer: mail, appUrl: "https://bullrun.test" });
   await new Promise<void>((r) => server.listen(0, r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => server.close();
@@ -409,7 +411,7 @@ describe("signing up", () => {
     fetch(`${base}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": ip }, body: JSON.stringify(body) });
 
   test("anyone can make an account with an email, then sign in with either", async () => {
-    assert.deepEqual((await new Client().call("/api/config")).data, { openSignup: true });
+    assert.deepEqual((await new Client().call("/api/config")).data, { openSignup: true, mail: true });
     const r = await signup({ email: "Neha@Example.com", username: "neha", password: "neha-pass" });
     assert.equal(r.status, 200);
     const cookie = r.headers.get("set-cookie")!.split(";")[0];
@@ -448,9 +450,69 @@ describe("signing up", () => {
     const { server } = createApp({ store, trustProxy: true, openSignup: false });
     await new Promise<void>((r) => server.listen(0, r));
     const other = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    assert.deepEqual(await (await fetch(`${other}/api/config`)).json(), { openSignup: false });
+    assert.deepEqual(await (await fetch(`${other}/api/config`)).json(), { openSignup: false, mail: false });
     const r = await fetch(`${other}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "z@z.zz", username: "zzz", password: "zzz-pass" }) });
     assert.equal(r.status, 403);
     server.close();
+  });
+});
+
+describe("confirming emails", () => {
+  const linkTo = async (email: string) => {
+    for (let i = 0; i < 50 && !mail.sent.some((m) => m.to === email); i++) await new Promise((r) => setTimeout(r, 10));
+    const m = [...mail.sent].reverse().find((x) => x.to === email);
+    assert.ok(m, `an email went to ${email}`);
+    const link = m.text.match(/https:\/\/bullrun\.test\/#\/verify\/([A-Za-z0-9_-]+)/);
+    assert.ok(link, m.text);
+    return link[1];
+  };
+  const verify = (token: string) => fetch(`${base}/api/verify-email`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
+
+  test("signing up sends a link, and the link confirms the address once", async () => {
+    const r = await fetch(`${base}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "192.0.2.77" }, body: JSON.stringify({ email: "kiran@example.com", username: "kiran", password: "kiran-pass" }) });
+    assert.equal(r.status, 200);
+    const c = new Client();
+    c.cookie = r.headers.get("set-cookie")!.split(";")[0];
+    assert.equal((await c.call("/api/me")).data.emailVerified, false);
+    const token = await linkTo("kiran@example.com");
+    // Opened on another device, signed out: still works, once.
+    const ok = await verify(token);
+    assert.equal(ok.status, 200);
+    assert.equal(((await ok.json()) as { email: string }).email, "kiran@example.com");
+    assert.equal((await verify(token)).status, 400);
+    assert.equal((await verify("not-a-real-token-at-all")).status, 400);
+    assert.equal((await c.call("/api/me")).data.emailVerified, true);
+    const users = (await admin.call("/api/admin/users")).data as { username: string; emailVerified?: boolean }[];
+    assert.equal(users.find((u) => u.username === "kiran")?.emailVerified, true);
+  });
+
+  test("an older account adds its email; changing it later needs the password", async () => {
+    const c = new Client();
+    await c.login("chitra", "chitra-pw1");
+    assert.equal((await c.call("/api/me")).data.email, null);
+    assert.equal((await c.call("/api/me/email", { email: "nope" })).status, 400);
+    assert.equal((await c.call("/api/me/email", { email: "kiran@example.com" })).status, 409); // someone else's
+    const added = await c.call("/api/me/email", { email: "chitra@example.com" });
+    assert.equal(added.status, 200);
+    assert.equal(added.data.email, "chitra@example.com");
+    assert.equal(added.data.emailVerified, false);
+    assert.equal((await verify(await linkTo("chitra@example.com"))).status, 200);
+    assert.equal((await c.call("/api/me")).data.emailVerified, true);
+    // Signing in with the new email works too.
+    assert.equal((await new Client().login("CHITRA@example.com", "chitra-pw1")).status, 200);
+    // A different address needs the password, and starts unconfirmed.
+    assert.equal((await c.call("/api/me/email", { email: "c2@example.com", password: "wrong" })).status, 400);
+    const changed = await c.call("/api/me/email", { email: "c2@example.com", password: "chitra-pw1" });
+    assert.equal(changed.status, 200);
+    assert.equal(changed.data.emailVerified, false);
+    // An old link for the previous address no longer confirms anything.
+    const resent = await c.call("/api/me/email/resend", {});
+    assert.equal(resent.status, 200);
+    assert.equal((await verify(await linkTo("c2@example.com"))).status, 200);
+    // Asking again and again is capped.
+    await c.call("/api/me/email", { email: "c3@example.com", password: "chitra-pw1" });
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) codes.push((await c.call("/api/me/email/resend", {})).status);
+    assert.ok(codes.includes(429), codes.join(","));
   });
 });

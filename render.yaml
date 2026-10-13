@@ -22,3 +22,8 @@ services:
         sync: false # the admin account created on first start
       - key: ADMIN_PASSWORD
         sync: false
+      # Optional: confirmation emails. Without them the app works and links go to the log.
+      - key: BREVO_API_KEY
+        sync: false # from brevo.com → SMTP & API → API keys
+      - key: MAIL_FROM
+        sync: false # e.g. Bull Run <you@gmail.com> (the sender confirmed in Brevo)

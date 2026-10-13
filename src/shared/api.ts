@@ -6,6 +6,8 @@ export interface Me {
   username: string;
   isAdmin: boolean;
   email?: string | null;
+  /** The email has been confirmed from the link sent to it. */
+  emailVerified?: boolean;
 }
 
 export type GameStatus = "lobby" | "playing" | "ended" | "abandoned";
@@ -47,6 +49,7 @@ export interface AdminUser {
   username: string;
   /** Set for accounts that signed up themselves. */
   email?: string | null;
+  emailVerified?: boolean;
   isAdmin: boolean;
   active: boolean;
   createdAt: string;

@@ -1056,3 +1056,10 @@ body::before {
 .add-bot { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; } .seat.bot .avatar { filter: saturate(0.6); }
 .login-mode { margin-bottom: 6px; } .field-hint { margin: -6px 4px 4px; }
 .login-mode button { font-family: var(--font-body); font-size: 15px; font-weight: 600; white-space: nowrap; min-height: 44px; letter-spacing: 0; }
+.email-card { display: grid; gap: 8px; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.email-card h2 { margin: 0; }
+.email-card p { margin: 0; }
+.email-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.email-form input { flex: 1 1 220px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; }
+.email-card .ghost-link { justify-self: start; }
+.email-card-done { margin: 0 4px; color: var(--accent); }

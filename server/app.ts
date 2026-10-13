@@ -7,8 +7,14 @@ import type { AdminUser, Me } from "../src/shared/api.ts";
 import { DUMMY_HASH, LoginLimiter, SESSION_DAYS, checkNewPassword, checkPassword, checkUsername, hashPassword, newToken } from "./auth.ts";
 import { GameError, Hub } from "./hub.ts";
 import type { Store, User } from "./store.ts";
+import { createHash } from "node:crypto";
+import { mailerFromEnv, type Mailer } from "./mail.ts";
 
 export interface AppOptions {
+  /** Sends the confirmation emails (default: none, the link is logged). */
+  mailer?: Mailer;
+  /** The site's address for links in emails, e.g. https://bull-run.onrender.com (default: from the request). */
+  appUrl?: string;
   /** Let anyone create an account with an email (default). False: only the admin makes accounts. */
   openSignup?: boolean;
   /** Override how long computer players pause before moving (tests). */
@@ -57,6 +63,31 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   const signupLimiter = new LoginLimiter(5);
   const openSignup = opts.openSignup !== false;
   const log = opts.log ?? (() => {});
+  const mailer = opts.mailer ?? mailerFromEnv({}, log);
+  const mailLimiter = new LoginLimiter(3);
+  const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+  const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
+  const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+  function siteUrl(req: IncomingMessage): string {
+    if (opts.appUrl) return opts.appUrl.replace(/\/+$/, "");
+    const proto = opts.trustProxy ? String(req.headers["x-forwarded-proto"] ?? "https").split(",")[0].trim() : "http";
+    return `${proto}://${req.headers.host ?? "localhost"}`;
+  }
+
+  /** Email a one-time link that confirms the address belongs to this player. Never fails the request. */
+  async function sendConfirmation(u: User, email: string, req: IncomingMessage) {
+    try {
+      const token = newToken();
+      await store.saveEmailToken(sha256(token), u.id, email, new Date(Date.now() + 3 * 86400_000));
+      const link = `${siteUrl(req)}/#/verify/${token}`;
+      const text = `Hi ${u.username},\n\nConfirm this email for your Bull Run account by opening this link:\n${link}\n\nThe link works for 3 days. If you didn't sign up for Bull Run, you can ignore this email.`;
+      const html = `<p>Hi ${escapeHtml(u.username)},</p><p>Confirm this email for your Bull Run account:</p><p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0b7a4b;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Confirm my email</a></p><p style="color:#666;font-size:13px">Or open this link: ${link}<br>It works for 3 days. If you didn't sign up for Bull Run, you can ignore this email.</p>`;
+      await mailer.send(email, "Confirm your email for Bull Run", text, html);
+    } catch (e) {
+      log(`Could not send the confirmation email to ${email}: ${(e as Error).message}`);
+    }
+  }
 
   /** Render's proxy appends the real address as the last X-Forwarded-For entry; earlier ones are the client's to forge. */
   /** A plain description of the device a request came from, for the admin's sign-in history. */
@@ -95,11 +126,12 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     }
   }
 
-  const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin, email: u.email ?? null });
+  const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin, email: u.email ?? null, emailVerified: !!u.emailVerifiedAt });
   const adminView = (u: User, devices = 0): AdminUser => ({
     id: u.id,
     username: u.username,
     email: u.email ?? null,
+    emailVerified: !!u.emailVerifiedAt,
     isAdmin: u.isAdmin,
     active: u.active,
     createdAt: u.createdAt,
@@ -209,7 +241,17 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     if (!path.startsWith("/api/")) return serveStatic(req, res, path);
 
     if (path === "/api/health") return json(res, 200, { ok: true });
-    if (path === "/api/config" && method === "GET") return json(res, 200, { openSignup });
+    if (path === "/api/config" && method === "GET") return json(res, 200, { openSignup, mail: mailer.live });
+
+    // ── The link in the confirmation email (works signed out, on any device) ──
+    if (path === "/api/verify-email" && method === "POST") {
+      const b = await body(req);
+      const token = String(b.token ?? "").slice(0, 200);
+      const t = token ? await store.takeEmailToken(sha256(token)) : null;
+      if (!t || t.expiresAt.getTime() < Date.now()) throw new HttpError(400, "This link has expired or was already used. Sign in and ask for a new one.");
+      if (!(await store.confirmEmail(t.userId, t.email))) throw new HttpError(400, "That email is no longer the one on the account.");
+      return json(res, 200, { ok: true, email: t.email });
+    }
 
     // ── Sign up ──
     if (path === "/api/signup" && method === "POST") {
@@ -236,6 +278,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       signupLimiter.fail(`ip:${ip}`);
       await store.recordLogin({ userId: u.id, username: u.username, result: "ok", device: deviceOf(req) }).catch(() => {});
       log(`${u.username} signed up`);
+      void sendConfirmation(u, email, req);
       const token = newToken();
       await store.createSession(token, u.id, new Date(Date.now() + SESSION_DAYS * 86400_000));
       setCookie(res, token, SESSION_DAYS * 86400);
@@ -294,6 +337,43 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     if (!user) throw new HttpError(401, "Please sign in.");
 
     if (path === "/api/me" && method === "GET") return json(res, 200, me(user));
+    // Add an email (accounts the admin made have none), or change it. Changing needs the password,
+    // so somebody at an unlocked phone can't move the account to their own address.
+    if (path === "/api/me/email" && method === "POST") {
+      const b = await body(req);
+      const email = String(b.email ?? "").trim().slice(0, 254);
+      if (!emailOk(email)) throw new HttpError(400, "That doesn't look like an email address.");
+      if (user.email && user.email.toLowerCase() !== email.toLowerCase()) {
+        const key = `pw:${user.id}`;
+        if (limiter.blocked(key)) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+        if (!(await checkPassword(String(b.password ?? "").slice(0, 200), user.passwordHash))) {
+          limiter.fail(key);
+          throw new HttpError(400, "Your password is needed to change your email, and that one doesn't match.");
+        }
+      }
+      const other = await store.userByEmail(email);
+      if (other && other.id !== user.id) throw new HttpError(409, "Another account already uses that email.");
+      try {
+        await store.setEmail(user.id, email);
+      } catch (e) {
+        if ((e as { code?: string }).code === "23505") throw new HttpError(409, "Another account already uses that email.");
+        throw e;
+      }
+      const now = (await store.userById(user.id))!;
+      if (!now.emailVerifiedAt && !mailLimiter.blocked(`mail:${user.id}`)) {
+        mailLimiter.fail(`mail:${user.id}`);
+        void sendConfirmation(now, email, req);
+      }
+      return json(res, 200, me(now));
+    }
+    if (path === "/api/me/email/resend" && method === "POST") {
+      if (!user.email) throw new HttpError(400, "Add an email first.");
+      if (user.emailVerifiedAt) return json(res, 200, me(user));
+      if (mailLimiter.blocked(`mail:${user.id}`)) throw new HttpError(429, "A few emails have gone out already. Check your spam folder, or wait ten minutes and try again.");
+      mailLimiter.fail(`mail:${user.id}`);
+      await sendConfirmation(user, user.email, req);
+      return json(res, 200, me(user));
+    }
     // A crash on someone's screen, so it shows up in the server log instead of only as a blank page.
     if (path === "/api/client-error" && method === "POST") {
       const b = await body(req);

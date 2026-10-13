@@ -23,6 +23,8 @@ export interface User {
   isBot?: boolean;
   /** Set when the player signed up themselves; they can sign in with it as well as their name. */
   email?: string | null;
+  /** When the email was confirmed from the link sent to it (null: not yet). */
+  emailVerifiedAt?: string | null;
 }
 
 /** One attempt to sign in. Never holds a password. */
@@ -72,6 +74,13 @@ export interface Store {
   listUsers(): Promise<User[]>;
   createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string): Promise<User>;
   userByEmail(email: string): Promise<User | null>;
+  /** Set (or change) an account's email; a new address starts unconfirmed. */
+  setEmail(userId: number, email: string): Promise<void>;
+  /** Confirm the email, if it is still the one the link was sent to. */
+  confirmEmail(userId: number, email: string): Promise<boolean>;
+  /** One-time confirmation links, stored by the hash of their token. */
+  saveEmailToken(tokenHash: string, userId: number, email: string, expiresAt: Date): Promise<void>;
+  takeEmailToken(tokenHash: string): Promise<{ userId: number; email: string; expiresAt: Date } | null>;
   /** The computer player with this name, made the first time it is needed. */
   botUser(name: string): Promise<User>;
   updateUser(id: number, patch: { passwordHash?: string; active?: boolean; isAdmin?: boolean }): Promise<void>;
@@ -127,6 +136,27 @@ export class MemoryStore implements Store {
     const u: User = { id: this.users.length + 1, username: name, passwordHash: "bot", isAdmin: false, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null, isBot: true };
     this.users.push(u);
     return u;
+  }
+  private emailTokens = new Map<string, { userId: number; email: string; expiresAt: Date }>();
+  async setEmail(userId: number, email: string) {
+    const other = await this.userByEmail(email);
+    if (other && other.id !== userId) throw Object.assign(new Error("duplicate email"), { code: "23505" });
+    const u = this.users.find((x) => x.id === userId);
+    if (u && u.email !== email) Object.assign(u, { email, emailVerifiedAt: null });
+  }
+  async confirmEmail(userId: number, email: string) {
+    const u = this.users.find((x) => x.id === userId);
+    if (!u || u.email?.toLowerCase() !== email.toLowerCase()) return false;
+    u.emailVerifiedAt ??= new Date().toISOString();
+    return true;
+  }
+  async saveEmailToken(tokenHash: string, userId: number, email: string, expiresAt: Date) {
+    this.emailTokens.set(tokenHash, { userId, email, expiresAt });
+  }
+  async takeEmailToken(tokenHash: string) {
+    const t = this.emailTokens.get(tokenHash) ?? null;
+    this.emailTokens.delete(tokenHash);
+    return t;
   }
   async userByEmail(email: string) {
     return this.users.find((u) => !!u.email && u.email.toLowerCase() === email.toLowerCase()) ?? null;
@@ -308,6 +338,14 @@ UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email)) WHERE email IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+DELETE FROM email_tokens WHERE expires_at < now();
 `;
 
 type Row = Record<string, unknown>;
@@ -322,6 +360,7 @@ const toUser = (r: Row): User => ({
   lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at as string).toISOString() : null,
   isBot: r.is_bot === true,
   email: (r.email as string | null) ?? null,
+  emailVerifiedAt: r.email_verified_at ? new Date(r.email_verified_at as string).toISOString() : null,
 });
 const toGame = (r: Row): Game => ({
   id: r.id as number,
@@ -385,6 +424,20 @@ export class PgStore implements Store {
   async createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string) {
     const [r] = await this.q("INSERT INTO users (username, password_hash, is_admin, email) VALUES ($1, $2, $3, $4) RETURNING *", [username, passwordHash, isAdmin, email ?? null]);
     return toUser(r);
+  }
+  async setEmail(userId: number, email: string) {
+    await this.q("UPDATE users SET email = $2, email_verified_at = CASE WHEN lower(email) = lower($2) THEN email_verified_at END WHERE id = $1", [userId, email]);
+  }
+  async confirmEmail(userId: number, email: string) {
+    const rows = await this.q("UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1 AND lower(email) = lower($2) RETURNING id", [userId, email]);
+    return rows.length > 0;
+  }
+  async saveEmailToken(tokenHash: string, userId: number, email: string, expiresAt: Date) {
+    await this.q("INSERT INTO email_tokens (token_hash, user_id, email, expires_at) VALUES ($1, $2, $3, $4)", [tokenHash, userId, email, expiresAt]);
+  }
+  async takeEmailToken(tokenHash: string) {
+    const [r] = await this.q("DELETE FROM email_tokens WHERE token_hash = $1 RETURNING user_id, email, expires_at", [tokenHash]);
+    return r ? { userId: r.user_id as number, email: r.email as string, expiresAt: new Date(r.expires_at as string) } : null;
   }
   async userByEmail(email: string) {
     const [r] = await this.q("SELECT * FROM users WHERE lower(email) = lower($1) AND NOT is_bot", [email]);

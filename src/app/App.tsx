@@ -10,7 +10,7 @@ import { ThemeToggle } from "./theme.tsx";
 import { chime, setSoundOn, soundOn } from "./sound.ts";
 import { Avatar, AvatarStack, Icon, TickerTape, When, clock, fullTime } from "./ui.tsx";
 
-type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" };
+type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" } | { name: "verify"; token: string };
 
 /** The practice game in progress. Kept outside React so reading the rules and coming back resumes it. */
 let practice: { source: GameSource; n: number } | null = null;
@@ -24,6 +24,8 @@ function parse(hash: string): Route {
   if (m) return { name: "game", id: Number(m[1]) };
   if (hash === "#/admin") return { name: "admin" };
   if (hash === "#/practice") return { name: "practice" };
+  const v = hash.match(/^#\/verify\/([A-Za-z0-9_-]{10,200})$/);
+  if (v) return { name: "verify", token: v[1] };
   if (hash === "#rules") return { name: "rules" };
   return { name: "lobby" };
 }
@@ -55,6 +57,8 @@ export function App() {
   };
 
   if (route.name === "rules") return <Rulebook onClose={() => go(back)} />;
+  // The link in a confirmation email: it works whether or not this device is signed in.
+  if (route.name === "verify") return <VerifyEmail token={route.token} onDone={() => (me ? api.me().then(setMe, () => {}).finally(() => go("#/")) : go("#/"))} />;
   if (me === undefined)
     return (
       <div className="splash">
@@ -78,7 +82,7 @@ export function App() {
   if (route.name === "practice" && practice)
     return shell(<GameScreen key={`practice-${practice.n}`} id={0} me={me} onRules={openRules} local={practice.source} />, true);
   if (route.name === "admin" && me.isAdmin) return shell(<Admin me={me} />);
-  return shell(<Lobby me={me} />);
+  return shell(<Lobby me={me} onMe={setMe} />);
 }
 
 function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSignOut: () => void }) {
@@ -293,7 +297,145 @@ function greeting() {
   return h < 5 ? "Burning the midnight oil" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-function Lobby({ me }: { me: Me }) {
+/** Opened from the link in a confirmation email. */
+function VerifyEmail({ token, onDone }: { token: string; onDone: () => void }) {
+  const [state, setState] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    api.verifyEmail(token).then(
+      (r) => setState({ ok: true, text: `${r.email} is confirmed. Thank you!` }),
+      (e) => setState({ ok: false, text: (e as Error).message }),
+    );
+  }, [token]);
+  return (
+    <main className="page">
+      <div className="empty-state">
+        <BullLogo size={48} />
+        <h1 className="page-title">{state === null ? "Confirming your email…" : state.ok ? "Email confirmed" : "That link didn't work"}</h1>
+        {state === null ? <span className="spinner big" /> : <p className={state.ok ? "" : "error"}>{state.text}</p>}
+        {state && (
+          <button className="primary big" onClick={onDone}>
+            Go to Bull Run <Icon name="arrow" size={18} />
+          </button>
+        )}
+      </div>
+    </main>
+  );
+}
+
+/**
+ * At the top of the lobby: asks for an email if the account has none (accounts the admin made
+ * before sign-up existed), and asks to confirm it if it isn't confirmed yet.
+ */
+function EmailCard({ me, onMe, mail }: { me: Me; onMe: (m: Me) => void; mail: boolean }) {
+  const key = `bullrun.email-later.${me.id}`;
+  const [later, setLater] = useState(() => {
+    try {
+      return sessionStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [changing, setChanging] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = (f: () => Promise<Me>, ok: string) => {
+    setBusy(true);
+    setMsg(null);
+    f().then(
+      (m) => {
+        onMe(m);
+        setChanging(false);
+        setPassword("");
+        setMsg({ ok: true, text: ok });
+      },
+      (e) => setMsg({ ok: false, text: (e as Error).message }),
+    ).finally(() => setBusy(false));
+  };
+  const needsEmail = !me.email;
+  const needsConfirm = !!me.email && !me.emailVerified && mail;
+  if (!needsEmail && !needsConfirm && !changing) return msg?.ok ? <p className="email-card-done small">{msg.text}</p> : null;
+  if (needsEmail && later && !changing) return null;
+
+  const form = (
+    <form
+      className="email-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(() => api.setEmail(email.trim(), me.email ? password : undefined), mail ? `Saved. We've sent a link to ${email.trim()}: open it to confirm.` : "Saved.");
+      }}
+    >
+      <input type="email" required autoComplete="email" aria-label="Your email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+      {me.email && <input type="password" required autoComplete="current-password" aria-label="Your password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} />}
+      <button className="primary" disabled={busy}>
+        {me.email ? "Change email" : "Save my email"}
+      </button>
+    </form>
+  );
+  return (
+    <section className="panel email-card" aria-label="Email">
+      {needsEmail ? (
+        <>
+          <h2>
+            <Icon name="key" /> Add your email
+          </h2>
+          <p className="muted small">You'll be able to sign in with it as well as your name{mail ? ", and we'll send a link to confirm it's yours" : ""}.</p>
+          {form}
+          <button
+            className="ghost-link small"
+            onClick={() => {
+              try {
+                sessionStorage.setItem(key, "1");
+              } catch {
+                /* private mode */
+              }
+              setLater(true);
+            }}
+          >
+            Not now
+          </button>
+        </>
+      ) : changing ? (
+        <>
+          <h2>Change your email</h2>
+          {form}
+          <button className="ghost-link small" onClick={() => setChanging(false)}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <h2>
+            <Icon name="key" /> Confirm your email
+          </h2>
+          <p className="small">
+            We sent a link to <b>{me.email}</b>. Open it to confirm the address is yours (check spam if it isn't there).
+          </p>
+          <div className="row">
+            <button disabled={busy} onClick={() => run(() => api.resendEmail(), `Sent again to ${me.email}.`)}>
+              Send the link again
+            </button>
+            <button className="ghost-link" onClick={() => setChanging(true)}>
+              Wrong address? Change it
+            </button>
+          </div>
+        </>
+      )}
+      {msg && (
+        <p className={`small ${msg.ok ? "" : "error"}`} role={msg.ok ? "status" : "alert"}>
+          {msg.text}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function Lobby({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
+  const [mail, setMail] = useState(false);
+  useEffect(() => {
+    api.config().then((c) => setMail(c.mail), () => {});
+  }, []);
   const [games, setGames] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -360,6 +502,8 @@ function Lobby({ me }: { me: Me }) {
           </svg>
         </div>
       </section>
+
+      <EmailCard me={me} onMe={onMe} mail={mail} />
 
       {error && (
         <p className="error banner" role="alert">
@@ -796,7 +940,7 @@ function Admin({ me }: { me: Me }) {
                     <b>{u.username}</b>
                     <span className="muted small">
                       {u.isAdmin ? " Admin" : " Player"}
-                      {u.email && ` · signed up with ${u.email}`}
+                      {u.email && ` · ${u.email}${u.emailVerified ? " ✓ confirmed" : " (not confirmed)"}`}
                       {!u.active && " · switched off"}
                     </span>
                     <span className="muted small user-times">

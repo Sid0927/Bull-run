@@ -6,7 +6,12 @@
  *   ADMIN_USERNAME  The admin account created on first start, if there is no admin yet.
  *   ADMIN_PASSWORD
  *   PORT            Defaults to 3000.
+ *   OPEN_SIGNUP     "0" turns off self sign-up (then only the admin makes accounts).
+ *   BREVO_API_KEY   Or RESEND_API_KEY: sends the confirmation emails (see server/mail.ts).
+ *   MAIL_FROM       The sender, e.g. "Bull Run <you@gmail.com>".
+ *   APP_URL         The site's address for links in emails (Render's own address by default).
  */
+import { mailerFromEnv } from "./mail.ts";
 import { fileURLToPath } from "node:url";
 import { createApp, ensureAdmin } from "./app.ts";
 import { MemoryStore, PgStore } from "./store.ts";
@@ -34,7 +39,7 @@ if (!adminUser || !adminPass) {
 } else await ensureAdmin(store, adminUser, adminPass, log);
 
 const staticDir = fileURLToPath(new URL("../dist", import.meta.url));
-const { server, hub } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, openSignup: process.env.OPEN_SIGNUP !== "0", log });
+const { server, hub } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, openSignup: process.env.OPEN_SIGNUP !== "0", mailer: mailerFromEnv(process.env, log), appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL, log });
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, () => log(`Listening on port ${port}${url ? "" : " (memory store: nothing is saved)"}`));
 
