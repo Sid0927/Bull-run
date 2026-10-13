@@ -19,6 +19,8 @@ export interface User {
   /** Last successful sign-in, and the last time they used the app (null if never). */
   lastLoginAt: string | null;
   lastSeenAt: string | null;
+  /** A computer player: it can't sign in and isn't listed with the accounts. */
+  isBot?: boolean;
 }
 
 /** One attempt to sign in. Never holds a password. */
@@ -57,6 +59,7 @@ export interface Seated {
   userId: number;
   seat: number;
   username: string;
+  isBot: boolean;
 }
 
 export interface Store {
@@ -66,6 +69,8 @@ export interface Store {
   userById(id: number): Promise<User | null>;
   listUsers(): Promise<User[]>;
   createUser(username: string, passwordHash: string, isAdmin: boolean): Promise<User>;
+  /** The computer player with this name, made the first time it is needed. */
+  botUser(name: string): Promise<User>;
   updateUser(id: number, patch: { passwordHash?: string; active?: boolean; isAdmin?: boolean }): Promise<void>;
   createSession(token: string, userId: number, expiresAt: Date): Promise<void>;
   sessionUser(token: string): Promise<User | null>;
@@ -111,7 +116,14 @@ export class MemoryStore implements Store {
     return this.users.find((u) => u.id === id) ?? null;
   }
   async listUsers() {
-    return [...this.users];
+    return this.users.filter((u) => !u.isBot);
+  }
+  async botUser(name: string) {
+    const have = this.users.find((u) => u.isBot && u.username === name);
+    if (have) return have;
+    const u: User = { id: this.users.length + 1, username: name, passwordHash: "bot", isAdmin: false, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null, isBot: true };
+    this.users.push(u);
+    return u;
   }
   async createUser(username: string, passwordHash: string, isAdmin: boolean) {
     const u: User = { id: this.users.length + 1, username, passwordHash, isAdmin, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null };
@@ -190,7 +202,10 @@ export class MemoryStore implements Store {
     return this.players
       .filter((p) => p.gameId === gameId)
       .sort((a, b) => a.seat - b.seat)
-      .map((p) => ({ userId: p.userId, seat: p.seat, username: this.users.find((u) => u.id === p.userId)!.username }));
+      .map((p) => {
+        const u = this.users.find((x) => x.id === p.userId)!;
+        return { userId: p.userId, seat: p.seat, username: u.username, isBot: !!u.isBot };
+      });
   }
   async addPlayer(gameId: number, userId: number) {
     const seats = this.players.filter((p) => p.gameId === gameId).map((p) => p.seat);
@@ -282,6 +297,7 @@ ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS at TIMESTAMPTZ;
 ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
 -- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
 UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 type Row = Record<string, unknown>;
@@ -294,6 +310,7 @@ const toUser = (r: Row): User => ({
   createdAt: new Date(r.created_at as string).toISOString(),
   lastLoginAt: r.last_login_at ? new Date(r.last_login_at as string).toISOString() : null,
   lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at as string).toISOString() : null,
+  isBot: r.is_bot === true,
 });
 const toGame = (r: Row): Game => ({
   id: r.id as number,
@@ -346,7 +363,13 @@ export class PgStore implements Store {
     return r ? toUser(r) : null;
   }
   async listUsers() {
-    return (await this.q("SELECT * FROM users ORDER BY id")).map(toUser);
+    return (await this.q("SELECT * FROM users WHERE NOT is_bot ORDER BY id")).map(toUser);
+  }
+  async botUser(name: string) {
+    const [have] = await this.q("SELECT * FROM users WHERE is_bot AND username = $1", [name]);
+    if (have) return toUser(have);
+    const [r] = await this.q("INSERT INTO users (username, password_hash, is_bot) VALUES ($1, 'bot', TRUE) RETURNING *", [name]);
+    return toUser(r);
   }
   async createUser(username: string, passwordHash: string, isAdmin: boolean) {
     const [r] = await this.q("INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING *", [username, passwordHash, isAdmin]);
@@ -424,8 +447,8 @@ export class PgStore implements Store {
   }
   async seated(gameId: number) {
     return (
-      await this.q("SELECT p.user_id, p.seat, u.username FROM game_players p JOIN users u ON u.id = p.user_id WHERE p.game_id = $1 ORDER BY p.seat", [gameId])
-    ).map((r) => ({ userId: r.user_id as number, seat: r.seat as number, username: r.username as string }));
+      await this.q("SELECT p.user_id, p.seat, u.username, u.is_bot FROM game_players p JOIN users u ON u.id = p.user_id WHERE p.game_id = $1 ORDER BY p.seat", [gameId])
+    ).map((r) => ({ userId: r.user_id as number, seat: r.seat as number, username: r.username as string, isBot: r.is_bot === true }));
   }
   async addPlayer(gameId: number, userId: number) {
     await this.q(

@@ -9,6 +9,8 @@ import { GameError, Hub } from "./hub.ts";
 import type { Store, User } from "./store.ts";
 
 export interface AppOptions {
+  /** Override how long computer players pause before moving (tests). */
+  botDelayMs?: number;
   store: Store;
   /** Folder with the built app (vite build). Omit to serve the API only. */
   staticDir?: string;
@@ -45,7 +47,7 @@ class HttpError extends Error {
 
 export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   const { store } = opts;
-  const hub = new Hub(store);
+  const hub = new Hub(store, { botDelayMs: opts.botDelayMs });
   const limiter = new LoginLimiter();
   const joinLimiter = new LoginLimiter(10);
   const ipLimiter = new LoginLimiter(30);
@@ -228,7 +230,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       const u = await store.userByName(username);
       // Always do the slow hash, so the time taken doesn't reveal whether the name exists.
       const ok = await checkPassword(String(b.password ?? "").slice(0, 200), u?.passwordHash ?? DUMMY_HASH);
-      if (!u || !u.active || !ok) {
+      if (!u || !u.active || u.isBot || !ok) {
         await attempt(u && ok ? "off" : "wrong", u?.id ?? null);
         throw new HttpError(401, "That username and password don't match.");
       }
@@ -356,11 +358,22 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       });
       return json(res, 200, await hub.summary(g, user.id));
     }
-    const gm = path.match(/^\/api\/games\/(\d{1,9})\/(leave|start|action|stream)$/);
+    const gm = path.match(/^\/api\/games\/(\d{1,9})\/(leave|start|action|stream|add-bot|remove-bot)$/);
     if (gm) {
       const id = Number(gm[1]);
       if (gm[2] === "leave" && method === "POST") {
         await hub.leave(user, id);
+        return json(res, 200, { ok: true });
+      }
+      if (gm[2] === "add-bot" && method === "POST") {
+        await hub.addBot(user, id);
+        return json(res, 200, { ok: true });
+      }
+      if (gm[2] === "remove-bot" && method === "POST") {
+        const b = await body(req);
+        const seat = Number(b.seat);
+        if (!Number.isInteger(seat) || seat < 0 || seat > 9) throw new HttpError(400, "Say which seat.");
+        await hub.removeBot(user, id, seat);
         return json(res, 200, { ok: true });
       }
       if (gm[2] === "start" && method === "POST") {

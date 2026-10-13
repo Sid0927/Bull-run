@@ -30,7 +30,7 @@ export interface GameSummary {
 
 export interface GameUpdate {
   game: GameSummary;
-  seats: { seat: Seat; username: string }[];
+  seats: { seat: Seat; username: string; isBot?: boolean }[];
   mySeat: Seat | null;
   /** The admin watching a game they are not in: every player's cash, cards and sealed moves are shown. */
   revealed: boolean;

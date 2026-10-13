@@ -14,7 +14,7 @@ export interface GameSource {
   act(a: Action): Promise<void>;
 }
 
-const BOTS = ["Asha", "Bilal", "Chitra", "Dev"];
+const BOTS = ["Asha", "Kabir", "Chitra", "Dev", "Esha"];
 /** A mix of styles, so the table doesn't all play the same way. */
 const STYLES: Strategy[] = [STRATEGIES.favour, STRATEGIES.dividend, STRATEGIES.follower, STRATEGIES.random];
 /** How long a computer player "thinks", so you can watch what each one did. */
@@ -53,7 +53,7 @@ export function localGame(you: string, players: number, rounds: 6 | 9 | 12): Gam
         endedAt: ended ? new Date().toISOString() : null,
         lastMoveAt: times[times.length - 1] ?? null,
       },
-      seats: names.map((n, seat) => ({ seat, username: n })),
+      seats: names.map((n, seat) => ({ seat, username: n, isBot: seat > 0 })),
       mySeat: 0,
       revealed: false,
       view: viewFor(state, 0),

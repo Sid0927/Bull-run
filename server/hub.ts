@@ -8,6 +8,8 @@ import { apply, newGame, type Action, type GameEvent, type GameState, type Seat 
 import type { GameSummary, GameUpdate } from "../src/shared/api.ts";
 import { cleanAction, eventsFor, viewFor, waitingOn } from "../src/shared/view.ts";
 import type { Game, Seated, Store, User } from "./store.ts";
+import { Rng } from "../src/engine/rng.ts";
+import { STRATEGIES } from "../src/sim/strategies.ts";
 
 export class GameError extends Error {
   constructor(
@@ -31,6 +33,11 @@ type Listener = { userId: number; token: string; opened: number; seat: Seat | nu
 
 /** Live connections one person may hold at once (phones, tabs); a new one ends their oldest. */
 const STREAMS_PER_USER = 8;
+/** Computer players' names; a bot is shown as "Kabir (bot)", which no real account can be called. */
+const BOT_NAMES = ["Kabir", "Meera", "Rohan", "Tara", "Vikram"];
+/** How long a computer player "thinks", so people can see what each move did. */
+const BOT_TURN_MS = 1500;
+const BOT_SEALED_MS = 600;
 /** Games one person may have waiting for players at once. */
 const LOBBY_GAMES_PER_USER = 5;
 
@@ -45,8 +52,12 @@ export class Hub {
   private locks = new Map<number, Promise<unknown>>();
   private inFlight = new Map<number, number>();
   private listeners = new Map<number, Set<Listener>>();
+  private botTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private opts: { botDelayMs?: number } = {},
+  ) {}
 
   /** Run `fn` for one game at a time, so two phones acting at once cannot interleave. */
   private exclusive<T>(gameId: number, fn: () => Promise<T>): Promise<T> {
@@ -101,6 +112,7 @@ export class Hub {
       const live = this.live.get(game.id) ?? { state, events, times, seq: actions.length, lastMoveAt: saved.at(-1)?.at ?? null };
       this.live.set(game.id, live);
       this.trimCache();
+      if (game.status === "playing") this.scheduleBots(game.id, live.state);
       return live;
     })().finally(() => this.loading.delete(game.id));
     this.loading.set(game.id, p);
@@ -149,7 +161,7 @@ export class Hub {
     const reveal = user.isAdmin && !mine;
     return {
       game: await (summary ?? this.summary(game, user.id)),
-      seats: seated.map((p) => ({ seat: p.seat, username: p.username })),
+      seats: seated.map((p) => ({ seat: p.seat, username: p.username, isBot: p.isBot })),
       mySeat: seat,
       revealed: reveal,
       view: live ? viewFor(live.state, seat, reveal) : null,
@@ -322,7 +334,7 @@ export class Hub {
       const old = seated.find((p) => p.seat === seat);
       if (!old) throw new GameError("Nobody is in that seat.", 404);
       const u = await this.store.userByName(String(username).trim());
-      if (!u || !u.active) throw new GameError("There is no active account with that name. Create it first.", 404);
+      if (!u || !u.active || u.isBot) throw new GameError("There is no active account with that name. Create it first.", 404);
       if (seated.some((p) => p.userId === u.id)) throw new GameError(`${u.username} is already in this game.`);
       await this.store.replacePlayer(gameId, seat, u.id);
       this.live.delete(gameId); // replayed with the new name next time it is read
@@ -352,6 +364,7 @@ export class Hub {
       const now = new Date().toISOString();
       this.live.set(g.id, { state, events: [...events], times: events.map(() => now), seq: 0, lastMoveAt: null });
       this.push(g.id);
+      this.scheduleBots(g.id, state);
     });
   }
 
@@ -366,19 +379,89 @@ export class Hub {
       // Only the fields an action has, and the seat always from the login, never from the phone.
       const a = cleanAction(action, mine.seat);
       if (!a) throw new GameError("Unknown action.");
-      const r = apply(live.state, a);
-      if (!r.ok) throw new GameError(r.error);
-      await this.store.appendAction(g.id, live.seq, a);
-      const now = new Date().toISOString();
-      live.state = r.state;
-      live.events.push(...r.events);
-      live.times.push(...r.events.map(() => now));
-      live.lastMoveAt = now;
-      live.seq++;
-      // If anything replaced the cached copy while the move was being saved, this one is the truth.
-      this.live.set(g.id, live);
-      if (r.state.phase.kind === "ended") await this.store.updateGame(g.id, { status: "ended" });
+      await this.commit(g, live, a);
+    });
+  }
+
+  /** Apply a move, save it, and tell everyone. Called with the game's lock held. */
+  private async commit(g: Game, live: Live, a: Action) {
+    const r = apply(live.state, a);
+    if (!r.ok) throw new GameError(r.error);
+    await this.store.appendAction(g.id, live.seq, a);
+    const now = new Date().toISOString();
+    live.state = r.state;
+    live.events.push(...r.events);
+    live.times.push(...r.events.map(() => now));
+    live.lastMoveAt = now;
+    live.seq++;
+    // If anything replaced the cached copy while the move was being saved, this one is the truth.
+    this.live.set(g.id, live);
+    if (r.state.phase.kind === "ended") await this.store.updateGame(g.id, { status: "ended" });
+    this.push(g.id);
+    this.scheduleBots(g.id, r.state);
+  }
+
+  // ─── Computer players ───────────────────────────────────────────────────────────────────
+
+  /** The game's creator (or the admin) adds a computer player to fill a seat before the start. */
+  async addBot(user: User, gameId: number) {
+    return this.exclusive(gameId, async () => {
+      const g = await this.mustSee(gameId, user);
+      if (g.createdBy !== user.id && !user.isAdmin) throw new GameError("Only the player who created the game can add computer players.", 403);
+      if (g.status !== "lobby") throw new GameError("Computer players can only join before the game starts.");
+      const seated = await this.store.seated(g.id);
+      if (seated.length >= g.maxPlayers) throw new GameError("The game is full.");
+      const name = BOT_NAMES.map((n) => `${n} (bot)`).find((n) => !seated.some((p) => p.username === n))!;
+      const bot = await this.store.botUser(name);
+      await this.store.addPlayer(g.id, bot.id);
       this.push(g.id);
+    });
+  }
+
+  /** Take a computer player out again before the start. */
+  async removeBot(user: User, gameId: number, seat: number) {
+    return this.exclusive(gameId, async () => {
+      const g = await this.mustSee(gameId, user);
+      if (g.createdBy !== user.id && !user.isAdmin) throw new GameError("Only the player who created the game can remove computer players.", 403);
+      if (g.status !== "lobby") throw new GameError("The game has started.");
+      const bot = (await this.store.seated(g.id)).find((p) => p.seat === seat && p.isBot);
+      if (!bot) throw new GameError("There is no computer player in that seat.", 404);
+      await this.store.removePlayer(g.id, bot.userId);
+      this.push(g.id);
+    });
+  }
+
+  /** If a computer player is up, let it move after a pause. One timer per game at a time. */
+  private scheduleBots(gameId: number, state: GameState) {
+    if (this.botTimers.has(gameId) || state.phase.kind === "ended") return;
+    const sealed = state.phase.kind === "opening" || state.phase.kind === "ipo";
+    const t = setTimeout(() => {
+      this.botTimers.delete(gameId);
+      this.botMove(gameId).catch((e) => console.error(`Computer player in game ${gameId} could not move:`, e));
+    }, this.opts.botDelayMs ?? (sealed ? BOT_SEALED_MS : BOT_TURN_MS));
+    t.unref?.();
+    this.botTimers.set(gameId, t);
+  }
+
+  private async botMove(gameId: number) {
+    await this.exclusive(gameId, async () => {
+      const g = await this.store.gameById(gameId);
+      if (!g || g.status !== "playing") return;
+      const live = await this.load(g);
+      if (!live) return;
+      const waiting = waitingOn(live.state);
+      const bot = (await this.store.seated(g.id)).find((p) => p.isBot && waiting.includes(p.seat));
+      if (!bot) return;
+      // It decides from what its seat may see, like a person would, and the engine is the judge.
+      const view = viewFor(live.state, bot.seat);
+      const style = Object.values(STRATEGIES).filter((x) => x.name !== "random")[bot.seat % 3] ?? STRATEGIES.favour;
+      const rng = new Rng(((g.seed ?? 0) ^ Math.imul(live.seq + 1, 2654435761)) >>> 0);
+      for (const a of [...style.candidates(view, bot.seat, rng), ...STRATEGIES.random.candidates(view, bot.seat, rng)]) {
+        if (!apply(live.state, a).ok) continue;
+        await this.commit(g, live, a);
+        return;
+      }
+      console.error(`Computer player ${bot.username} in game ${gameId} found no legal move`);
     });
   }
 

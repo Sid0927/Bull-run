@@ -19,7 +19,7 @@ before(async () => {
   store = pgUrl ? new PgStore(pgUrl) : new MemoryStore();
   await store.init();
   await ensureAdmin(store, "boss", "boss-password", () => {});
-  const { server } = createApp({ store, trustProxy: true });
+  const { server } = createApp({ store, trustProxy: true, botDelayMs: 5 });
   await new Promise<void>((r) => server.listen(0, r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => server.close();
@@ -347,5 +347,59 @@ describe("the admin swaps a player", () => {
     const live = await sid.snapshot(g.id);
     assert.ok(live.waiting.length > 0);
     await admin.call(`/api/admin/games/${g.id}/abandon`, {});
+  });
+});
+
+describe("computer players", () => {
+  test("two people and a computer player play a game to the end", async () => {
+    const [a, b] = [players[0], players[2]]; // asha and chitra
+    const g: GameSummary = (await a.call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    await b.call("/api/games/join", { code: g.code });
+    assert.equal((await a.call(`/api/games/${g.id}/start`, {})).status, 400); // only two
+    assert.equal((await b.call(`/api/games/${g.id}/add-bot`, {})).status, 403); // only the host
+    assert.equal((await a.call(`/api/games/${g.id}/add-bot`, {})).status, 200);
+    assert.equal((await a.call(`/api/games/${g.id}/add-bot`, {})).status, 400); // full
+    const lobby = await a.snapshot(g.id);
+    const bot = lobby.seats.find((s) => s.isBot)!;
+    assert.equal(bot.username, "Kabir (bot)");
+    // The bot can't be signed in to, and isn't listed with the accounts.
+    assert.equal((await new Client().login("Kabir (bot)", "bot")).status, 401);
+    assert.ok(!((await admin.call("/api/admin/users")).data as { username: string }[]).some((u) => u.username.includes("(bot)")));
+    // Removed and added back.
+    assert.equal((await a.call(`/api/games/${g.id}/remove-bot`, { seat: 0 })).status, 404); // not a bot
+    assert.equal((await a.call(`/api/games/${g.id}/remove-bot`, { seat: bot.seat })).status, 200);
+    assert.equal((await a.snapshot(g.id)).seats.length, 2);
+    assert.equal((await a.call(`/api/games/${g.id}/add-bot`, {})).status, 200);
+    assert.equal((await a.call(`/api/games/${g.id}/start`, {})).status, 200);
+
+    const people = [a, b];
+    const rng = new Rng(9);
+    let botMoved = false;
+    for (let guard = 0; guard < 3000; guard++) {
+      const snaps = await Promise.all(people.map((p) => p.snapshot(g.id)));
+      const s0 = snaps[0];
+      if (s0.view!.phase.kind === "ended") break;
+      const who = people.findIndex((_, i) => s0.waiting.includes(snaps[i].mySeat!));
+      if (who < 0) {
+        // Only the computer player is up: it moves by itself.
+        botMoved = true;
+        await new Promise((r) => setTimeout(r, 20));
+        continue;
+      }
+      const seat = snaps[who].mySeat!;
+      let done = false;
+      for (const act of STRATEGIES.favour.candidates(snaps[who].view!, seat, rng)) {
+        if ((await people[who].call(`/api/games/${g.id}/action`, { action: act })).status === 200) {
+          done = true;
+          break;
+        }
+      }
+      assert.ok(done);
+    }
+    const end = await a.snapshot(g.id);
+    assert.equal(end.view!.phase.kind, "ended");
+    assert.ok(botMoved);
+    assert.ok(end.events.list.some((e) => e.text.includes("Kabir (bot)")));
+    assert.equal(end.view!.standings!.length, 3);
   });
 });

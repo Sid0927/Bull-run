@@ -396,10 +396,15 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
           {Array.from({ length: g.maxPlayers }, (_, i) => {
             const p = u.seats[i];
             return p ? (
-              <div key={i} className="seat filled">
+              <div key={i} className={`seat filled ${p.isBot ? "bot" : ""}`}>
                 <Avatar name={p.username} seat={p.seat} size={48} />
                 <b>{p.username}</b>
-                <span className="small muted">{p.username === g.createdBy ? "host" : p.username === me.username ? "you" : "ready"}</span>
+                <span className="small muted">{p.isBot ? "computer" : p.username === g.createdBy ? "host" : p.username === me.username ? "you" : "ready"}</span>
+                {p.isBot && (isCreator || me.isAdmin) && (
+                  <button className="ghost-link small" disabled={busy} onClick={() => act(() => api.removeBot(g.id, p.seat))}>
+                    Remove
+                  </button>
+                )}
               </div>
             ) : (
               <div key={i} className="seat empty">
@@ -417,6 +422,12 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
         )}
         {isCreator || me.isAdmin ? (
           <>
+            {u.seats.length < g.maxPlayers && (
+              <button className={`big add-bot ${need > 0 ? "primary" : ""}`} disabled={busy} onClick={() => act(() => api.addBot(g.id))}>
+                <Icon name="robot" size={18} /> {need > 0 ? "Add a computer player" : "Add another computer player"}
+              </button>
+            )}
+            {need > 0 && <p className="small muted">A game needs 3 players. Add a computer player to fill a seat, or wait for a friend to join.</p>}
             <button className="primary big" disabled={need > 0 || busy} onClick={() => act(() => api.start(g.id))}>
               {need > 0 ? `Need ${need} more to start` : "Start the game"}
             </button>
