@@ -10,6 +10,8 @@ import { cleanAction, eventsFor, viewFor, waitingOn } from "../src/shared/view.t
 import type { Game, Seated, Store, User } from "./store.ts";
 import { Rng } from "../src/engine/rng.ts";
 import { STRATEGIES } from "../src/sim/strategies.ts";
+import { smartPlayer } from "../src/sim/smart.ts";
+import { botThinkMs } from "../src/shared/bot-pace.ts";
 
 export class GameError extends Error {
   constructor(
@@ -35,9 +37,6 @@ type Listener = { userId: number; token: string; opened: number; seat: Seat | nu
 const STREAMS_PER_USER = 8;
 /** Computer players' names; a bot is shown as "Kabir (bot)", which no real account can be called. */
 const BOT_NAMES = ["Kabir", "Meera", "Rohan", "Tara", "Vikram"];
-/** How long a computer player "thinks", so people can see what each move did. */
-const BOT_TURN_MS = 1500;
-const BOT_SEALED_MS = 600;
 /** Games one person may have waiting for players at once. */
 const LOBBY_GAMES_PER_USER = 5;
 
@@ -434,11 +433,10 @@ export class Hub {
   /** If a computer player is up, let it move after a pause. One timer per game at a time. */
   private scheduleBots(gameId: number, state: GameState) {
     if (this.botTimers.has(gameId) || state.phase.kind === "ended") return;
-    const sealed = state.phase.kind === "opening" || state.phase.kind === "ipo";
     const t = setTimeout(() => {
       this.botTimers.delete(gameId);
       this.botMove(gameId).catch((e) => console.error(`Computer player in game ${gameId} could not move:`, e));
-    }, this.opts.botDelayMs ?? (sealed ? BOT_SEALED_MS : BOT_TURN_MS));
+    }, this.opts.botDelayMs ?? botThinkMs(state));
     t.unref?.();
     this.botTimers.set(gameId, t);
   }
@@ -454,7 +452,7 @@ export class Hub {
       if (!bot) return;
       // It decides from what its seat may see, like a person would, and the engine is the judge.
       const view = viewFor(live.state, bot.seat);
-      const style = Object.values(STRATEGIES).filter((x) => x.name !== "random")[bot.seat % 3] ?? STRATEGIES.favour;
+      const style = smartPlayer;
       const rng = new Rng(((g.seed ?? 0) ^ Math.imul(live.seq + 1, 2654435761)) >>> 0);
       for (const a of [...style.candidates(view, bot.seat, rng), ...STRATEGIES.random.candidates(view, bot.seat, rng)]) {
         if (!apply(live.state, a).ok) continue;

@@ -23,6 +23,7 @@ import {
   tradeRoom,
 } from "../engine/index.ts";
 import { Rng } from "../engine/rng.ts";
+import { smartPlayer } from "./smart.ts";
 
 export interface Strategy {
   name: string;
@@ -251,4 +252,5 @@ export const STRATEGIES: Record<string, Strategy> = {
   favour: favourPlayer,
   dividend: dividendPlayer,
   follower: followerPlayer,
+  smart: smartPlayer,
 };

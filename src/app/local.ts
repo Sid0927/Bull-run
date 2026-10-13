@@ -8,6 +8,8 @@ import { Rng } from "../engine/rng.ts";
 import type { GameUpdate } from "../shared/api.ts";
 import { eventsFor, viewFor, waitingOn } from "../shared/view.ts";
 import { STRATEGIES, type Strategy } from "../sim/strategies.ts";
+import { smartPlayer } from "../sim/smart.ts";
+import { botThinkMs } from "../shared/bot-pace.ts";
 
 export interface GameSource {
   follow(onUpdate: (u: GameUpdate) => void, onStatus: (connected: boolean) => void, onRefused: (status: number, message: string) => void): () => void;
@@ -16,10 +18,7 @@ export interface GameSource {
 
 const BOTS = ["Asha", "Kabir", "Chitra", "Dev", "Esha"];
 /** A mix of styles, so the table doesn't all play the same way. */
-const STYLES: Strategy[] = [STRATEGIES.favour, STRATEGIES.dividend, STRATEGIES.follower, STRATEGIES.random];
-/** How long a computer player "thinks", so you can watch what each one did. */
-const TURN_MS = 1100;
-const SEALED_MS = 400;
+const STYLES: Strategy[] = [smartPlayer];
 
 export function localGame(you: string, players: number, rounds: 6 | 9 | 12): GameSource {
   const seed = (Math.random() * 2 ** 31) | 0;
@@ -76,16 +75,17 @@ export function localGame(you: string, players: number, rounds: 6 | 9 | 12): Gam
     if (timer || state.phase.kind === "ended") return;
     const bot = waitingOn(state).find((s) => s !== 0);
     if (bot === undefined) return;
-    const sealed = state.phase.kind === "opening" || state.phase.kind === "ipo";
     timer = setTimeout(() => {
       timer = null;
       botMove(bot);
-    }, sealed ? SEALED_MS : TURN_MS);
+    }, botThinkMs(state));
   };
 
   const botMove = (seat: Seat) => {
     if (!listener || !waitingOn(state).includes(seat)) return schedule();
-    for (const a of STYLES[(seat - 1) % STYLES.length].candidates(state, seat, rng)) {
+    // It decides from what its seat may see, as it would online; the engine is the judge.
+    const view = viewFor(state, seat);
+    for (const a of [...STYLES[(seat - 1) % STYLES.length].candidates(view, seat, rng), ...STRATEGIES.random.candidates(view, seat, rng)]) {
       const r = apply(state, a);
       if (r.ok) return record(r.state, r.events);
     }
