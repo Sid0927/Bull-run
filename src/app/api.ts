@@ -31,6 +31,8 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 export const api = {
   me: () => call<Me>("/api/me"),
   login: (username: string, password: string) => call<Me>("/api/login", { username, password }),
+  signup: (email: string, username: string, password: string) => call<Me>("/api/signup", { email, username, password }),
+  config: () => call<{ openSignup: boolean }>("/api/config"),
   logout: () => call<{ ok: true }>("/api/logout", {}),
   changePassword: (current: string, next: string) => call<{ ok: true }>("/api/me/password", { current, next }),
   games: () => call<GameSummary[]>("/api/games"),

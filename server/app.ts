@@ -9,6 +9,8 @@ import { GameError, Hub } from "./hub.ts";
 import type { Store, User } from "./store.ts";
 
 export interface AppOptions {
+  /** Let anyone create an account with an email (default). False: only the admin makes accounts. */
+  openSignup?: boolean;
   /** Override how long computer players pause before moving (tests). */
   botDelayMs?: number;
   store: Store;
@@ -51,6 +53,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
   const limiter = new LoginLimiter();
   const joinLimiter = new LoginLimiter(10);
   const ipLimiter = new LoginLimiter(30);
+  // New accounts from one address: a few at a time is a family on one Wi-Fi; more is a script.
+  const signupLimiter = new LoginLimiter(5);
+  const openSignup = opts.openSignup !== false;
   const log = opts.log ?? (() => {});
 
   /** Render's proxy appends the real address as the last X-Forwarded-For entry; earlier ones are the client's to forge. */
@@ -90,10 +95,11 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     }
   }
 
-  const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin });
+  const me = (u: User): Me => ({ id: u.id, username: u.username, isAdmin: u.isAdmin, email: u.email ?? null });
   const adminView = (u: User, devices = 0): AdminUser => ({
     id: u.id,
     username: u.username,
+    email: u.email ?? null,
     isAdmin: u.isAdmin,
     active: u.active,
     createdAt: u.createdAt,
@@ -203,11 +209,43 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
     if (!path.startsWith("/api/")) return serveStatic(req, res, path);
 
     if (path === "/api/health") return json(res, 200, { ok: true });
+    if (path === "/api/config" && method === "GET") return json(res, 200, { openSignup });
+
+    // ── Sign up ──
+    if (path === "/api/signup" && method === "POST") {
+      if (!openSignup) throw new HttpError(403, "New accounts are made by the game's admin.");
+      const b = await body(req);
+      const email = String(b.email ?? "").trim().slice(0, 254);
+      const username = String(b.username ?? "").trim();
+      const password = String(b.password ?? "");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "That doesn't look like an email address.");
+      const bad = checkUsername(username) ?? checkNewPassword(password);
+      if (bad) throw new HttpError(400, bad);
+      const ip = clientIp(req);
+      if (signupLimiter.blocked(`ip:${ip}`)) throw new HttpError(429, "Too many new accounts from here. Wait ten minutes and try again.");
+      if (await store.userByEmail(email)) throw new HttpError(409, "There is already an account with that email. Sign in instead.");
+      if (await store.userByName(username)) throw new HttpError(409, `The name ${username} is taken. Pick another.`);
+      let u: User;
+      try {
+        u = await store.createUser(username, await hashPassword(password), false, email);
+      } catch (e) {
+        // Two sign-ups racing for the same name or email: the database's unique index decides.
+        if ((e as { code?: string }).code === "23505") throw new HttpError(409, "That name or email was just taken. Try another.");
+        throw e;
+      }
+      signupLimiter.fail(`ip:${ip}`);
+      await store.recordLogin({ userId: u.id, username: u.username, result: "ok", device: deviceOf(req) }).catch(() => {});
+      log(`${u.username} signed up`);
+      const token = newToken();
+      await store.createSession(token, u.id, new Date(Date.now() + SESSION_DAYS * 86400_000));
+      setCookie(res, token, SESSION_DAYS * 86400);
+      return json(res, 200, me(u));
+    }
 
     // ── Sign in ──
     if (path === "/api/login" && method === "POST") {
       const b = await body(req);
-      const username = String(b.username ?? "").trim().slice(0, 64);
+      const username = String(b.username ?? "").trim().slice(0, 254);
       const ip = clientIp(req);
       // 5 tries per name from one address (so a stranger can't lock a player out), and a looser
       // cap per address that a success doesn't reset (a table on one Wi-Fi shares an address).
@@ -227,7 +265,8 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       }
       limiter.fail(...keys); // counted before checking, so parallel guesses can't slip past
       ipLimiter.fail(`ip:${ip}`);
-      const u = await store.userByName(username);
+      // Either the player name or, for accounts made by signing up, the email.
+      const u = username.includes("@") ? await store.userByEmail(username) : await store.userByName(username);
       // Always do the slow hash, so the time taken doesn't reveal whether the name exists.
       const ok = await checkPassword(String(b.password ?? "").slice(0, 200), u?.passwordHash ?? DUMMY_HASH);
       if (!u || !u.active || u.isBot || !ok) {

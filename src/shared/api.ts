@@ -5,6 +5,7 @@ export interface Me {
   id: number;
   username: string;
   isAdmin: boolean;
+  email?: string | null;
 }
 
 export type GameStatus = "lobby" | "playing" | "ended" | "abandoned";
@@ -44,6 +45,8 @@ export interface GameUpdate {
 export interface AdminUser {
   id: number;
   username: string;
+  /** Set for accounts that signed up themselves. */
+  email?: string | null;
   isAdmin: boolean;
   active: boolean;
   createdAt: string;

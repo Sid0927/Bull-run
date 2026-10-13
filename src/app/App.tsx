@@ -163,17 +163,24 @@ function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSig
 // ─── Sign in ────────────────────────────────────────────────────────────────────────────
 
 function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }) {
+  const [mode, setMode] = useState<"in" | "up">("in");
+  const [openSignup, setOpenSignup] = useState(false);
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.config().then((c) => setOpenSignup(c.openSignup), () => {});
+  }, []);
+  const signingUp = mode === "up" && openSignup;
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      onIn(await api.login(username.trim(), password));
+      onIn(signingUp ? await api.signup(email.trim(), username.trim(), password) : await api.login(username.trim(), password));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -203,13 +210,43 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
           </ul>
         </div>
         <form onSubmit={submit} className="login-card">
-          <h2>Sign in to trade</h2>
+          {openSignup && (
+            <div className="seg seg-fill login-mode" role="group" aria-label="Sign in or create an account">
+              {(
+                [
+                  ["in", "Sign in"],
+                  ["up", "Create account"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mode === m ? "on" : ""}
+                  aria-pressed={mode === m}
+                  onClick={() => {
+                    setMode(m);
+                    setError("");
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <h2>{signingUp ? "Open your trading account" : "Sign in to trade"}</h2>
+          {signingUp && (
+            <label className="float">
+              <input id="email" type="email" placeholder=" " autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <span>Email</span>
+            </label>
+          )}
           <label className="float">
-            <input id="username" placeholder=" " autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
-            <span>Username</span>
+            <input id="username" placeholder=" " autoComplete={signingUp ? "nickname" : "username"} autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <span>{signingUp ? "Player name (shown in games)" : openSignup ? "Email or player name" : "Username"}</span>
           </label>
+          {signingUp && <p className="muted small field-hint">3–24 letters, digits, dots, dashes or underscores.</p>}
           <label className="float">
-            <input id="password" placeholder=" " type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input id="password" placeholder=" " type={show ? "text" : "password"} autoComplete={signingUp ? "new-password" : "current-password"} minLength={signingUp ? 6 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} required />
             <span>Password</span>
             <button type="button" className="peek" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}>
               {show ? "Hide" : "Show"}
@@ -222,14 +259,16 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
           )}
           <button className="primary big shine" disabled={busy}>
             {busy ? (
-              <span className="spinner" aria-label="Signing in" />
+              <span className="spinner" aria-label={signingUp ? "Creating your account" : "Signing in"} />
             ) : (
               <>
-                Enter the market <Icon name="arrow" size={18} />
+                {signingUp ? "Create my account" : "Enter the market"} <Icon name="arrow" size={18} />
               </>
             )}
           </button>
-          <p className="muted small center">Accounts are given out by the game's admin.</p>
+          <p className="muted small center">
+            {!openSignup ? "Accounts are given out by the game's admin." : signingUp ? "At least 6 characters for the password. Forgot it later? Ask the game's admin to reset it." : "New here? Choose Create account above."}
+          </p>
           <button type="button" className="ghost-link" onClick={onRules}>
             <Icon name="book" size={16} /> How to play
           </button>
@@ -757,6 +796,7 @@ function Admin({ me }: { me: Me }) {
                     <b>{u.username}</b>
                     <span className="muted small">
                       {u.isAdmin ? " Admin" : " Player"}
+                      {u.email && ` · signed up with ${u.email}`}
                       {!u.active && " · switched off"}
                     </span>
                     <span className="muted small user-times">

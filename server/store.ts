@@ -21,6 +21,8 @@ export interface User {
   lastSeenAt: string | null;
   /** A computer player: it can't sign in and isn't listed with the accounts. */
   isBot?: boolean;
+  /** Set when the player signed up themselves; they can sign in with it as well as their name. */
+  email?: string | null;
 }
 
 /** One attempt to sign in. Never holds a password. */
@@ -68,7 +70,8 @@ export interface Store {
   userByName(username: string): Promise<User | null>;
   userById(id: number): Promise<User | null>;
   listUsers(): Promise<User[]>;
-  createUser(username: string, passwordHash: string, isAdmin: boolean): Promise<User>;
+  createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string): Promise<User>;
+  userByEmail(email: string): Promise<User | null>;
   /** The computer player with this name, made the first time it is needed. */
   botUser(name: string): Promise<User>;
   updateUser(id: number, patch: { passwordHash?: string; active?: boolean; isAdmin?: boolean }): Promise<void>;
@@ -125,8 +128,13 @@ export class MemoryStore implements Store {
     this.users.push(u);
     return u;
   }
-  async createUser(username: string, passwordHash: string, isAdmin: boolean) {
-    const u: User = { id: this.users.length + 1, username, passwordHash, isAdmin, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null };
+  async userByEmail(email: string) {
+    return this.users.find((u) => !!u.email && u.email.toLowerCase() === email.toLowerCase()) ?? null;
+  }
+  async createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string) {
+    if (email && (await this.userByEmail(email))) throw Object.assign(new Error("duplicate email"), { code: "23505" });
+    if (await this.userByName(username)) throw Object.assign(new Error("duplicate username"), { code: "23505" });
+    const u: User = { id: this.users.length + 1, username, passwordHash, isAdmin, active: true, createdAt: new Date().toISOString(), lastLoginAt: null, lastSeenAt: null, email: email ?? null };
     this.users.push(u);
     return u;
   }
@@ -298,6 +306,8 @@ ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
 -- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
 UPDATE games SET rules = ${CURRENT_RULES} WHERE seed IS NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email)) WHERE email IS NOT NULL;
 `;
 
 type Row = Record<string, unknown>;
@@ -311,6 +321,7 @@ const toUser = (r: Row): User => ({
   lastLoginAt: r.last_login_at ? new Date(r.last_login_at as string).toISOString() : null,
   lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at as string).toISOString() : null,
   isBot: r.is_bot === true,
+  email: (r.email as string | null) ?? null,
 });
 const toGame = (r: Row): Game => ({
   id: r.id as number,
@@ -371,9 +382,13 @@ export class PgStore implements Store {
     const [r] = await this.q("INSERT INTO users (username, password_hash, is_bot) VALUES ($1, 'bot', TRUE) RETURNING *", [name]);
     return toUser(r);
   }
-  async createUser(username: string, passwordHash: string, isAdmin: boolean) {
-    const [r] = await this.q("INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING *", [username, passwordHash, isAdmin]);
+  async createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string) {
+    const [r] = await this.q("INSERT INTO users (username, password_hash, is_admin, email) VALUES ($1, $2, $3, $4) RETURNING *", [username, passwordHash, isAdmin, email ?? null]);
     return toUser(r);
+  }
+  async userByEmail(email: string) {
+    const [r] = await this.q("SELECT * FROM users WHERE lower(email) = lower($1) AND NOT is_bot", [email]);
+    return r ? toUser(r) : null;
   }
   async updateUser(id: number, patch: { passwordHash?: string; active?: boolean; isAdmin?: boolean }) {
     if (patch.passwordHash !== undefined) await this.q("UPDATE users SET password_hash = $2 WHERE id = $1", [id, patch.passwordHash]);

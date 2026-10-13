@@ -403,3 +403,54 @@ describe("computer players", () => {
     assert.equal(end.view!.standings!.length, 3);
   });
 });
+
+describe("signing up", () => {
+  const signup = (body: unknown, ip = "192.0.2.50") =>
+    fetch(`${base}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": ip }, body: JSON.stringify(body) });
+
+  test("anyone can make an account with an email, then sign in with either", async () => {
+    assert.deepEqual((await new Client().call("/api/config")).data, { openSignup: true });
+    const r = await signup({ email: "Neha@Example.com", username: "neha", password: "neha-pass" });
+    assert.equal(r.status, 200);
+    const cookie = r.headers.get("set-cookie")!.split(";")[0];
+    const me = await fetch(`${base}/api/me`, { headers: { Cookie: cookie } });
+    assert.equal(((await me.json()) as { username: string }).username, "neha");
+    // Signed in straight away, and can create a game like anyone else.
+    const c = new Client();
+    c.cookie = cookie;
+    assert.equal((await c.call("/api/games", { rounds: 6, maxPlayers: 3 })).status, 200);
+    // Either the email (any case) or the name works to sign in.
+    assert.equal((await new Client().login("neha@example.COM", "neha-pass")).status, 200);
+    assert.equal((await new Client().login("NEHA", "neha-pass")).status, 200);
+    assert.equal((await new Client().login("neha@example.com", "wrong-pass")).status, 401);
+    // The admin sees the account and its email.
+    const users = (await admin.call("/api/admin/users")).data as { username: string; email?: string }[];
+    assert.equal(users.find((u) => u.username === "neha")?.email, "Neha@Example.com");
+  });
+
+  test("a taken email or name, or a bad one, is refused", async () => {
+    assert.equal((await signup({ email: "neha@example.com", username: "neha2", password: "neha-pass" })).status, 409);
+    assert.equal((await signup({ email: "other@example.com", username: "Neha", password: "neha-pass" })).status, 409);
+    assert.equal((await signup({ email: "other@example.com", username: "asha", password: "x-pass-1" })).status, 409);
+    assert.equal((await signup({ email: "not-an-email", username: "okname", password: "ok-pass-1" })).status, 400);
+    assert.equal((await signup({ email: "a@b.co", username: "Kabir (bot)", password: "ok-pass-1" })).status, 400);
+    assert.equal((await signup({ email: "a@b.co", username: "okname", password: "123" })).status, 400);
+  });
+
+  test("one address can't make accounts without limit", async () => {
+    const codes: number[] = [];
+    for (let i = 0; i < 7; i++) codes.push((await signup({ email: `p${i}@flood.test`, username: `flood${i}`, password: "flood-pass" }, "198.51.100.200")).status);
+    assert.deepEqual(codes.slice(0, 5), [200, 200, 200, 200, 200]);
+    assert.equal(codes[6], 429);
+  });
+
+  test("sign-up can be switched off", async () => {
+    const { server } = createApp({ store, trustProxy: true, openSignup: false });
+    await new Promise<void>((r) => server.listen(0, r));
+    const other = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    assert.deepEqual(await (await fetch(`${other}/api/config`)).json(), { openSignup: false });
+    const r = await fetch(`${other}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "z@z.zz", username: "zzz", password: "zzz-pass" }) });
+    assert.equal(r.status, 403);
+    server.close();
+  });
+});
