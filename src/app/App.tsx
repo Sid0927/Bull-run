@@ -246,7 +246,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
           )}
           <label className="float">
             <input id="username" placeholder=" " autoComplete={signingUp ? "nickname" : "username"} autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
-            <span>{signingUp ? "Player name (shown in games)" : openSignup ? "Email or player name" : "Username"}</span>
+            <span>{signingUp ? "Player name (shown in games)" : openSignup ? "Player name or email" : "Player name"}</span>
           </label>
           {signingUp && <p className="muted small field-hint">3–24 letters, digits, dots, dashes or underscores.</p>}
           <label className="float">
@@ -271,7 +271,11 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
             )}
           </button>
           <p className="muted small center">
-            {!openSignup ? "Accounts are given out by the game's admin." : signingUp ? "At least 6 characters for the password. Forgot it later? Ask the game's admin to reset it." : "New here? Choose Create account above."}
+            {!openSignup
+              ? "Accounts are given out by the game's admin."
+              : signingUp
+                ? "At least 6 characters for the password. Forgot it later? Ask the game's admin to reset it."
+                : "Had an account before? Sign in with your player name. New here? Choose Create account above."}
           </p>
           <button type="button" className="ghost-link" onClick={onRules}>
             <Icon name="book" size={16} /> How to play

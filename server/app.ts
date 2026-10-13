@@ -314,7 +314,14 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       const ok = await checkPassword(String(b.password ?? "").slice(0, 200), u?.passwordHash ?? DUMMY_HASH);
       if (!u || !u.active || u.isBot || !ok) {
         await attempt(u && ok ? "off" : "wrong", u?.id ?? null);
-        throw new HttpError(401, "That username and password don't match.");
+        // Accounts the admin made have no email until the player adds one, so a player trying
+        // theirs gets told to use their name instead (without saying whether the email exists).
+        throw new HttpError(
+          401,
+          username.includes("@")
+            ? "That email and password don't match. If the admin made your account, sign in with your player name; you can add your email once you're in."
+            : "That player name and password don't match.",
+        );
       }
       await attempt("ok", u.id);
       limiter.clear(...keys);
