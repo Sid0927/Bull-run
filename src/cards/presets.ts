@@ -87,15 +87,15 @@ export const PRESETS: Preset[] = [
   {
     id: "president-bomber",
     name: "President & Bomber",
-    blurb: "A President on one side, a Bomber on the other. The Bomber's side wants them together at the end; the President's side wants them apart.",
+    blurb: "Sun has the President, Moon has the Bomber. Moon wants the Bomber in the President's room at the end; Sun wants them apart.",
     config: base({
       title: "President & Bomber",
       teams: [
-        { id: "gov", name: "Government", color: "blue", fills: true, memberName: "Government", goal: "Keep the President safe: your side wins if, when the last round ends, the President and the Bomber are in different groups." },
-        { id: "reb", name: "Rebels", color: "red", fills: true, memberName: "Rebel", goal: "Get the Bomber to the President: your side wins if, when the last round ends, the Bomber is in the same group as the President." },
+        { id: "sun", name: "Sun", color: "gold", fills: true, memberName: "Sun", goal: "Sun wins if, when the last round ends, the President is not in the same room as the Bomber." },
+        { id: "moon", name: "Moon", color: "purple", fills: true, memberName: "Moon", goal: "Moon wins if, when the last round ends, the Bomber is in the same room as the President." },
         { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
       ],
-      roles: [roleFrom("president", "gov"), roleFrom("bomber", "reb"), roleFrom("drifter", "loners", { count: 0 })],
+      roles: [roleFrom("president", "sun"), roleFrom("bomber", "moon"), roleFrom("drifter", "loners", { count: 0 })],
       oddRoleId: "drifter-loners",
       groups: true,
       rounds: [
@@ -103,7 +103,7 @@ export const PRESETS: Preset[] = [
         { minutes: 2, swap: 1 },
         { minutes: 1, swap: 1 },
       ],
-      notes: "When the last round ends, the President and the Bomber show their cards. Same group: the Rebels win. Different groups: the Government wins.",
+      notes: "When the last round ends, the President and the Bomber show their cards. Same room: Moon wins. Different rooms: Sun wins.",
     }),
   },
   {
