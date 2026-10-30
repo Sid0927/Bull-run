@@ -366,3 +366,4 @@
 }
 .hub-tile.cards .pill:not(.pill-move) { background: rgb(255 255 255 / 0.1); color: #f1ecff; border-color: rgb(255 255 255 / 0.18); }
 .hub-tile.cards .pill-move { background: #d9c88f; color: #1b1436; }
+.reset-note { margin: 0; line-height: 1.45; }

@@ -423,10 +423,13 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       if (path === "/api/admin/users" && method === "POST") {
         const b = await body(req);
         const username = String(b.username ?? "").trim();
+        const email = String(b.email ?? "").trim().slice(0, 254);
+        if (!emailOk(email)) throw new HttpError(400, "Every account needs an email address.");
         const bad = checkUsername(username) ?? checkNewPassword(String(b.password ?? ""));
         if (bad) throw new HttpError(400, bad);
         if (await store.userByName(username)) throw new HttpError(409, `There is already an account called ${username}.`);
-        const u = await store.createUser(username, await hashPassword(String(b.password)), b.isAdmin === true);
+        if (await store.userByEmail(email)) throw new HttpError(409, `There is already an account with ${email}.`);
+        const u = await store.createUser(username, await hashPassword(String(b.password)), b.isAdmin === true, email);
         log(`admin ${user.username} created ${u.username}`);
         return json(res, 200, adminView(u));
       }

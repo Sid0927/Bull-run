@@ -1,12 +1,16 @@
 # Sid's Arcade
 
 One website, one account, several games. Everyone signs in first (with an account they create,
-or one the admin gives them) and then picks a game:
+or one the admin gives them; every account needs an email) and then picks a game:
 
 - **Bull Run**: a physical tabletop stock market game for 3–5 players, played online. Its rules,
   engine and simulator are described below.
 - **Undercover**: secret role cards for a game played together in one room. Each phone is a
   player's card. See [Undercover](#undercover) below.
+
+On 30 October 2026 every account except the admins was removed, with every Bull Run game, so
+that everybody signs up again with an email. That ran once, on the first start of the server
+after the change (`resetAccountsOnce` in `server/store.ts`, marked done in `app_flags`).
 
 ## Bull Run: play-test software
 

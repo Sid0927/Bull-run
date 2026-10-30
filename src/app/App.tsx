@@ -84,6 +84,8 @@ export function App() {
     setMe(null);
     go("#/");
   };
+  // Every account has an email; one made before that was required is asked for it first.
+  if (!me.email) return <EmailGate me={me} onMe={setMe} onSignOut={signOut} />;
   const inBullRun = route.name === "lobby" || route.name === "game" || route.name === "practice";
   const shell = (body: ReactNode, wide = false) => (
     <div className={`app ${wide ? "wide" : ""}`}>
@@ -273,6 +275,11 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
             </div>
           )}
           <h2>{signingUp ? "Make your account" : "Sign in to play"}</h2>
+          {!signingUp && openSignup && (
+            <p className="notice small reset-note">
+              <b>Accounts were reset on 30 October 2026.</b> If you played before, choose <b>Create account</b> and sign up again with your email.
+            </p>
+          )}
           {signingUp && (
             <label className="float">
               <input id="email" type="email" placeholder=" " autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -310,7 +317,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
               ? "Accounts are given out by the game's admin."
               : signingUp
                 ? "At least 6 characters for the password. Forgot it later? Ask the game's admin to reset it."
-                : "Had an account before? Sign in with your player name. New here? Choose Create account above."}
+                : "New here? Choose Create account above."}
           </p>
           <button type="button" className="ghost-link" onClick={onRules}>
             <Icon name="book" size={16} /> How to play Bull Run
@@ -434,6 +441,58 @@ const STATUS: Record<GameSummary["status"], string> = { lobby: "Waiting room", p
 function greeting() {
   const h = new Date().getHours();
   return h < 5 ? "Burning the midnight oil" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+/** Shown to an account with no email: it has to add one before anything else. */
+function EmailGate({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignOut: () => void }) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <main className="login">
+      <div className="login-glow" aria-hidden="true" />
+      <div className="login-center">
+        <div className="login-hero">
+          <div className="logo-halo">
+            <CentreLogo size={64} />
+          </div>
+        </div>
+        <form
+          className="login-card"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError("");
+            try {
+              onMe(await api.setEmail(email.trim()));
+            } catch (err) {
+              setError((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <h2>Add your email</h2>
+          <p className="muted small">Hi {me.username}. Every account on {CENTRE_NAME} needs an email now. You can sign in with it as well as your name.</p>
+          <label className="float">
+            <input id="gate-email" type="email" placeholder=" " autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <span>Email</span>
+          </label>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary big shine" disabled={busy}>
+            {busy ? <span className="spinner" aria-label="Saving" /> : <>Save and continue <Icon name="arrow" size={18} /></>}
+          </button>
+          <button type="button" className="ghost-link" onClick={onSignOut}>
+            <Icon name="out" size={16} /> Sign out
+          </button>
+        </form>
+      </div>
+    </main>
+  );
 }
 
 /** Opened from the link in a confirmation email. */
@@ -933,6 +992,7 @@ function ChangePassword() {
 function Admin({ me }: { me: Me }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
+  const [newEmail, setNewEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -1009,8 +1069,9 @@ function Admin({ me }: { me: Me }) {
             e.preventDefault();
             const name = username.trim();
             attempt(async () => {
-              await api.createUser(name, password, false);
+              await api.createUser(name, newEmail.trim(), password, false);
               setUsername("");
+              setNewEmail("");
               setPassword("");
             }, `Account ${name} created. Give them the username and password.`);
           }}
@@ -1020,12 +1081,16 @@ function Admin({ me }: { me: Me }) {
             <input id="new-user" autoCapitalize="none" autoComplete="off" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
           </label>
           <label>
+            Email
+            <input id="new-user-email" type="email" autoCapitalize="none" autoComplete="off" spellCheck={false} value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+          </label>
+          <label>
             Password
             <input id="new-user-pw" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </label>
           <button className="primary">Create account</button>
         </form>
-        <p className="muted small">Usernames are 3–24 letters, digits, dots, dashes or underscores. Passwords need 6 characters or more.</p>
+        <p className="muted small">Every account needs an email. Usernames are 3–24 letters, digits, dots, dashes or underscores. Passwords need 6 characters or more.</p>
       </section>
 
       <section className="panel">
