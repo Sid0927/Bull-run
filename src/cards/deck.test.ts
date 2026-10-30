@@ -113,3 +113,12 @@ test("every library role is a usable role on its own", () => {
     assert.ok("cards" in buildDeck(c, 8), lib.id);
   }
 });
+
+test("a pasted setup that repeats an id gets unique ids", () => {
+  const c = cleanConfig({
+    teams: [{ id: "a", name: "A", color: "red", fills: true, goal: "x" }, { id: "a", name: "B", color: "blue", fills: true, goal: "y" }],
+    roles: [{ id: "r", libId: "leader", teamId: "a" }, { id: "r", libId: "scout", teamId: "a" }],
+  });
+  assert.equal(new Set(c.teams.map((t) => t.id)).size, 2);
+  assert.equal(new Set(c.roles.map((r) => r.id)).size, 2);
+});

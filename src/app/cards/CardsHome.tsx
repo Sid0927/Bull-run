@@ -110,6 +110,34 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
         </section>
       </div>
 
+      <details className="panel hh-how" open={rooms !== null && rooms.length === 0}>
+        <summary>
+          <Icon name="book" /> How it works <Icon name="chevron" size={18} className="hh-chev" />
+        </summary>
+        <ol className="hh-how-steps">
+          <li>
+            <span className="hh-how-icon"><Icon name="users" /></span>
+            <span><b>Join</b> with the room code, or the link the host shares. Keep your phone with you.</span>
+          </li>
+          <li>
+            <span className="hh-how-icon"><Icon name="eye" /></span>
+            <span><b>Look</b> at your card when it is dealt: tap it, shield the screen, and it turns itself back over.</span>
+          </li>
+          <li>
+            <span className="hh-how-icon"><Icon name="flag" /></span>
+            <span><b>Play for your goal.</b> Your side's goal is written on your card; a Loner's is its own.</span>
+          </li>
+          <li>
+            <span className="hh-how-icon"><Icon name="shield" /></span>
+            <span><b>Show</b> someone your team or your whole card, full screen. Showing goes both ways: you both show, or nobody does.</span>
+          </li>
+          <li>
+            <span className="hh-how-icon"><Icon name="timer" /></span>
+            <span><b>Rounds</b> run on a shared timer. When it ends, the groups trade players in person.</span>
+          </li>
+        </ol>
+      </details>
+
       <section className="stack">
         <h2 className="section-title">Your rooms</h2>
         {rooms === null ? (

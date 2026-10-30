@@ -445,3 +445,24 @@
 .hh-flip-side.front .hh-face { grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .hh-face-desc { font-size: 14px; }
 .hh-face-goal p { font-size: 13.5px; }
+
+/* Sides and their goals, in the waiting room */
+.hh-sides { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hh-sides li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--team) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--team) 30%, var(--line)); border-left: 4px solid var(--team); }
+.hh-side-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.hh-side-goal { font-size: 14px; line-height: 1.4; }
+.hh-test-avatar { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--foil) 18%, var(--panel-2)); color: var(--foil); border: 1px dashed color-mix(in srgb, var(--foil) 60%, transparent); }
+.hh-how { padding: 0; }
+.hh-how summary { display: flex; align-items: center; gap: 8px; padding: 16px 18px; cursor: pointer; font-family: var(--font-display); font-size: 21px; font-weight: 700; list-style: none; }
+.hh-how summary::-webkit-details-marker { display: none; }
+.hh-how summary .icon:first-child { color: var(--accent); }
+.hh-how .hh-chev { margin-left: auto; color: var(--muted); transition: transform 0.2s var(--ease); }
+.hh-how[open] .hh-chev { transform: rotate(90deg); }
+.hh-how-steps { list-style: none; margin: 0; padding: 0 18px 18px; display: grid; gap: 10px; }
+.hh-how-steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; line-height: 1.45; }
+.hh-how-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); }
+.hh-face-blank { background: #fffdf8; }
+.hh-removed { display: grid; gap: 6px; margin-top: 12px; padding: 12px; border-radius: 14px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); }
+.hh-removed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hh-removed li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hh-removed li button { min-height: 36px; }
