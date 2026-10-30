@@ -1,7 +1,7 @@
-/** Hidden Hand: what a host sets up, what the server keeps, and what each phone is sent. */
+/** Undercover: what a host sets up, what the server keeps, and what each phone is sent. */
 
 /** The game's name, in one place. */
-export const CARDS_NAME = "Hidden Hand";
+export const CARDS_NAME = "Undercover";
 
 /** How a role's holder may show their card to somebody else. */
 export type ShowRule = "any" | "team" | "full" | "none";

@@ -7,6 +7,7 @@ import { STRATEGIES } from "../src/sim/strategies.ts";
 import { Rng } from "../src/engine/rng.ts";
 import { createApp, ensureAdmin } from "./app.ts";
 import { MemoryStore, PgStore, type Store } from "./store.ts";
+import { hashPassword } from "./auth.ts";
 import { recordingMailer } from "./mail.ts";
 
 // TEST_DATABASE_URL runs the same tests against a real (empty) Postgres database.
@@ -73,18 +74,18 @@ describe("accounts", () => {
     assert.equal((await admin.login("boss", "nope")).status, 401);
     assert.equal((await admin.login("boss", "boss-password")).status, 200);
     for (const [i, name] of ["asha", "bilal", "chitra"].entries()) {
-      const r = await admin.call("/api/admin/users", { username: name, password: `${name}-pw1` });
+      const r = await admin.call("/api/admin/users", { username: name, email: `${name}@test.example`, password: `${name}-pw1` });
       assert.equal(r.status, 200, JSON.stringify(r.data));
       assert.equal((await players[i].login(name, `${name}-pw1`)).status, 200);
     }
-    assert.equal((await admin.call("/api/admin/users", { username: "asha", password: "whatever1" })).status, 409);
+    assert.equal((await admin.call("/api/admin/users", { username: "asha", email: "asha@test.example", password: "whatever1" })).status, 409);
     assert.equal((await players[0].call("/api/admin/users")).status, 403);
     assert.equal((await new Client().call("/api/games")).status, 401);
   });
 
   test("the admin can reset a password, which signs that player out", async () => {
     const extra = new Client();
-    const made = await admin.call("/api/admin/users", { username: "dev", password: "dev-pw-1" });
+    const made = await admin.call("/api/admin/users", { username: "dev", email: "dev@test.example", password: "dev-pw-1" });
     await extra.login("dev", "dev-pw-1");
     assert.equal((await extra.call("/api/me")).status, 200);
     await admin.call(`/api/admin/users/${made.data.id}`, { password: "dev-pw-2" });
@@ -162,7 +163,7 @@ describe("a game played from three phones", () => {
 
   test("outsiders cannot watch; the admin can", async () => {
     const outsider = new Client();
-    const made = await admin.call("/api/admin/users", { username: "eve", password: "eve-pw-1" });
+    const made = await admin.call("/api/admin/users", { username: "eve", email: "eve@test.example", password: "eve-pw-1" });
     assert.equal(made.status, 200);
     await outsider.login("eve", "eve-pw-1");
     const r = await fetch(`${base}/api/games/${game.id}/stream`, { headers: { Cookie: outsider.cookie } });
@@ -220,7 +221,7 @@ describe("fixes from the security review", () => {
   });
 
   test("switching an account off ends its open game connection", async () => {
-    const made = await admin.call("/api/admin/users", { username: "zed", password: "zed-pass1" });
+    const made = await admin.call("/api/admin/users", { username: "zed", email: "zed@test.example", password: "zed-pass1" });
     const zed = new Client();
     await zed.login("zed", "zed-pass1");
     const g: GameSummary = (await zed.call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
@@ -271,7 +272,7 @@ describe("fixes from the security review", () => {
 
   test("a player can't pile up games nobody has joined", async () => {
     const solo = new Client();
-    await admin.call("/api/admin/users", { username: "solo", password: "solo-pass1" });
+    await admin.call("/api/admin/users", { username: "solo", email: "solo@test.example", password: "solo-pass1" });
     await solo.login("solo", "solo-pass1");
     for (let i = 0; i < 5; i++) assert.equal((await solo.call("/api/games", { rounds: 6, maxPlayers: 3 })).status, 200);
     assert.equal((await solo.call("/api/games", { rounds: 6, maxPlayers: 3 })).status, 429);
@@ -321,7 +322,7 @@ describe("the admin swaps a player", () => {
     }
     const before = (await admin.snapshot(g.id)).view!.players[1];
 
-    assert.equal((await admin.call("/api/admin/users", { username: "Sid", password: "sid-pass-1" })).status, 200);
+    assert.equal((await admin.call("/api/admin/users", { username: "Sid", email: "sid@test.example", password: "sid-pass-1" })).status, 200);
     const sid = new Client();
     await sid.login("Sid", "sid-pass-1");
     // Only the admin may swap; nobody can be put in twice.
@@ -487,8 +488,10 @@ describe("confirming emails", () => {
   });
 
   test("an older account adds its email; changing it later needs the password", async () => {
+    // Accounts made before email was required have none: make one the way they were made.
+    await store.createUser("oldtimer", await hashPassword("oldtimer-pw1"), false);
     const c = new Client();
-    await c.login("chitra", "chitra-pw1");
+    await c.login("oldtimer", "oldtimer-pw1");
     assert.equal((await c.call("/api/me")).data.email, null);
     assert.equal((await c.call("/api/me/email", { email: "nope" })).status, 400);
     assert.equal((await c.call("/api/me/email", { email: "kiran@example.com" })).status, 409); // someone else's
@@ -499,10 +502,10 @@ describe("confirming emails", () => {
     assert.equal((await verify(await linkTo("chitra@example.com"))).status, 200);
     assert.equal((await c.call("/api/me")).data.emailVerified, true);
     // Signing in with the new email works too.
-    assert.equal((await new Client().login("CHITRA@example.com", "chitra-pw1")).status, 200);
+    assert.equal((await new Client().login("CHITRA@example.com", "oldtimer-pw1")).status, 200);
     // A different address needs the password, and starts unconfirmed.
     assert.equal((await c.call("/api/me/email", { email: "c2@example.com", password: "wrong" })).status, 400);
-    const changed = await c.call("/api/me/email", { email: "c2@example.com", password: "chitra-pw1" });
+    const changed = await c.call("/api/me/email", { email: "c2@example.com", password: "oldtimer-pw1" });
     assert.equal(changed.status, 200);
     assert.equal(changed.data.emailVerified, false);
     // An old link for the previous address no longer confirms anything.
@@ -510,7 +513,7 @@ describe("confirming emails", () => {
     assert.equal(resent.status, 200);
     assert.equal((await verify(await linkTo("c2@example.com"))).status, 200);
     // Asking again and again is capped.
-    await c.call("/api/me/email", { email: "c3@example.com", password: "chitra-pw1" });
+    await c.call("/api/me/email", { email: "c3@example.com", password: "oldtimer-pw1" });
     const codes: number[] = [];
     for (let i = 0; i < 4; i++) codes.push((await c.call("/api/me/email/resend", {})).status);
     assert.ok(codes.includes(429), codes.join(","));

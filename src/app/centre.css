@@ -1,11 +1,11 @@
-/* Sid's Game Centre: the shell around the games, and Hidden Hand.
-   The centre keeps Bull Run's paper-and-terminal look; Hidden Hand swaps the green for a
+/* Sid's Arcade: the shell around the games, and Undercover.
+   The arcade keeps Bull Run's paper-and-terminal look; Undercover swaps the green for a
    midnight violet and a gold foil, so you always know which table you are sitting at. */
 
 /* ── Brand and the game picker ────────────────────────────────────── */
 .centre-logo { flex: none; display: inline-block; vertical-align: middle; filter: drop-shadow(0 4px 12px color-mix(in srgb, #7c4ddb 35%, transparent)); }
 .centre-word { display: inline-flex; align-items: baseline; gap: 0.18em; white-space: nowrap; }
-.centre-word small { font-size: 0.62em; letter-spacing: 0.08em; color: var(--muted); }
+.centre-word small { font-family: var(--font-serif); font-style: italic; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 0.82em; color: var(--ink); opacity: 0.8; }
 @media (max-width: 420px) { .centre-word { font-size: 19px; } }
 @media (max-width: 350px) { .centre-word small { display: none; } }
 .section-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 3px 10px 3px 5px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none; font-weight: 600; font-size: 13px; white-space: nowrap; }
@@ -62,7 +62,7 @@
 .hub-tile-cards span { transition: transform 0.35s var(--ease); }
 @media (max-width: 420px) { .hub-tile { padding: 18px; min-height: 0; } .hub-tile-name { font-size: 28px; } .hub-tile-cards { opacity: 0.5; } }
 
-/* ── Hidden Hand: its own colours ─────────────────────────────────── */
+/* ── Undercover: its own colours ─────────────────────────────────── */
 .hh {
   --accent: #6a3fd1; --accent-2: #8a5cf0; --accent-soft: #ece4fd; --on-accent: #ffffff;
   --foil: #b8923a; --midnight: #1b1436; --midnight-2: #2a1f59;
@@ -366,3 +366,4 @@
 }
 .hub-tile.cards .pill:not(.pill-move) { background: rgb(255 255 255 / 0.1); color: #f1ecff; border-color: rgb(255 255 255 / 0.18); }
 .hub-tile.cards .pill-move { background: #d9c88f; color: #1b1436; }
+.reset-note { margin: 0; line-height: 1.45; }

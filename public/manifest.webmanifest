@@ -1,7 +1,7 @@
 {
-  "name": "Sid's Game Centre",
-  "short_name": "Game Centre",
-  "description": "Bull Run, Hidden Hand and more: games for the people you play with.",
+  "name": "Sid's Arcade",
+  "short_name": "Sid's Arcade",
+  "description": "Bull Run, Undercover and more: games for the people you play with.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#060a09",

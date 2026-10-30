@@ -1,12 +1,16 @@
-# Sid's Game Centre
+# Sid's Arcade
 
 One website, one account, several games. Everyone signs in first (with an account they create,
-or one the admin gives them) and then picks a game:
+or one the admin gives them; every account needs an email) and then picks a game:
 
 - **Bull Run**: a physical tabletop stock market game for 3–5 players, played online. Its rules,
   engine and simulator are described below.
-- **Hidden Hand**: secret role cards for a game played together in one room. Each phone is a
-  player's card. See [Hidden Hand](#hidden-hand) below.
+- **Undercover**: secret role cards for a game played together in one room. Each phone is a
+  player's card. See [Undercover](#undercover) below.
+
+On 30 October 2026 every account except the admins was removed, with every Bull Run game, so
+that everybody signs up again with an email. That ran once, on the first start of the server
+after the change (`resetAccountsOnce` in `server/store.ts`, marked done in `app_flags`).
 
 ## Bull Run: play-test software
 
@@ -69,12 +73,12 @@ npm start            # http://localhost:3000, admin / admin123, nothing saved wi
 
 For development, `npm run server` (API with reload) and `npm run dev` (app on :5173) together.
 
-## Hidden Hand
+## Undercover
 
 For any game of hidden teams and roles played around a table, without a deck of cards. The host
 sets it up; everyone else needs only the room code.
 
-- **Host:** Hidden Hand → **Start a room**, then **Edit setup**: name the teams (and their
+- **Host:** Undercover → **Start a room**, then **Edit setup**: name the teams (and their
   colours), add roles with how many copies, what the card says, and how it may be shown (team or
   full card, team only, full card only, or not at all). A role can also *show as* another team on
   a team share. Start from a ready-made setup, keep your own on your phone, or copy one and send

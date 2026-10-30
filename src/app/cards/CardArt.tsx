@@ -13,7 +13,7 @@ export function teamStyle(team: Team | undefined): CSSProperties {
   return { "--team": c.bg, "--team-ink": c.ink } as CSSProperties;
 }
 
-/** The Hidden Hand mark: a hand of three cards with an eye on the front one. */
+/** The Undercover mark: a hand of three cards with an eye on the front one. */
 export function HandMark({ size = 40 }: { size?: number }) {
   return (
     <svg className="hh-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">

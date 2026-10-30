@@ -1,5 +1,5 @@
 /**
- * Hidden Hand: secret role cards for a game played in person, each phone holding one card.
+ * Undercover: secret role cards for a game played in person, each phone holding one card.
  *
  * A room is one evening. A player is a signed-in account, so a phone that reloads or loses signal
  * is back in its seat by itself. Every change is written to the store whole, so a restart (a

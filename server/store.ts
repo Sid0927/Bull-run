@@ -107,7 +107,7 @@ export interface Store {
   replacePlayer(gameId: number, seat: number, userId: number): Promise<void>;
   actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
-  /** Hidden Hand rooms, kept whole as JSON: one evening's state, read back after a restart. */
+  /** Undercover rooms, kept whole as JSON: one evening's state, read back after a restart. */
   cardRooms(): Promise<{ code: string; data: unknown }[]>;
   saveCardRoom(code: string, data: unknown): Promise<void>;
   deleteCardRoom(code: string): Promise<void>;
@@ -420,6 +420,34 @@ export class PgStore implements Store {
   }
   async init() {
     await this.pool.query(SCHEMA);
+    await this.resetAccountsOnce();
+  }
+
+  /**
+   * The October 2026 fresh start: every account except the admins, every Bull Run game and
+   * every Undercover room goes, so that everybody signs up again with an email. Runs once,
+   * the first time a server with this code starts; the marker row stops it running again.
+   */
+  private async resetAccountsOnce() {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now())");
+      // The insert is the lock: a second server starting at the same moment waits here, then finds the row.
+      const claimed = await client.query("INSERT INTO app_flags (name) VALUES ('accounts_reset_2026_10') ON CONFLICT DO NOTHING");
+      if (claimed.rowCount === 1) {
+        await client.query("DELETE FROM card_rooms");
+        await client.query("DELETE FROM games"); // their players and moves go with them
+        await client.query("DELETE FROM users WHERE NOT is_admin"); // sessions and email links go with them
+        console.log("[bull-run] Accounts reset: every non-admin account, Bull Run game and Undercover room was removed.");
+      }
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   }
   async close() {
     await this.pool.end();

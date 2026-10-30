@@ -91,7 +91,7 @@ export function BullLogo({ size = 36 }: { size?: number }) {
   );
 }
 
-/** The Game Centre mark: a die and a card leaning on each other, one from each kind of game. */
+/** The arcade's mark: a die and a card leaning on each other, one from each kind of game. */
 export function CentreLogo({ size = 36 }: { size?: number }) {
   return (
     <svg className="centre-logo" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
