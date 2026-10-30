@@ -85,6 +85,11 @@ sets it up; everyone else needs only the room code.
   shows the other side's colour on a team share). There is no typing in roles of your own: every
   card says something that has been thought through. Start from a ready-made setup, keep your
   own on your phone, or copy one and send it to somebody.
+- **Trying it alone:** **Try it alone** on the Undercover screen (or **+ test player** in a
+  room) adds pretend players. Only the host sees their cards, and can open any of them and
+  hold it up as that player would, so a setup can be dealt and played through on one phone.
+- **If the host's phone dies:** after 90 seconds without a word from it, anyone in the room
+  can take over as host.
 - **Dealing:** roles go in at their counts, and teams marked *fills the deck* make up the rest,
   kept level. An odd player can get a chosen role instead; one card can be set aside unseen.
   Players can be split into two groups at random.

@@ -1,7 +1,7 @@
 /** One room: the waiting room before the deal, then this phone's card, the timer and the host's tools. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildDeck, deckSummary } from "../../cards/deck.ts";
-import { CARDS_NAME, SHOW_LABELS, type Card, type Config, type PlayerView, type RoomView } from "../../cards/types.ts";
+import { CARDS_NAME, MAX_TEST_PLAYERS, SHOW_LABELS, type Card, type Config, type PlayerView, type RoomView } from "../../cards/types.ts";
 import type { Me } from "../../shared/api.ts";
 import { Avatar, Icon } from "../ui.tsx";
 import { CardsError, cardsApi } from "./api.ts";
@@ -17,7 +17,8 @@ function useRoom(code: string) {
   const take = useCallback((v: RoomView) => {
     wasIn.current = true;
     offset.current = v.serverNow - Date.now();
-    setView((old) => (old && old.version > v.version ? old : v));
+    // An older view never replaces a newer one, except across a restart, when versions start again.
+    setView((old) => (old && old.boot === v.boot && old.version > v.version ? old : v));
     setError(null);
   }, []);
   const load = useCallback(
@@ -36,18 +37,27 @@ function useRoom(code: string) {
     [code, take],
   );
   const inRoom = view !== null;
+  const [stream, setStream] = useState(0);
   useEffect(() => {
     if (!inRoom) return;
     let es: EventSource | null = null;
+    let retry = 0;
     try {
       es = cardsApi.events(code);
       es.onmessage = () => load();
       es.addEventListener("gone", () => load());
+      // A refused reconnect (the server restarting behind a proxy) closes it for good: open a new one.
+      es.onerror = () => {
+        if (es?.readyState === EventSource.CLOSED) retry = window.setTimeout(() => setStream((n) => n + 1), 3000);
+      };
     } catch {
       /* no stream: the poll carries it */
     }
-    return () => es?.close();
-  }, [code, inRoom, load]);
+    return () => {
+      window.clearTimeout(retry);
+      es?.close();
+    };
+  }, [code, inRoom, load, stream]);
   useEffect(() => {
     load();
     const t = setInterval(load, 20_000);
@@ -160,6 +170,16 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
           {note.text}
         </p>
       )}
+      {view.hostAway && (
+        <div className="notice hh-host-away" role="status">
+          <span>
+            <b>{host?.name ?? "The host"}</b> hasn't been seen for a while. If their phone has gone, someone can take over.
+          </span>
+          <button disabled={busy} onClick={() => act(() => cardsApi.claimHost(code), "You're the host now.")}>
+            <Icon name="crown" size={16} /> Take over
+          </button>
+        </div>
+      )}
       {view.revealed ? (
         <RevealBoard view={view} />
       ) : view.dealt ? (
@@ -167,6 +187,7 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
       ) : (
         <Waiting view={view} hostName={host?.name ?? ""} onEdit={() => setEditing(true)} />
       )}
+      {view.host && view.dealt && !view.revealed && view.players.some((p) => p.test) && <TestCards view={view} />}
       {view.dealt && view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
       {view.dealt && view.config.groups && <Groups view={view} act={act} busy={busy} />}
       {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={!view.dealt} />}
@@ -330,20 +351,35 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
   const card = view.myCard as Card;
   const [open, setOpen] = useState(false);
   const [showing, setShowing] = useState<"team" | "full" | null>(null);
+  const [refused, setRefused] = useState(false);
+  const refusedTimer = useRef<number>(0);
   const timer = useRef<number>(0);
-  // A new deal turns the card face down again.
+  // A new deal turns the card face down again, and brings it into view: the host dealt from the
+  // bottom of the page, and everybody else may have scrolled down to read the house rules.
   useEffect(() => {
     setOpen(false);
     setShowing(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [view.deal]);
   const flip = () => {
     window.clearTimeout(timer.current);
     if (!open) timer.current = window.setTimeout(() => setOpen(false), 8000);
     setOpen(!open);
   };
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(timer.current);
+      window.clearTimeout(refusedTimer.current);
+    },
+    [],
+  );
   if (!card) return null;
   const canTeam = card.show === "any" || card.show === "team";
+  const refuse = () => {
+    window.clearTimeout(refusedTimer.current);
+    setRefused(true);
+    refusedTimer.current = window.setTimeout(() => setRefused(false), 3500);
+  };
   const canFull = card.show === "any" || card.show === "full";
   const group = view.myGroup;
   return (
@@ -353,35 +389,39 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
           <Icon name="swap" size={16} /> You start in <b>{view.config.groupNames[group]}</b>
         </p>
       )}
-      <button className={`hh-flip ${open ? "open" : ""}`} onClick={flip} aria-label={open ? "Hide your card" : "Look at your card"} aria-pressed={open}>
+      {/* Open, the button's name is the card itself, so a screen reader reads the role out. */}
+      <button className={`hh-flip ${open ? "open" : ""}`} onClick={flip} aria-label={open ? undefined : "Look at your card"} aria-pressed={open}>
         <span className="hh-flip-inner">
-          <span className="hh-flip-side back">
+          <span className="hh-flip-side back" aria-hidden={open}>
             <CardBack>
               <span className="hh-back-hint">
                 <Icon name="eye" size={16} /> Tap to look
               </span>
             </CardBack>
           </span>
-          <span className="hh-flip-side front">
+          <span className="hh-flip-side front" aria-hidden={!open}>
             <CardFace card={card} config={view.config} />
           </span>
         </span>
       </button>
       <p className="muted small center hh-flip-note">{open ? "Tap the card to hide it. It hides by itself after a few seconds." : "Only you can see this. Shield the screen when you look."}</p>
+      {/* Both buttons look the same on every card: a disabled one would tell a neighbour the card is
+          Silent or a Veil. A card that can't be shown that way says so only when it is asked to. */}
       <div className="hh-show-btns">
-        {/* Never in the team's colour: a glance at the button would give the team away. */}
-        <button className="hh-show-btn team" disabled={!canTeam} onClick={() => setShowing("team")}>
+        <button className="hh-show-btn team" onClick={() => (canTeam ? setShowing("team") : refuse())}>
           <Icon name="shield" /> <span>Show team</span>
         </button>
-        <button className="hh-show-btn full" disabled={!canFull} onClick={() => setShowing("full")}>
+        <button className="hh-show-btn full" onClick={() => (canFull ? setShowing("full") : refuse())}>
           <Icon name="card" /> <span>Show card</span>
         </button>
       </div>
-      {card.show !== "any" && (
-        <p className="muted small center">
-          <Icon name="lock" size={14} /> {card.show === "none" ? "This card can't be shown to anyone." : card.show === "team" ? "This card can only show its team." : "This card can only be shown whole."}
-        </p>
-      )}
+      <p className="muted small center hh-refusal" role="status">
+        {refused && (
+          <>
+            <Icon name="lock" size={14} /> {card.show === "none" ? "Your card can't be shown to anyone." : card.show === "team" ? "Your card can only show its team." : "Your card can only be shown whole."}
+          </>
+        )}
+      </p>
       {showing && <ShowScreen card={card} config={view.config} mode={showing} name={me.username} onClose={() => setShowing(null)} />}
     </section>
   );
@@ -397,6 +437,7 @@ function Countdown({ view, offset, busy, act }: { view: RoomView; offset: number
   const running = timer.endsAt !== null;
   useEffect(() => {
     if (!running) return;
+    setNow(Date.now() + offset); // at once, or the first frame counts from a stale time
     const t = setInterval(() => setNow(Date.now() + offset), 200);
     return () => clearInterval(t);
   }, [running, offset]);
@@ -516,12 +557,20 @@ function HouseRules({ notes, open }: { notes: string; open: boolean }) {
 
 function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<RoomView>) => Promise<boolean | undefined>; busy: boolean }) {
   const [menu, setMenu] = useState<number | null>(null);
+  const tests = view.players.filter((p) => p.test).length;
   if (view.dealt && view.config.groups) return null; // the groups already list everybody
   return (
     <section className="panel hh-players">
-      <h2>
-        <Icon name="users" /> Players <span className="count">{view.players.length}</span>
-      </h2>
+      <div className="hh-section-head">
+        <h2>
+          <Icon name="users" /> Players <span className="count">{view.players.length}</span>
+        </h2>
+        {view.host && !view.dealt && tests > 0 && (
+          <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => cardsApi.removeTests(view.code))}>
+            Remove test players
+          </button>
+        )}
+      </div>
       <ul>
         {view.players.map((p: PlayerView) => (
           <li key={p.id}>
@@ -530,6 +579,7 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
               {p.name}
               {p.id === view.me && <span className="muted small"> (you)</span>}
             </span>
+            {p.test && <span className="tag hh-test-tag">Test</span>}
             {p.host && (
               <span className="hh-host-tag">
                 <Icon name="crown" size={14} /> Host
@@ -542,15 +592,17 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
                 </button>
                 {menu === p.id && (
                   <span className="hh-player-actions">
-                    <button
-                      disabled={busy}
-                      onClick={() => {
-                        setMenu(null);
-                        act(() => cardsApi.host(view.code, p.id));
-                      }}
-                    >
-                      <Icon name="crown" size={16} /> Make host
-                    </button>
+                    {!p.test && (
+                      <button
+                        disabled={busy}
+                        onClick={() => {
+                          setMenu(null);
+                          act(() => cardsApi.host(view.code, p.id));
+                        }}
+                      >
+                        <Icon name="crown" size={16} /> Make host
+                      </button>
+                    )}
                     {!view.dealt && (
                       <button
                         className="danger-outline"
@@ -570,6 +622,74 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
           </li>
         ))}
       </ul>
+      {view.host && !view.dealt && (
+        <div className="hh-test-add">
+          <p className="muted small">
+            <Icon name="robot" size={16} /> Nobody to play with? Add test players and open their cards from your phone.
+          </p>
+          <div className="row">
+            <button disabled={busy || tests >= MAX_TEST_PLAYERS} onClick={() => act(() => cardsApi.addTests(view.code, 1))}>
+              <Icon name="plus" size={16} /> 1 test player
+            </button>
+            <button disabled={busy || tests >= MAX_TEST_PLAYERS} onClick={() => act(() => cardsApi.addTests(view.code, 5))}>
+              <Icon name="plus" size={16} /> 5
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** For the host trying a game alone: each test player's card, face down until opened. */
+function TestCards({ view }: { view: RoomView }) {
+  const [open, setOpen] = useState<PlayerView | null>(null);
+  const [showing, setShowing] = useState<"team" | "full" | null>(null);
+  const tests = view.players.filter((p) => p.test && p.testCard);
+  useEffect(() => {
+    setOpen(null);
+    setShowing(null);
+  }, [view.deal]);
+  const card = open?.testCard;
+  return (
+    <section className="panel hh-testcards">
+      <h2>
+        <Icon name="robot" /> Test players' cards
+      </h2>
+      <p className="muted small">Only you see these. Open one to play its part: look at it, or hold it up as that player would.</p>
+      <ul>
+        {tests.map((p) => (
+          <li key={p.id}>
+            <span className="hh-player-name truncate">{p.name}</span>
+            {view.config.groups && p.group !== undefined && <span className="muted small">{view.config.groupNames[p.group]}</span>}
+            <button onClick={() => setOpen(p)}>
+              <Icon name="eye" size={16} /> Open
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open && card && (
+        <div className="hh-sheet-backdrop" onClick={() => setOpen(null)}>
+          <div className="hh-sheet" role="dialog" aria-modal="true" aria-label={`${open.name}'s card`} onClick={(e) => e.stopPropagation()}>
+            <div className="hh-sheet-head">
+              <b>{open.name}</b>
+              <button className="icon-btn" aria-label="Close" onClick={() => setOpen(null)}>
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <CardFace card={card} config={view.config} />
+            <div className="hh-show-btns">
+              <button className="hh-show-btn team" disabled={card.show === "full" || card.show === "none"} onClick={() => setShowing("team")}>
+                <Icon name="shield" /> <span>Show team</span>
+              </button>
+              <button className="hh-show-btn full" disabled={card.show === "team" || card.show === "none"} onClick={() => setShowing("full")}>
+                <Icon name="card" /> <span>Show card</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {open && card && showing && <ShowScreen card={card} config={view.config} mode={showing} name={open.name} onClose={() => setShowing(null)} />}
     </section>
   );
 }
@@ -635,7 +755,7 @@ function HostBar({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
         <button
           disabled={busy}
           onClick={() => {
-            if (confirm("Shuffle and deal new cards to everyone?")) act(() => cardsApi.deal(view.code), "New cards dealt.");
+            if (confirm("Shuffle and deal new cards to everyone?")) act(() => cardsApi.deal(view.code, true), "New cards dealt.");
           }}
         >
           <Icon name="shuffle" size={18} /> Deal again

@@ -9,7 +9,7 @@ import { randomInt } from "node:crypto";
 import { buildDeck, shuffle, splitGroups } from "../src/cards/deck.ts";
 import { PRESETS, cleanConfig } from "../src/cards/presets.ts";
 import type { Card, CardRoomSummary, Config, RoomView, Timer } from "../src/cards/types.ts";
-import { MAX_PLAYERS } from "../src/cards/types.ts";
+import { MAX_PLAYERS, MAX_TEST_PLAYERS } from "../src/cards/types.ts";
 import type { Store } from "./store.ts";
 
 export class RoomError extends Error {
@@ -27,8 +27,10 @@ export interface Who {
 }
 
 interface Player {
+  /** An account's id; a test player has a negative one, which no account can have. */
   userId: number;
   name: string;
+  test?: boolean;
   card: Card | null;
   group: 0 | 1 | null;
 }
@@ -45,15 +47,23 @@ interface Room {
   timer: Timer;
   touched: number;
   version: number;
+  /** Accounts the host removed: a shared link must not let them straight back in. */
+  kicked?: number[];
 }
 
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I or O: they read as 1 and 0
 const ROOM_TTL = 12 * 60 * 60 * 1000;
+/** A phone polls every 20 seconds; past this, its host is taken to have gone. */
+export const HOST_AWAY_MS = 90_000;
 const MAX_ROOMS = 2000;
 const random = () => randomInt(0, 2 ** 32) / 2 ** 32;
 
 export class CardRooms {
   private rooms = new Map<string, Room>();
+  /** When each player's phone last asked for the room, so a host who has gone can be replaced. */
+  private seen = new Map<string, number>();
+  /** Changes on every start: a phone holding a view from before a restart takes the new one. */
+  readonly boot = Date.now();
   private writes = new Map<string, Promise<void>>();
   private watchers = new Map<string, Set<() => void>>();
 
@@ -110,6 +120,7 @@ export class CardRooms {
       p.name = user.username;
       return;
     }
+    if (room.kicked?.includes(user.id)) throw new RoomError(403, "The host removed you from this room. Ask them to let you back in.");
     if (room.dealt) throw new RoomError(409, "The cards in this room are already dealt. Ask the host to collect them so you can join.");
     if (room.players.length >= MAX_PLAYERS) throw new RoomError(409, `This room is full (${MAX_PLAYERS} players).`);
     room.players.push(this.newPlayer(user));
@@ -134,6 +145,7 @@ export class CardRooms {
   view(code: string, user: Who): RoomView {
     const room = this.get(code);
     const me = this.player(room, user);
+    this.seen.set(`${room.code}:${me.userId}`, this.now());
     return {
       code: room.code,
       me: me.userId,
@@ -143,6 +155,8 @@ export class CardRooms {
         id: p.userId,
         name: p.name,
         host: p.userId === room.hostId,
+        ...(p.test ? { test: true } : {}),
+        ...(p.test && p.card && me.userId === room.hostId ? { testCard: p.card } : {}),
         ...(room.revealed && p.card ? { card: p.card } : {}),
         ...(room.dealt && p.group !== null ? { group: p.group } : {}),
       })),
@@ -154,6 +168,8 @@ export class CardRooms {
       setAside: room.revealed ? room.setAside : null,
       timer: room.timer,
       version: room.version,
+      boot: this.boot,
+      hostAway: me.userId !== room.hostId && this.away(room, room.hostId),
       serverNow: this.now(),
     };
   }
@@ -178,8 +194,10 @@ export class CardRooms {
     this.changed(room);
   }
 
-  deal(code: string, user: Who) {
+  /** Deals. Dealing again over cards already out needs `again`, so a stale Deal button can't reshuffle a game. */
+  deal(code: string, user: Who, again = false) {
     const room = this.hostRoom(code, user);
+    if (room.dealt && !again) throw new RoomError(409, "The cards are already out. Use Deal again to reshuffle.");
     const built = buildDeck(room.config, room.players.length);
     if ("error" in built) throw new RoomError(400, built.error);
     const cards = shuffle(built.cards, random);
@@ -260,13 +278,67 @@ export class CardRooms {
     const room = this.hostRoom(code, user);
     if (playerId === room.hostId) throw new RoomError(400, "The host can't remove themselves. Hand the room to someone else first.");
     if (room.dealt) throw new RoomError(400, "Collect the cards before removing anybody, or the deck no longer matches the table.");
+    const gone = room.players.find((p) => p.userId === playerId);
     room.players = room.players.filter((p) => p.userId !== playerId);
+    if (gone && !gone.test) room.kicked = [...(room.kicked ?? []), playerId];
+    this.changed(room);
+  }
+
+  /** Lets the host back in somebody they removed. */
+  unkick(code: string, user: Who, playerId: number) {
+    const room = this.hostRoom(code, user);
+    room.kicked = (room.kicked ?? []).filter((id) => id !== playerId);
+    this.changed(room);
+  }
+
+  /**
+   * Any player may take over a room whose host's phone has not been heard from for a while
+   * (a flat battery mid-game), or the room would be stuck with nobody able to collect or reveal.
+   */
+  claimHost(code: string, user: Who) {
+    const room = this.get(code);
+    const me = this.player(room, user);
+    if (room.hostId === me.userId) return;
+    if (!this.away(room, room.hostId)) throw new RoomError(409, "The host is still here.");
+    room.hostId = me.userId;
+    this.changed(room);
+  }
+
+  private away(room: Room, userId: number) {
+    const last = this.seen.get(`${room.code}:${userId}`);
+    // Never seen since this server started counts from the start, not as away at once.
+    return this.now() - (last ?? this.boot) > HOST_AWAY_MS;
+  }
+
+  /**
+   * Adds pretend players, so somebody can try a setup alone: the host sees their cards and can
+   * hold any of them up as if it were that player's phone.
+   */
+  addTestPlayers(code: string, user: Who, count: number) {
+    const room = this.hostRoom(code, user);
+    if (room.dealt) throw new RoomError(400, "Collect the cards before adding players.");
+    const have = room.players.filter((p) => p.test).length;
+    const n = Math.min(Math.max(1, Math.floor(Number(count) || 1)), MAX_TEST_PLAYERS - have, MAX_PLAYERS - room.players.length);
+    if (n <= 0) throw new RoomError(409, have >= MAX_TEST_PLAYERS ? `A room can hold ${MAX_TEST_PLAYERS} test players.` : "This room is full.");
+    let id = Math.min(0, ...room.players.map((p) => p.userId));
+    let no = Math.max(0, ...room.players.filter((p) => p.test).map((p) => Number(p.name.replace(/\D/g, "")) || 0));
+    for (let i = 0; i < n; i++) room.players.push({ userId: --id, name: `Test player ${++no}`, test: true, card: null, group: null });
+    this.changed(room);
+  }
+
+  /** Takes every test player out (before a real game). */
+  removeTestPlayers(code: string, user: Who) {
+    const room = this.hostRoom(code, user);
+    if (room.dealt) throw new RoomError(400, "Collect the cards before removing anybody, or the deck no longer matches the table.");
+    room.players = room.players.filter((p) => !p.test);
     this.changed(room);
   }
 
   makeHost(code: string, user: Who, playerId: number) {
     const room = this.hostRoom(code, user);
-    if (!room.players.some((p) => p.userId === playerId)) throw new RoomError(404, "No such player.");
+    const p = room.players.find((x) => x.userId === playerId);
+    if (!p) throw new RoomError(404, "No such player.");
+    if (p.test) throw new RoomError(400, "A test player can't host: there is nobody holding that phone.");
     room.hostId = playerId;
     this.changed(room);
   }
@@ -276,8 +348,9 @@ export class CardRooms {
     const me = this.player(room, user);
     if (room.dealt) throw new RoomError(400, "The cards are dealt. Ask the host to collect them first.");
     room.players = room.players.filter((p) => p.userId !== me.userId);
-    if (room.players.length === 0) return this.drop(room.code);
-    if (room.hostId === me.userId) room.hostId = room.players[0].userId;
+    const people = room.players.filter((p) => !p.test);
+    if (people.length === 0) return this.drop(room.code); // nobody left but pretend players
+    if (room.hostId === me.userId) room.hostId = people[0].userId;
     this.changed(room);
   }
 

@@ -77,6 +77,10 @@ export interface PlayerView {
   /** Only present once the host reveals every card. */
   card?: Card;
   group?: 0 | 1;
+  /** A pretend player the host added to try the game alone. */
+  test?: boolean;
+  /** A test player's card, sent to the host only: there is no phone to hold it. */
+  testCard?: Card;
 }
 
 /** Everything one phone is sent. Nobody else's card is in it unless the cards were revealed. */
@@ -95,6 +99,10 @@ export interface RoomView {
   setAside: Card | null;
   timer: Timer;
   version: number;
+  /** Which start of the server this view is from (versions restart with it). */
+  boot: number;
+  /** The host's phone has not been heard from for a while: anyone may take over. */
+  hostAway: boolean;
   serverNow: number;
 }
 
@@ -129,3 +137,5 @@ export const SHOW_LABELS: Record<ShowRule, string> = {
 };
 
 export const MAX_PLAYERS = 60;
+/** How many test players one room may hold. */
+export const MAX_TEST_PLAYERS = 20;

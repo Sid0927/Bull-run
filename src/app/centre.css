@@ -398,3 +398,28 @@
 .hh-role-dots { display: inline-flex; flex: none; margin-top: 5px; }
 .hh-role-dots .hh-dot + .hh-dot { margin-left: -3px; }
 .hh-role-sides { font-weight: 500; margin-left: 4px; }
+
+/* ── Test players ─────────────────────────────────────────────────── */
+.hh-test-tag { background: color-mix(in srgb, var(--foil) 18%, transparent); color: var(--foil); }
+.hh-test-add { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border-radius: 14px; background: var(--panel-2); border: 1px dashed var(--line-strong); }
+.hh-test-add p { margin: 0; display: flex; gap: 8px; align-items: flex-start; }
+.hh-test-add p .icon { color: var(--foil); margin-top: 2px; }
+.hh-test-add .row button { flex: 1; min-height: 40px; }
+.hh-testcards { display: grid; gap: 8px; border-color: color-mix(in srgb, var(--foil) 40%, var(--line)); }
+.hh-testcards h2 { margin: 0; }
+.hh-testcards h2 .icon { color: var(--foil); }
+.hh-testcards > p { margin: 0; }
+.hh-testcards ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.hh-testcards li { display: flex; align-items: center; gap: 10px; min-height: 50px; border-top: 1px solid var(--line); }
+.hh-testcards li:first-child { border-top: 0; }
+.hh-testcards li .hh-player-name { flex: 1; }
+.hh-testcards li button { min-height: 38px; }
+.hh-sheet-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; align-items: end; justify-items: center; background: rgb(8 6 20 / 0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: show-in 0.2s var(--ease) both; }
+.hh-sheet { width: min(100%, 30rem); max-height: 92dvh; overflow-y: auto; display: grid; justify-items: center; gap: 14px; padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-radius: 24px 24px 0 0; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-lg); animation: sheet-up 0.3s var(--ease) both; }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } }
+.hh-sheet-head { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+.hh-sheet-head .icon-btn { display: inline-grid; place-items: center; }
+.hh-sheet .hh-card { width: min(68vw, 46dvh * 5 / 7, 280px); }
+.hh-refusal { margin: 0; min-height: 1.5em; }
+.hh-host-away { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.hh-host-away button { min-height: 40px; }

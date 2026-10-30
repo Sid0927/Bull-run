@@ -92,6 +92,19 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
           <button className="primary big shine" disabled={busy} onClick={() => run(async () => (await cardsApi.create()).code)}>
             Start a room <Icon name="arrow" size={18} />
           </button>
+          <button
+            className="ghost big"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const { code } = await cardsApi.create();
+                await cardsApi.addTests(code, 5);
+                return code;
+              })
+            }
+          >
+            <Icon name="robot" size={18} /> Try it alone, with 5 test players
+          </button>
         </section>
       </div>
 

@@ -1,5 +1,5 @@
 /** The card itself: its back, its face, and the full-screen views shown to another player. */
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { SHOW_LABELS, TEAM_COLORS, type Card, type Config, type Team } from "../../cards/types.ts";
 import { Icon } from "../ui.tsx";
@@ -81,6 +81,12 @@ export function CardFace({ card, config, compact = false }: { card: Card; config
 export function ShowScreen({ card, config, mode, name, onClose }: { card: Card; config: Config; mode: "team" | "full"; name: string; onClose: () => void }) {
   // A team share shows the colour the card *shows as*, which is the point of such a role.
   const shown = mode === "team" ? teamOf(config, card.showsAsTeamId || card.teamId) : teamOf(config, card.teamId);
+  // Escape closes it too, for a keyboard or a phone with one.
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [onClose]);
   // Drawn on the page's body: inside the card's animated column, "fixed" would be fixed to that
   // column instead of the screen.
   return createPortal(
