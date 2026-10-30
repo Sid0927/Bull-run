@@ -52,7 +52,7 @@ export const PRESETS: Preset[] = [
   {
     id: "tricky",
     name: "Two sides, full of tricks",
-    blurb: "Leaders and Deputies, a Mole and a Scout on each side, plus a Shadow and a Collector playing for themselves.",
+    blurb: "Leaders and Deputies, a Mole and a Scout on each side, plus a Shadow and a Drifter playing for themselves.",
     config: base({
       title: "Smoke & Mirrors",
       teams: [
@@ -70,9 +70,9 @@ export const PRESETS: Preset[] = [
         roleFrom("scout", "red"),
         roleFrom("scout", "blue"),
         roleFrom("shadow", "loners"),
-        roleFrom("collector", "loners", { count: 0 }),
+        roleFrom("drifter", "loners", { count: 0 }),
       ],
-      oddRoleId: "collector-loners",
+      oddRoleId: "drifter-loners",
       setAside: true,
       groups: true,
       rounds: [
