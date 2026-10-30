@@ -77,7 +77,7 @@ export function App() {
         <CentreLogo size={64} />
       </div>
     );
-  if (me === null) return <Login onIn={setMe} onRules={openRules} />;
+  if (me === null) return <Login onIn={setMe} />;
 
   const signOut = async () => {
     await api.logout().catch(() => {});
@@ -200,7 +200,7 @@ function TopBar({ me, onRules, onSignOut, section }: { me: Me; onRules: (() => v
 
 // ─── Sign in ────────────────────────────────────────────────────────────────────────────
 
-function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }) {
+function Login({ onIn }: { onIn: (m: Me) => void }) {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [openSignup, setOpenSignup] = useState(false);
   const [username, setUsername] = useState("");
@@ -319,9 +319,6 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
                 ? "At least 6 characters for the password. Forgot it later? Ask the game's admin to reset it."
                 : "New here? Choose Create account above."}
           </p>
-          <button type="button" className="ghost-link" onClick={onRules}>
-            <Icon name="book" size={16} /> How to play Bull Run
-          </button>
         </form>
         <p className="credit">
           <span>Created by</span> <b>Siddhant Bansal</b>

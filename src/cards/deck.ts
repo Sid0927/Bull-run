@@ -4,6 +4,7 @@
  */
 import type { Card, Config, Role, Team } from "./types.ts";
 import { MAX_PLAYERS, TEAM_COLORS } from "./types.ts";
+import { LIBRARY_BY_ID } from "./library.ts";
 
 export type Random = () => number;
 
@@ -31,6 +32,7 @@ export function configProblems(config: Config): string[] {
     if (!teamIds.has(r.teamId)) out.push(`${r.name || "A role"} is on a team that no longer exists.`);
     if (r.showsAsTeamId && !teamIds.has(r.showsAsTeamId)) out.push(`${r.name || "A role"} shows as a team that no longer exists.`);
     if (!Number.isInteger(r.count) || r.count < 0) out.push(`${r.name || "A role"} needs a whole number of copies.`);
+    if (LIBRARY_BY_ID[r.libId]?.disguise && !r.showsAsTeamId) out.push(`${r.name} needs a team to show as. Pick one, or add a second team.`);
   }
   if (config.oddRoleId && !config.roles.some((r) => r.id === config.oddRoleId)) out.push("The odd-player role no longer exists.");
   if (config.rounds.some((r) => !(r.minutes > 0))) out.push("Every round needs a length.");

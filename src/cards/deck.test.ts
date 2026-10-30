@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildDeck, configProblems, shuffle, splitGroups } from "./deck.ts";
 import { PRESETS, cleanConfig } from "./presets.ts";
+import { LIBRARY, roleFrom } from "./library.ts";
 import type { Config } from "./types.ts";
 
 const twoTeams = () => structuredClone(PRESETS[0].config);
@@ -21,15 +22,15 @@ test("an even table splits evenly, with each key card once", () => {
   assert.equal(cards.length, 10);
   assert.equal(count(cards, "sun"), 5);
   assert.equal(count(cards, "moon"), 5);
-  assert.equal(cards.filter((c) => c.roleId === "sun-lead").length, 1);
-  assert.equal(cards.filter((c) => c.roleId === "moon-lead").length, 1);
+  assert.equal(cards.filter((c) => c.roleId === "leader-sun").length, 1);
+  assert.equal(cards.filter((c) => c.roleId === "leader-moon").length, 1);
 });
 
 test("an odd table takes the odd-player role instead of tipping one team ahead", () => {
   const cards = deck(twoTeams(), 11);
   assert.equal(count(cards, "sun"), 5);
   assert.equal(count(cards, "moon"), 5);
-  assert.equal(cards.filter((c) => c.roleId === "drifter").length, 1);
+  assert.equal(cards.filter((c) => c.roleId === "drifter-loners").length, 1);
 });
 
 test("without an odd-player role the extra card goes to a filling team", () => {
@@ -62,7 +63,7 @@ test("a deck with no filling team and too few roles says so", () => {
 });
 
 test("a filling team that already holds more roles gets fewer plain cards", () => {
-  const c = structuredClone(PRESETS[1].config); // 3 infiltrators + captain, crew fills
+  const c = structuredClone(PRESETS.find((p) => p.id === "hidden-few")!.config); // 3 infiltrators, crew fills
   const cards = deck(c, 9);
   assert.equal(count(cards, "inf"), 3);
   assert.equal(count(cards, "crew"), 6);
@@ -78,12 +79,29 @@ test("a shuffle keeps every card and a split is as even as it can be", () => {
 });
 
 test("cleaning a setup clamps what arrives and drops what does not belong", () => {
-  const c = cleanConfig({ teams: [{ id: "a", name: "A", color: "nope", fills: "yes" }], roles: [{ id: "r", name: "R", teamId: "a", count: 999, show: "sometimes" }], rounds: [{ minutes: -5, swap: 3.7 }], extra: 1 });
+  const c = cleanConfig({ teams: [{ id: "a", name: "A", color: "nope", fills: "yes" }], roles: [{ id: "r", libId: "leader", name: "Typed in", teamId: "a", count: 999, show: "none" }, { id: "x", libId: "made-up", name: "Custom", teamId: "a" }, { id: "y", name: "No library", teamId: "a" }], rounds: [{ minutes: -5, swap: 3.7 }], extra: 1 });
   assert.equal(c.teams[0].color, "grey");
   assert.equal(c.teams[0].fills, false);
+  assert.equal(c.roles.length, 1, "only library roles survive");
+  assert.equal(c.roles[0].name, "Leader");
   assert.equal(c.roles[0].count, 60);
   assert.equal(c.roles[0].show, "any");
   assert.equal(c.rounds[0].minutes, 0.25);
   assert.equal(c.rounds[0].swap, 4);
   assert.equal("extra" in c, false);
+});
+
+test("a Mole needs a team to show as", () => {
+  const c = structuredClone(PRESETS.find((p) => p.id === "tricky")!.config);
+  assert.deepEqual(configProblems(c), []);
+  c.roles.find((r) => r.libId === "mole")!.showsAsTeamId = "";
+  assert.match(configProblems(c)[0], /Mole needs a team to show as/);
+});
+
+test("every library role is a usable role on its own", () => {
+  for (const lib of LIBRARY) {
+    const c = structuredClone(PRESETS.find((p) => p.id === "blank")!.config);
+    c.roles = [roleFrom(lib.id, "t1", { showsAsTeamId: "t2" })];
+    assert.ok("cards" in buildDeck(c, 8), lib.id);
+  }
 });

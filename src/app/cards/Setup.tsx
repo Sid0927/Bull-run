@@ -2,7 +2,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { buildDeck, configProblems } from "../../cards/deck.ts";
 import { PRESETS, cleanConfig, rid } from "../../cards/presets.ts";
-import { SHOW_LABELS, TEAM_COLORS, type Config, type Role, type ShowRule, type Team } from "../../cards/types.ts";
+import { LIBRARY, LIBRARY_BY_ID, ROLE_GROUPS, roleFrom } from "../../cards/library.ts";
+import { SHOW_LABELS, TEAM_COLORS, type Config, type Role, type Team } from "../../cards/types.ts";
 import { Icon } from "../ui.tsx";
 import { teamOf, teamStyle } from "./CardArt.tsx";
 
@@ -70,6 +71,7 @@ const minutes = (m: number) => (m < 1 ? `${Math.round(m * 60)} s` : `${m % 1 ===
 export function Setup({ initial, players, onSave, onCancel, busy }: { initial: Config; players: number; onSave: (c: Config) => void; onCancel: () => void; busy: boolean }) {
   const [c, setC] = useState<Config>(() => structuredClone(initial));
   const [openRole, setOpenRole] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(savedSetups);
   const [preview, setPreview] = useState(Math.max(players, 4));
   const [paste, setPaste] = useState<string | null>(null);
@@ -83,19 +85,42 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
   const problems = configProblems(c);
   const deck = useMemo(() => buildDeck(c, preview), [c, preview]);
 
-  const addTeam = () =>
+  const addTeam = (fills: boolean) =>
     up((d) => {
       const used = new Set(d.teams.map((t) => t.color));
-      const color = Object.keys(TEAM_COLORS).find((k) => !used.has(k)) ?? "grey";
-      const name = `Team ${String.fromCharCode(65 + d.teams.length)}`;
-      d.teams.push({ id: rid(), name, color, fills: true, memberName: name });
+      const color = fills ? (Object.keys(TEAM_COLORS).find((k) => k !== "grey" && !used.has(k)) ?? "black") : "grey";
+      const name = fills ? `Team ${String.fromCharCode(65 + d.teams.filter((t) => t.fills).length)}` : "Loners";
+      d.teams.push({ id: rid(), name, color, fills, memberName: fills ? name : "Loner" });
     });
-  const addRole = () => {
-    const id = rid();
+  /** Adds a library role to the team it fits best, or one more copy if it is already there. */
+  const addRole = (libId: string) => {
+    const lib = LIBRARY_BY_ID[libId];
+    const newId = rid(); // made here, not in the updater, which React may run twice
+    let id = newId;
     up((d) => {
-      d.roles.push({ id, name: "", teamId: d.teams[0]?.id ?? "", count: 1, description: "", show: "any", showsAsTeamId: "" });
+      const sides = d.teams.filter((t) => t.fills);
+      let team: Team | undefined;
+      if (lib.group === "loner") {
+        team = d.teams.find((t) => !t.fills);
+        if (!team) {
+          team = { id: rid(), name: "Loners", color: "grey", fills: false, memberName: "Loner" };
+          d.teams.push(team);
+        }
+      } else {
+        // The first side that doesn't have this role yet, so a Leader each is two taps.
+        team = sides.find((t) => !d.roles.some((r) => r.libId === libId && r.teamId === t.id)) ?? sides[0] ?? d.teams[0];
+      }
+      const have = d.roles.find((r) => r.libId === libId && r.teamId === team!.id);
+      if (have) {
+        have.count = Math.min(20, have.count + lib.copies);
+        id = have.id;
+        return;
+      }
+      const other = d.teams.find((t) => t.fills && t.id !== team!.id);
+      const role = roleFrom(libId, team!.id, { id: newId, showsAsTeamId: other?.id });
+      d.roles.push(role);
     });
-    setOpenRole(id);
+    setTimeout(() => setOpenRole(id), 0);
   };
   const removeTeam = (id: string) =>
     up((d) => {
@@ -213,11 +238,17 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
         title="Teams"
         icon="shield"
         aside={
-          <button className="ghost-link" onClick={addTeam} disabled={c.teams.length >= 8}>
-            <Icon name="plus" size={18} /> Team
-          </button>
+          <span className="row hh-add-team">
+            <button className="ghost-link" onClick={() => addTeam(true)} disabled={c.teams.length >= 8}>
+              <Icon name="plus" size={18} /> Side
+            </button>
+            <button className="ghost-link" onClick={() => addTeam(false)} disabled={c.teams.length >= 8 || c.teams.some((t) => !t.fills && t.name === "Loners")}>
+              <Icon name="plus" size={18} /> Loners
+            </button>
+          </span>
         }
       >
+        <p className="muted small hh-section-hint">A side competes and fills the deck with plain cards. Loners holds the roles that play only for themselves.</p>
         <div className="hh-list">
           {c.teams.map((t) => (
             <div key={t.id} className="hh-team-edit" style={teamStyle(t)}>
@@ -235,10 +266,10 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                   </button>
                 ))}
               </div>
-              <Switch checked={t.fills} onChange={(v) => setTeam(t.id, { fills: v })} label="Fills the deck" hint="Plain cards of this team make up the rest of the players, kept level with other filling teams." />
+              <Switch checked={t.fills} onChange={(v) => setTeam(t.id, { fills: v })} label="Fills the deck" hint="Plain cards of this team make up the rest of the players, kept level with the other sides that fill." />
               {t.fills && (
                 <label className="hh-inline-field">
-                  <span className="field-label">Plain card is called</span>
+                  <span className="field-label">A plain card is called</span>
                   <input value={t.memberName} maxLength={40} placeholder={t.name} onChange={(e) => setTeam(t.id, { memberName: e.target.value })} />
                 </label>
               )}
@@ -251,17 +282,19 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
         title="Roles"
         icon="card"
         aside={
-          <button className="ghost-link" onClick={addRole} disabled={c.teams.length === 0 || c.roles.length >= 40}>
-            <Icon name="plus" size={18} /> Role
+          <button className="ghost-link" onClick={() => setPicking(!picking)} aria-expanded={picking} disabled={c.teams.length === 0}>
+            <Icon name={picking ? "x" : "plus"} size={18} /> {picking ? "Close list" : "Add roles"}
           </button>
         }
       >
+        {picking && <RolePicker config={c} onAdd={addRole} />}
         {c.roles.length === 0 ? (
-          <p className="muted small">No special roles. Every card will be a plain team card.</p>
+          !picking && <p className="muted small">No roles yet: every card will be a plain team card. Tap Add roles to pick some.</p>
         ) : (
           <div className="hh-list">
             {c.roles.map((r) => {
               const team = teamOf(c, r.teamId);
+              const lib = LIBRARY_BY_ID[r.libId];
               const open = openRole === r.id;
               return (
                 <div key={r.id} className={`hh-role-edit ${open ? "open" : ""} ${r.count === 0 ? "off" : ""}`} style={teamStyle(team)}>
@@ -269,62 +302,44 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                     <button className="hh-role-summary" onClick={() => setOpenRole(open ? null : r.id)} aria-expanded={open}>
                       <span className="hh-dot" aria-hidden="true" />
                       <span className="hh-role-text">
-                        <b className="truncate">{r.name || "New role"}</b>
+                        <b className="truncate">{r.name}</b>
                         <span className="muted small truncate">
                           {team?.name ?? "No team"}
                           {r.show !== "any" ? ` · ${SHOW_LABELS[r.show]}` : ""}
-                          {r.showsAsTeamId ? ` · shows as ${teamOf(c, r.showsAsTeamId)?.name ?? "?"}` : ""}
+                          {lib?.disguise ? ` · shows as ${teamOf(c, r.showsAsTeamId)?.name ?? "?"}` : ""}
                           {r.count === 0 ? " · left out" : ""}
                         </span>
                       </span>
                       <Icon name="chevron" size={18} className="hh-chev" />
                     </button>
-                    <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name || "this role"}`} />
+                    <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name}`} />
                   </div>
                   {open && (
                     <div className="hh-role-body">
-                      <label>
-                        <span className="field-label">Name</span>
-                        <input value={r.name} maxLength={40} autoFocus={!r.name} placeholder="Role name" onChange={(e) => setRole(r.id, { name: e.target.value })} />
-                      </label>
+                      <p className="hh-role-desc">{r.description}</p>
                       <div className="field">
-                        <span className="field-label">Team</span>
+                        <span className="field-label">On the side of</span>
                         <div className="hh-team-pick">
                           {c.teams.map((t) => (
-                            <button key={t.id} className={r.teamId === t.id ? "on" : ""} style={teamStyle(t)} onClick={() => setRole(r.id, { teamId: t.id })}>
+                            <button key={t.id} className={r.teamId === t.id ? "on" : ""} style={teamStyle(t)} onClick={() => setRole(r.id, { teamId: t.id, showsAsTeamId: r.showsAsTeamId === t.id ? "" : r.showsAsTeamId })}>
                               <span className="hh-dot" aria-hidden="true" /> {t.name}
                             </button>
                           ))}
                         </div>
                       </div>
-                      <label>
-                        <span className="field-label">What the card says</span>
-                        <textarea rows={2} value={r.description} maxLength={400} placeholder="What this role does or must do" onChange={(e) => setRole(r.id, { description: e.target.value })} />
-                      </label>
-                      <div className="field">
-                        <span className="field-label">Can show</span>
-                        <div className="seg seg-fill hh-seg-wrap" role="radiogroup" aria-label="How this card may be shown">
-                          {(Object.keys(SHOW_LABELS) as ShowRule[]).map((k) => (
-                            <button key={k} role="radio" aria-checked={r.show === k} className={r.show === k ? "on" : ""} onClick={() => setRole(r.id, { show: k })}>
-                              {SHOW_LABELS[k]}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {c.teams.length > 1 && (
-                        <label>
+                      {lib?.disguise && (
+                        <div className="field">
                           <span className="field-label">A team share shows</span>
-                          <select className="hh-select" value={r.showsAsTeamId} onChange={(e) => setRole(r.id, { showsAsTeamId: e.target.value })}>
-                            <option value="">Its real team</option>
+                          <div className="hh-team-pick">
                             {c.teams
                               .filter((t) => t.id !== r.teamId)
                               .map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name} (a disguise)
-                                </option>
+                                <button key={t.id} className={r.showsAsTeamId === t.id ? "on" : ""} style={teamStyle(t)} onClick={() => setRole(r.id, { showsAsTeamId: t.id })}>
+                                  <span className="hh-dot" aria-hidden="true" /> {t.name}
+                                </button>
                               ))}
-                          </select>
-                        </label>
+                          </div>
+                        </div>
                       )}
                       <div className="row hh-role-actions">
                         <button
@@ -336,7 +351,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                             })
                           }
                         >
-                          <Icon name="trash" size={16} /> Remove role
+                          <Icon name="trash" size={16} /> Remove
                         </button>
                         <button className="ghost-link" onClick={() => setOpenRole(null)}>
                           Done
@@ -415,14 +430,10 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
 
       <div className="hh-setup-bar">
         <div className="hh-setup-preview">
-          <div className="row hh-preview-head">
-            <span className="field-label">Deck for</span>
-            <Stepper value={preview} onChange={setPreview} min={2} max={60} label="Players in the preview" format={(v) => `${v} players`} />
-          </div>
           {"error" in deck ? (
-            <p className="error small">{problems[0] ?? deck.error}</p>
+            <p className="error small hh-preview-msg">{problems[0] ?? deck.error}</p>
           ) : (
-            <div className="hh-deck-bar" aria-label="How the deck splits">
+            <div className="hh-deck-bar" aria-label={`How the deck splits for ${preview} players`}>
               {c.teams.map((t) => {
                 const n = deck.cards.filter((x) => x.teamId === t.id).length;
                 return n ? (
@@ -433,6 +444,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
               })}
             </div>
           )}
+          <Stepper value={preview} onChange={setPreview} min={2} max={60} label="Players in the preview" format={(v) => `${v}`} />
         </div>
         <div className="row hh-setup-actions">
           <button onClick={onCancel}>Cancel</button>
@@ -441,6 +453,49 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The role library, grouped, each with what it does and how often it is already in the setup. */
+function RolePicker({ config, onAdd }: { config: Config; onAdd: (libId: string) => void }) {
+  return (
+    <div className="hh-picker">
+      {ROLE_GROUPS.map((g) => (
+        <section key={g.id} className={`hh-picker-group g-${g.id}`}>
+          <h3>{g.name}</h3>
+          <p className="muted small">{g.blurb}</p>
+          <ul>
+            {LIBRARY.filter((r) => r.group === g.id).map((r) => {
+              const inDeck = config.roles.filter((x) => x.libId === r.id).reduce((n, x) => n + x.count, 0);
+              return (
+                <li key={r.id}>
+                  <div className="hh-pick-text">
+                    <b>
+                      {r.name}
+                      {r.copies > 1 && <span className="tag">comes in {r.copies}</span>}
+                      {r.show !== "any" && <span className="tag">{SHOW_LABELS[r.show]}</span>}
+                      {r.disguise && <span className="tag">disguised</span>}
+                    </b>
+                    <span className="muted small">{r.description}</span>
+                  </div>
+                  <button className={`hh-pick-add ${inDeck ? "has" : ""}`} onClick={() => onAdd(r.id)} aria-label={`Add ${r.name}`}>
+                    {inDeck ? (
+                      <>
+                        <Icon name="plus" size={16} /> {inDeck}
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="plus" size={16} /> Add
+                      </>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }
