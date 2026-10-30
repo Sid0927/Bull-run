@@ -16,7 +16,7 @@ import { chime, setSoundOn, soundOn } from "./sound.ts";
 import { Avatar, AvatarStack, CodeInput, Icon, When, clock, fullTime } from "./ui.tsx";
 
 /** The site's name, in one place. */
-export const CENTRE_NAME = "Sid's Game Centre";
+export const CENTRE_NAME = "Sid's Arcade";
 
 type Route = { name: "hub" } | { name: "cards" } | { name: "cardroom"; code: string } | { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" } | { name: "verify"; token: string };
 
@@ -123,7 +123,7 @@ function TopBar({ me, onRules, onSignOut, section }: { me: Me; onRules: (() => v
       <a className="brand" href="#/" aria-label={`${CENTRE_NAME}: all games`}>
         <CentreLogo size={30} />
         <span className="brand-word centre-word">
-          <small>Sid's</small> Game<span>Centre</span>
+          <small>Sid's</small><span>Arcade</span>
         </span>
       </a>
       {section && (
@@ -236,7 +236,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
           </div>
           <p className="wordmark-pre">Sid's</p>
           <h1 className="wordmark">
-            Game <span>Centre</span>
+            <span>Arcade</span>
           </h1>
           <p className="tagline">Games for the people you play with</p>
           <ul className="hero-facts" aria-label="Games here">
@@ -324,7 +324,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
   );
 }
 
-// ─── Game Centre home ───────────────────────────────────────────────────────────────────
+// ─── Arcade home ───────────────────────────────────────────────────────────────────
 
 /** The front page after signing in: pick a game, and the account's own settings. */
 function Hub({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {

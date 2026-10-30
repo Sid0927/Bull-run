@@ -107,7 +107,7 @@ export interface Store {
   replacePlayer(gameId: number, seat: number, userId: number): Promise<void>;
   actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
-  /** Hidden Hand rooms, kept whole as JSON: one evening's state, read back after a restart. */
+  /** Undercover rooms, kept whole as JSON: one evening's state, read back after a restart. */
   cardRooms(): Promise<{ code: string; data: unknown }[]>;
   saveCardRoom(code: string, data: unknown): Promise<void>;
   deleteCardRoom(code: string): Promise<void>;

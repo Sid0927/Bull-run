@@ -21,7 +21,7 @@ export interface AppOptions {
   /** Override how long computer players pause before moving (tests). */
   botDelayMs?: number;
   store: Store;
-  /** Hidden Hand rooms (made here if not given; the server passes one it has read back from the store). */
+  /** Undercover rooms (made here if not given; the server passes one it has read back from the store). */
   cards?: CardRooms;
   /** Folder with the built app (vite build). Omit to serve the API only. */
   staticDir?: string;
@@ -85,9 +85,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       const token = newToken();
       await store.saveEmailToken(sha256(token), u.id, email, new Date(Date.now() + 3 * 86400_000));
       const link = `${siteUrl(req)}/#/verify/${token}`;
-      const text = `Hi ${u.username},\n\nConfirm this email for your Sid's Game Centre account by opening this link:\n${link}\n\nThe link works for 3 days. If you didn't sign up for Sid's Game Centre, you can ignore this email.`;
-      const html = `<p>Hi ${escapeHtml(u.username)},</p><p>Confirm this email for your Sid's Game Centre account:</p><p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0b7a4b;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Confirm my email</a></p><p style="color:#666;font-size:13px">Or open this link: ${link}<br>It works for 3 days. If you didn't sign up for Sid's Game Centre, you can ignore this email.</p>`;
-      await mailer.send(email, "Confirm your email for Sid's Game Centre", text, html);
+      const text = `Hi ${u.username},\n\nConfirm this email for your Sid's Arcade account by opening this link:\n${link}\n\nThe link works for 3 days. If you didn't sign up for Sid's Arcade, you can ignore this email.`;
+      const html = `<p>Hi ${escapeHtml(u.username)},</p><p>Confirm this email for your Sid's Arcade account:</p><p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0b7a4b;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Confirm my email</a></p><p style="color:#666;font-size:13px">Or open this link: ${link}<br>It works for 3 days. If you didn't sign up for Sid's Arcade, you can ignore this email.</p>`;
+      await mailer.send(email, "Confirm your email for Sid's Arcade", text, html);
     } catch (e) {
       log(`Could not send the confirmation email to ${email}: ${(e as Error).message}`);
     }
@@ -488,7 +488,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       });
       return json(res, 200, await hub.summary(g, user.id));
     }
-    // ── Hidden Hand (secret role cards) ──
+    // ── Undercover (secret role cards) ──
     if (path === "/api/cards/rooms" && method === "GET") return json(res, 200, cards.mine(user));
     if (path === "/api/cards/rooms" && method === "POST") return json(res, 200, { code: cards.create(user) });
     const cm = path.match(/^\/api\/cards\/rooms\/([A-Za-z]{5})(?:\/([a-z]+))?$/);
