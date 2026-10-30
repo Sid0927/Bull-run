@@ -39,12 +39,13 @@ only what that player may see.
 1. **Database (Neon).** Sign up at neon.tech, create a project, and copy its **connection string**
    (it starts `postgresql://` and ends `?sslmode=require`).
 2. **Server (Render).** Sign up at render.com with your GitHub account, then **New → Blueprint** and
-   pick this repository. Render reads `render.yaml` and asks for three values:
+   pick this repository. The service is called `sids-arcade`, so the site is at
+   https://sids-arcade.onrender.com (if that name is free on Render). Render reads `render.yaml` and asks for three values:
    - `DATABASE_URL`: the Neon connection string;
    - `ADMIN_USERNAME` and `ADMIN_PASSWORD`: the admin account created on first start (password at
      least 6 characters).
    Press **Apply**. The first build takes a few minutes; the game is then at the
-   `https://bull-run-….onrender.com` address Render shows.
+   address Render shows.
 3. **Sign in as the admin**, open **Admin** from the menu under your name, and create an account
    for each player. Give each player their username and password; they can change the password from
    their lobby.
@@ -78,11 +79,13 @@ For development, `npm run server` (API with reload) and `npm run dev` (app on :5
 For any game of hidden teams and roles played around a table, without a deck of cards. The host
 sets it up; everyone else needs only the room code.
 
-- **Host:** Undercover → **Start a room**, then **Edit setup**: name the teams (and their
-  colours), add roles with how many copies, what the card says, and how it may be shown (team or
-  full card, team only, full card only, or not at all). A role can also *show as* another team on
-  a team share. Start from a ready-made setup, keep your own on your phone, or copy one and send
-  it to somebody.
+- **Host:** Undercover → **Start a room**, then **Edit setup**: name the sides (and their
+  colours), add a Loners team if you want roles that play for themselves, and pick roles from
+  the list (`src/cards/library.ts`): key cards, team players, tricksters and loners, each with
+  its own text and, where it matters, how it may be shown (a Silent card can't be shown, a Mole
+  shows the other side's colour on a team share). There is no typing in roles of your own: every
+  card says something that has been thought through. Start from a ready-made setup, keep your
+  own on your phone, or copy one and send it to somebody.
 - **Dealing:** roles go in at their counts, and teams marked *fills the deck* make up the rest,
   kept level. An odd player can get a chosen role instead; one card can be set aside unseen.
   Players can be split into two groups at random.

@@ -19,6 +19,8 @@ export interface Team {
 
 export interface Role {
   id: string;
+  /** The library role this is (see library.ts): its name, text and show rule come from there. */
+  libId: string;
   name: string;
   teamId: string;
   /** How many copies go in the deck (0 leaves the role out without deleting it). */

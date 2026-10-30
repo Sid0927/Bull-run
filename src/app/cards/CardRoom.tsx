@@ -1,6 +1,6 @@
 /** One room: the waiting room before the deal, then this phone's card, the timer and the host's tools. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deckSummary } from "../../cards/deck.ts";
+import { buildDeck, deckSummary } from "../../cards/deck.ts";
 import { CARDS_NAME, SHOW_LABELS, type Card, type Config, type PlayerView, type RoomView } from "../../cards/types.ts";
 import type { Me } from "../../shared/api.ts";
 import { Avatar, Icon } from "../ui.tsx";
@@ -13,7 +13,9 @@ function useRoom(code: string) {
   const [view, setView] = useState<RoomView | null>(null);
   const [error, setError] = useState<{ status: number; text: string } | null>(null);
   const offset = useRef(0);
+  const wasIn = useRef(false);
   const take = useCallback((v: RoomView) => {
+    wasIn.current = true;
     offset.current = v.serverNow - Date.now();
     setView((old) => (old && old.version > v.version ? old : v));
     setError(null);
@@ -21,6 +23,10 @@ function useRoom(code: string) {
   const load = useCallback(
     () =>
       cardsApi.view(code).then(take, (e: CardsError) => {
+        if (e.status === 403 && wasIn.current) {
+          // In it a moment ago: the host removed this player. Joining again by itself would undo that.
+          return setError({ status: 403, text: "The host removed you from this room. Ask them for the code if that was a mistake." });
+        }
         if (e.status === 403) {
           // Not in it yet: a shared link joins by itself.
           return cardsApi.join(code).then(take, (j: CardsError) => setError({ status: j.status, text: j.message }));
@@ -103,12 +109,12 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
     }
   };
 
-  if (error && !view)
+  if (error && (!view || error.status === 403 || error.status === 404))
     return (
       <main className="page hh">
         <div className="empty-state">
           <Icon name="cards" size={36} />
-          <h1 className="page-title">{error.status === 404 ? "Room not found" : "Can't open this room"}</h1>
+          <h1 className="page-title">{error.status === 404 ? (view ? "This room has closed" : "Room not found") : "Can't open this room"}</h1>
           <p>{error.text}</p>
           <a className="button primary" href="#/cards">
             Back to {CARDS_NAME}
@@ -218,7 +224,7 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
   const c = view.config;
   const n = view.players.length;
   const summary = deckSummary(c, n);
-  const fits = !summary.startsWith(`${n} players:`) ? false : true;
+  const fits = "cards" in buildDeck(c, n);
   return (
     <>
       <section className="hh-waiting">
@@ -254,7 +260,7 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
             </button>
           )}
         </div>
-        <p className={fits ? "muted small" : "error small"}>{summary}</p>
+        <p className={fits || n < 2 ? "muted small" : "error small"}>{n < 2 ? "The deck is worked out once more players join." : summary}</p>
         <div className="hh-team-chips">
           {c.teams.map((t) => (
             <span key={t.id} className="hh-team-chip" style={teamStyle(t)}>
@@ -265,21 +271,30 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
         </div>
         {c.roles.filter((r) => r.count > 0).length > 0 && (
           <ul className="hh-role-list">
-            {c.roles
-              .filter((r) => r.count > 0)
-              .map((r) => (
-                <li key={r.id} style={teamStyle(teamOf(c, r.teamId))}>
-                  <span className="hh-dot" aria-hidden="true" />
+            {/* One row per role, with a dot for each side holding it: two Leaders read as one role. */}
+            {[...new Set(c.roles.filter((r) => r.count > 0).map((r) => r.libId))].map((libId) => {
+              const held = c.roles.filter((r) => r.libId === libId && r.count > 0);
+              const r = held[0];
+              return (
+                <li key={libId}>
+                  <span className="hh-role-dots" aria-hidden="true">
+                    {held.map((h) => (
+                      <span key={h.id} className="hh-dot" style={teamStyle(teamOf(c, h.teamId))} />
+                    ))}
+                  </span>
                   <span className="hh-role-text">
                     <b>
                       {r.name}
-                      {r.count > 1 && <span className="count">×{r.count}</span>}
+                      <span className="muted small hh-role-sides">
+                        {held.map((h) => `${h.count > 1 ? `${h.count} ` : ""}${teamOf(c, h.teamId)?.name ?? ""}`).join(" · ")}
+                      </span>
                     </b>
-                    {r.description && <span className="muted small">{r.description}</span>}
+                    <span className="muted small">{r.description}</span>
                   </span>
                   {r.show !== "any" && <span className="tag">{SHOW_LABELS[r.show]}</span>}
                 </li>
-              ))}
+              );
+            })}
           </ul>
         )}
         <ul className="hh-facts">
@@ -323,10 +338,8 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
   }, [view.deal]);
   const flip = () => {
     window.clearTimeout(timer.current);
-    setOpen((o) => {
-      if (!o) timer.current = window.setTimeout(() => setOpen(false), 8000);
-      return !o;
-    });
+    if (!open) timer.current = window.setTimeout(() => setOpen(false), 8000);
+    setOpen(!open);
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
   if (!card) return null;
