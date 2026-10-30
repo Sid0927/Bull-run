@@ -62,6 +62,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
   const cards = opts.cards ?? new CardRooms(store, opts.log);
   const limiter = new LoginLimiter();
   const joinLimiter = new LoginLimiter(10);
+  const codeLimiter = new LoginLimiter(30);
   const ipLimiter = new LoginLimiter(30);
   // New accounts from one address: a few at a time is a family on one Wi-Fi; more is a script.
   const signupLimiter = new LoginLimiter(5);
@@ -498,6 +499,17 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
     if (cm) {
       const code = cm[1].toUpperCase();
       const what = cm[2] ?? "";
+      // Wrong codes count against the account, so live codes can't be found by trying them all.
+      const guessKey = `cards:${user.id}`;
+      if ((what === "" || what === "join") && codeLimiter.blocked(guessKey)) throw new HttpError(429, "Too many wrong room codes. Wait ten minutes and try again.");
+      try {
+        return await cardRoute(code, what, user);
+      } catch (e) {
+        if (e instanceof RoomError && e.status === 404 && (what === "" || what === "join")) codeLimiter.fail(guessKey);
+        throw e;
+      }
+    }
+    async function cardRoute(code: string, what: string, user: User) {
       if (method === "GET" && what === "") return json(res, 200, cards.view(code, user));
       if (method === "GET" && what === "events") {
         let stop: (() => void) | null = null;

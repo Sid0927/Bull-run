@@ -50,6 +50,8 @@ interface Room {
   version: number;
   /** Accounts the host removed: a shared link must not let them straight back in. */
   kicked?: number[];
+  /** Their names, so the host can see who to let back in. */
+  kickedNames?: Record<number, string>;
 }
 
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I or O: they read as 1 and 0
@@ -57,6 +59,8 @@ const ROOM_TTL = 12 * 60 * 60 * 1000;
 /** A phone polls every 20 seconds; past this, its host is taken to have gone. */
 export const HOST_AWAY_MS = 90_000;
 const MAX_ROOMS = 2000;
+/** Rooms one account may host at once, so one account can't fill the server. */
+const MAX_HOSTED = 5;
 const random = () => randomInt(0, 2 ** 32) / 2 ** 32;
 
 export class CardRooms {
@@ -90,6 +94,8 @@ export class CardRooms {
 
   create(user: Who): string {
     this.sweep();
+    const hosting = [...this.rooms.values()].filter((r) => r.hostId === user.id).length;
+    if (hosting >= MAX_HOSTED) throw new RoomError(429, `You're already hosting ${hosting} rooms. Leave one you've finished with first.`);
     if (this.rooms.size >= MAX_ROOMS) throw new RoomError(503, "Too many rooms are open right now. Try again in a while.");
     let code = "";
     do code = Array.from({ length: 5 }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join("");
@@ -157,7 +163,7 @@ export class CardRooms {
         name: p.name,
         host: p.userId === room.hostId,
         ...(p.test ? { test: true } : {}),
-        ...(p.test && p.card && me.userId === room.hostId ? { testCard: p.card } : {}),
+        ...(p.test && p.card && me.userId === room.hostId && user.isAdmin ? { testCard: p.card } : {}),
         ...(room.revealed && p.card ? { card: p.card } : {}),
         // Nobody is sent where anyone else is: who goes across is played out in the room, not tracked.
       })),
@@ -172,6 +178,7 @@ export class CardRooms {
       boot: this.boot,
       canTest: me.userId === room.hostId && user.isAdmin === true,
       canReveal: user.isAdmin === true,
+      removed: me.userId === room.hostId ? (room.kicked ?? []).map((id) => ({ id, name: room.kickedNames?.[id] ?? "Someone" })) : [],
       hostAway: me.userId !== room.hostId && this.away(room, room.hostId),
       serverNow: this.now(),
     };
@@ -277,7 +284,11 @@ export class CardRooms {
     if (room.dealt) throw new RoomError(400, "Collect the cards before removing anybody, or the deck no longer matches the table.");
     const gone = room.players.find((p) => p.userId === playerId);
     room.players = room.players.filter((p) => p.userId !== playerId);
-    if (gone && !gone.test) room.kicked = [...(room.kicked ?? []), playerId];
+    if (gone && !gone.test) {
+      room.kicked = [...(room.kicked ?? []), playerId];
+      room.kickedNames = { ...room.kickedNames, [playerId]: gone.name };
+    }
+    this.seen.delete(`${room.code}:${playerId}`);
     this.changed(room);
   }
 
@@ -285,6 +296,7 @@ export class CardRooms {
   unkick(code: string, user: Who, playerId: number) {
     const room = this.hostRoom(code, user);
     room.kicked = (room.kicked ?? []).filter((id) => id !== playerId);
+    if (room.kickedNames) delete room.kickedNames[playerId];
     this.changed(room);
   }
 
@@ -346,6 +358,7 @@ export class CardRooms {
     const me = this.player(room, user);
     if (room.dealt) throw new RoomError(400, "The cards are dealt. Ask the host to collect them first.");
     room.players = room.players.filter((p) => p.userId !== me.userId);
+    this.seen.delete(`${room.code}:${me.userId}`);
     const people = room.players.filter((p) => !p.test);
     if (people.length === 0) return this.drop(room.code); // nobody left but pretend players
     if (room.hostId === me.userId) room.hostId = people[0].userId;
@@ -359,6 +372,7 @@ export class CardRooms {
 
   private drop(code: string) {
     this.rooms.delete(code);
+    for (const k of this.seen.keys()) if (k.startsWith(`${code}:`)) this.seen.delete(k);
     this.queue(code, () => this.store.deleteCardRoom(code));
     for (const fn of this.watchers.get(code) ?? []) fn();
   }
@@ -380,7 +394,8 @@ export class CardRooms {
 
   private player(room: Room, user: Who): Player {
     const p = room.players.find((x) => x.userId === user.id);
-    if (!p) throw new RoomError(403, "You are not in this room. Join it with its code.");
+    // Not in it reads the same as no such room, so a code can't be tested for whether it is live.
+    if (!p) throw new RoomError(404, "No room with that code. Check the letters with the host.");
     return p;
   }
 

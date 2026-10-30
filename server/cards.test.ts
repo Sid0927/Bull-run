@@ -32,9 +32,9 @@ test("only the host deals, sets up or runs the timer", async () => {
   }
 });
 
-test("a stranger cannot read a room, and joining twice is one seat", async () => {
+test("a stranger cannot read a room (told it does not exist), and joining twice is one seat", async () => {
   const { rooms, code } = await table(2);
-  assert.throws(() => rooms.view(code, cy), (e: unknown) => e instanceof RoomError && e.status === 403);
+  assert.throws(() => rooms.view(code, cy), (e: unknown) => e instanceof RoomError && e.status === 404);
   rooms.join(code, ben);
   assert.equal(rooms.view(code, ann).players.length, 2);
 });
@@ -167,4 +167,26 @@ test("only an admin reveals everyone's cards, host or not", async () => {
   assert.equal(rooms.view(code, ben).canReveal, false);
   rooms.reveal(code, ann, true);
   assert.ok(rooms.view(code, cy).players.every((p) => p.card));
+});
+
+test("the host sees who they removed and can let them back in", async () => {
+  const { rooms, code } = await table(2);
+  rooms.kick(code, ann, ben.id);
+  assert.deepEqual(rooms.view(code, ann).removed, [{ id: ben.id, name: "ben" }]);
+  rooms.unkick(code, ann, ben.id);
+  assert.deepEqual(rooms.view(code, ann).removed, []);
+});
+
+test("one account can host only a few rooms at once", async () => {
+  const rooms = new CardRooms(new MemoryStore());
+  for (let i = 0; i < 5; i++) rooms.create(ben);
+  assert.throws(() => rooms.create(ben), (e: unknown) => e instanceof RoomError && e.status === 429);
+});
+
+test("a host who is not an admin is never sent test players' cards", async () => {
+  const { rooms, code } = await table(2);
+  rooms.addTestPlayers(code, ann, 2);
+  rooms.makeHost(code, ann, ben.id);
+  rooms.deal(code, ben);
+  assert.ok(rooms.view(code, ben).players.every((p) => !p.testCard));
 });

@@ -102,6 +102,8 @@ export interface RoomView {
   setAside: Card | null;
   timer: Timer;
   version: number;
+  /** For the host: the people they removed, who can be let back in. */
+  removed: { id: number; name: string }[];
   /** This phone may reveal everybody's cards: an admin, host or not. */
   canReveal: boolean;
   /** This phone may add test players: it is the host, and an admin. */

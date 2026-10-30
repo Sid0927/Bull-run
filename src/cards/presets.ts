@@ -149,6 +149,14 @@ export function cleanConfig(input: unknown): Config {
       const x = obj(r);
       return { minutes: num(x.minutes, 0.25, 60, 3), swap: int(x.swap, 0, 30, 0) };
     });
+  // A pasted setup can repeat an id; each one has to be unique or edits land on the wrong copy.
+  for (const list of [teams, roles] as { id: string }[][]) {
+    const used = new Set<string>();
+    for (const x of list) {
+      if (used.has(x.id)) x.id = rid(); // roles keep pointing at the first team of that id
+      used.add(x.id);
+    }
+  }
   const g = arr(o.groupNames);
   return {
     title: str(o.title, 40),

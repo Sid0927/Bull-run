@@ -24,19 +24,23 @@ function useRoom(code: string) {
   const load = useCallback(
     () =>
       cardsApi.view(code).then(take, (e: CardsError) => {
-        if (e.status === 403 && wasIn.current) {
-          // In it a moment ago: the host removed this player. Joining again by itself would undo that.
-          return setError({ status: 403, text: "The host removed you from this room. Ask them for the code if that was a mistake." });
+        if (e.status !== 404) return setError({ status: e.status, text: e.message });
+        // Not in it (the server says so the same way as "no such room"). The first time, a shared
+        // link joins by itself. After having been in it, the room closed or the host removed this
+        // player: joining would say which, but must never quietly put them back.
+        if (wasIn.current) {
+          return cardsApi.join(code).then(
+            take,
+            (j: CardsError) => setError({ status: j.status === 403 ? 403 : 404, text: j.status === 403 ? j.message : "This room has closed." }),
+          );
         }
-        if (e.status === 403) {
-          // Not in it yet: a shared link joins by itself.
-          return cardsApi.join(code).then(take, (j: CardsError) => setError({ status: j.status, text: j.message }));
-        }
-        setError({ status: e.status, text: e.message });
+        return cardsApi.join(code).then(take, (j: CardsError) => setError({ status: j.status, text: j.message }));
       }),
     [code, take],
   );
-  const inRoom = view !== null;
+  // Out of the room (closed, or removed): stop the stream and the poll, or a dead tab keeps asking.
+  const out = error !== null && (error.status === 403 || error.status === 404);
+  const inRoom = view !== null && !out;
   const [stream, setStream] = useState(0);
   useEffect(() => {
     if (!inRoom) return;
@@ -59,6 +63,7 @@ function useRoom(code: string) {
     };
   }, [code, inRoom, load, stream]);
   useEffect(() => {
+    if (out) return;
     load();
     const t = setInterval(load, 20_000);
     const onVisible = () => document.visibilityState === "visible" && load();
@@ -67,7 +72,7 @@ function useRoom(code: string) {
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [code, load]);
+  }, [code, load, out]);
   return { view, error, take, load, offset };
 }
 
@@ -281,14 +286,17 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
           )}
         </div>
         <p className={fits || n < 2 ? "muted small" : "error small"}>{n < 2 ? "The deck is worked out once more players join." : summary}</p>
-        <div className="hh-team-chips">
+        {/* Every side's goal, before the deal: nobody should pick up a card not knowing what each side is after. */}
+        <ul className="hh-sides">
           {c.teams.map((t) => (
-            <span key={t.id} className="hh-team-chip" style={teamStyle(t)}>
-              <span className="hh-dot" aria-hidden="true" /> {t.name}
-              {t.fills && <span className="muted small">fills</span>}
-            </span>
+            <li key={t.id} style={teamStyle(t)}>
+              <span className="hh-side-name">
+                <span className="hh-dot" aria-hidden="true" /> {t.name}
+              </span>
+              <span className={t.goal ? "hh-side-goal" : "hh-side-goal muted"}>{t.goal || (t.fills ? "No goal written yet." : "Each plays for the goal on their own card.")}</span>
+            </li>
           ))}
-        </div>
+        </ul>
         {c.roles.filter((r) => r.count > 0).length > 0 && (
           <ul className="hh-role-list">
             {/* One row per role, with a dot for each side holding it: two Leaders read as one role. */}
@@ -351,6 +359,12 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
   const [open, setOpen] = useState(false);
   const [showing, setShowing] = useState<"team" | "full" | null>(null);
   const [refused, setRefused] = useState(false);
+  const [faceDrawn, setFaceDrawn] = useState(false);
+  useEffect(() => {
+    if (open) return setFaceDrawn(true);
+    const t = window.setTimeout(() => setFaceDrawn(false), 650); // after the turn back has finished
+    return () => window.clearTimeout(t);
+  }, [open]);
   const refusedTimer = useRef<number>(0);
   const timer = useRef<number>(0);
   // A new deal turns the card face down again, and brings it into view: the host dealt from the
@@ -399,7 +413,9 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
             </CardBack>
           </span>
           <span className="hh-flip-side front" aria-hidden={!open}>
-            <CardFace card={card} config={view.config} />
+            {/* Only drawn while turned over: some browsers (iOS Safari with a scrolling layer)
+                ignore a hidden back face, which would mirror the role through the face-down card. */}
+            {faceDrawn ? <CardFace card={card} config={view.config} /> : <div className="hh-card hh-face-blank" />}
           </span>
         </span>
       </button>
@@ -543,7 +559,13 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
       <ul>
         {view.players.map((p: PlayerView) => (
           <li key={p.id}>
-            <Avatar name={p.name} size={34} />
+            {p.test ? (
+              <span className="hh-test-avatar" aria-hidden="true">
+                <Icon name="robot" size={18} />
+              </span>
+            ) : (
+              <Avatar name={p.name} size={34} />
+            )}
             <span className="hh-player-name truncate">
               {p.name}
               {p.id === view.me && <span className="muted small"> (you)</span>}
@@ -591,6 +613,21 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
           </li>
         ))}
       </ul>
+      {view.removed.length > 0 && (
+        <div className="hh-removed">
+          <span className="field-label">Removed</span>
+          <ul>
+            {view.removed.map((r) => (
+              <li key={r.id}>
+                <span className="truncate">{r.name}</span>
+                <button disabled={busy} onClick={() => act(() => cardsApi.letBackIn(view.code, r.id))}>
+                  Let back in
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {view.canTest && !view.dealt && (
         <div className="hh-test-add">
           <p className="muted small">

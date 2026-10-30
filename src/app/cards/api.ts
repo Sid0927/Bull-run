@@ -39,6 +39,7 @@ export const cardsApi = {
   config: (code: string, config: Config) => post(code, "config", { config }),
   deal: (code: string, again = false) => post(code, "deal", { again }),
   claimHost: (code: string) => post(code, "claim"),
+  letBackIn: (code: string, playerId: number) => post(code, "unkick", { playerId }),
   collect: (code: string) => post(code, "collect"),
   reveal: (code: string, on: boolean) => post(code, "reveal", { on }),
   timer: (code: string, action: TimerAction) => post(code, "timer", { action }),
