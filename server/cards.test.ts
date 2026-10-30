@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CardRooms, HOST_AWAY_MS, RoomError } from "./cards.ts";
 import { MemoryStore } from "./store.ts";
 
-const ann = { id: 1, username: "ann" };
+const ann = { id: 1, username: "ann", isAdmin: true };
 const ben = { id: 2, username: "ben" };
 const cy = { id: 3, username: "cy" };
 
@@ -142,4 +142,29 @@ test("anyone may take over from a host who has gone quiet, and not before", asyn
   assert.equal(rooms.view(code, ben).hostAway, true);
   rooms.claimHost(code, ben);
   assert.equal(rooms.view(code, ben).host, true);
+});
+
+test("only an admin hosting the room can add test players", async () => {
+  const { rooms, code } = await table(2);
+  rooms.makeHost(code, ann, ben.id);
+  assert.throws(() => rooms.addTestPlayers(code, ben, 2), /Only an admin/);
+  assert.equal(rooms.view(code, ben).canTest, false);
+});
+
+test("nobody is sent which group anyone else is in", async () => {
+  const { rooms, code } = await table(3);
+  rooms.deal(code, ann);
+  const v = rooms.view(code, ben);
+  assert.notEqual(v.myGroup, null);
+  assert.ok(v.players.every((p) => !("group" in p)));
+});
+
+test("only an admin reveals everyone's cards, host or not", async () => {
+  const { rooms, code } = await table(3);
+  rooms.makeHost(code, ann, ben.id);
+  rooms.deal(code, ben);
+  assert.throws(() => rooms.reveal(code, ben, true), /Only an admin/);
+  assert.equal(rooms.view(code, ben).canReveal, false);
+  rooms.reveal(code, ann, true);
+  assert.ok(rooms.view(code, cy).players.every((p) => p.card));
 });

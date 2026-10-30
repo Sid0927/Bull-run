@@ -10,12 +10,12 @@ export type Random = () => number;
 
 const MEMBER = "member:";
 
-function cardOf(role: Role): Card {
-  return { roleId: role.id, name: role.name, teamId: role.teamId, description: role.description, show: role.show, showsAsTeamId: role.showsAsTeamId };
+function cardOf(role: Role, team: Team | undefined): Card {
+  return { roleId: role.id, name: role.name, teamId: role.teamId, description: role.description, show: role.show, showsAsTeamId: role.showsAsTeamId, goal: team?.goal ?? "" };
 }
 
 function memberCard(team: Team): Card {
-  return { roleId: MEMBER + team.id, name: team.memberName || `${team.name} member`, teamId: team.id, description: "", show: "any", showsAsTeamId: "" };
+  return { roleId: MEMBER + team.id, name: team.memberName || `${team.name} member`, teamId: team.id, description: "", show: "any", showsAsTeamId: "", goal: team.goal };
 }
 
 /** Problems with the setup itself, whatever the player count. Empty when it is usable. */
@@ -34,6 +34,14 @@ export function configProblems(config: Config): string[] {
     if (!Number.isInteger(r.count) || r.count < 0) out.push(`${r.name || "A role"} needs a whole number of copies.`);
     if (LIBRARY_BY_ID[r.libId]?.disguise && !r.showsAsTeamId) out.push(`${r.name} needs a team to show as. Pick one, or add a second team.`);
   }
+  // Every card says what its holder is playing for: a side's cards carry the side's goal, and a
+  // loner's role is its own goal.
+  for (const t of config.teams) {
+    if (t.goal.trim()) continue;
+    const roles = config.roles.filter((r) => r.teamId === t.id && r.count > 0);
+    const needs = t.fills || roles.some((r) => LIBRARY_BY_ID[r.libId]?.group !== "loner");
+    if (needs) out.push(`Write a goal for ${t.name || "every side"}: it is printed on their cards.`);
+  }
   if (config.oddRoleId && !config.roles.some((r) => r.id === config.oddRoleId)) out.push("The odd-player role no longer exists.");
   if (config.rounds.some((r) => !(r.minutes > 0))) out.push("Every round needs a length.");
   return [...new Set(out)];
@@ -51,7 +59,8 @@ export function buildDeck(config: Config, players: number): { cards: Card[] } | 
   if (players > MAX_PLAYERS) return { error: `At most ${MAX_PLAYERS} players.` };
   const size = players + (config.setAside ? 1 : 0);
   const cards: Card[] = [];
-  for (const role of config.roles) for (let i = 0; i < role.count; i++) cards.push(cardOf(role));
+  const teamOf = (id: string) => config.teams.find((t) => t.id === id);
+  for (const role of config.roles) for (let i = 0; i < role.count; i++) cards.push(cardOf(role, teamOf(role.teamId)));
   if (cards.length > size) {
     return { error: `The roles add up to ${cards.length} cards, but there are ${size} to deal${config.setAside ? " (one set aside)" : ""}. Take some roles out or wait for more players.` };
   }
@@ -66,7 +75,7 @@ export function buildDeck(config: Config, players: number): { cards: Card[] } | 
     const least = Math.min(...counts);
     const level = counts.every((c) => c === least);
     if (odd && level && fillers.length > 1 && size - cards.length === 1) {
-      cards.push(cardOf(odd));
+      cards.push(cardOf(odd, teamOf(odd.teamId)));
       continue;
     }
     cards.push(memberCard(fillers[counts.indexOf(least)]));

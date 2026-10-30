@@ -189,10 +189,9 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
       )}
       {view.host && view.dealt && !view.revealed && view.players.some((p) => p.test) && <TestCards view={view} />}
       {view.dealt && view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
-      {view.dealt && view.config.groups && <Groups view={view} act={act} busy={busy} />}
       {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={!view.dealt} />}
       <Players view={view} act={act} busy={busy} />
-      {view.host ? <HostBar view={view} act={act} busy={busy} /> : null}
+      {view.host || (view.canReveal && view.dealt) ? <HostBar view={view} act={act} busy={busy} /> : null}
       {!view.dealt && (
         <button
           className="ghost-link danger-text hh-leave"
@@ -515,35 +514,6 @@ function Countdown({ view, offset, busy, act }: { view: RoomView; offset: number
 
 /* ── Groups, players, rules ───────────────────────────────────────────────────── */
 
-function Groups({ view, act, busy }: { view: RoomView; act: (f: () => Promise<RoomView>) => Promise<boolean | undefined>; busy: boolean }) {
-  return (
-    <section className="hh-groups">
-      {[0, 1].map((g) => {
-        const people = view.players.filter((p) => p.group === g);
-        return (
-          <div key={g} className={`panel hh-group g${g}`}>
-            <h3>
-              {view.config.groupNames[g]} <span className="count">{people.length}</span>
-            </h3>
-            <ul>
-              {people.map((p) => (
-                <li key={p.id} className={p.id === view.me ? "me" : ""}>
-                  <span className="truncate">{p.name}</span>
-                  {view.host && (
-                    <button className="hh-move" disabled={busy} aria-label={`Move ${p.name} to ${view.config.groupNames[g === 0 ? 1 : 0]}`} onClick={() => act(() => cardsApi.move(view.code, p.id))}>
-                      <Icon name="swap" size={14} />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
 function HouseRules({ notes, open }: { notes: string; open: boolean }) {
   return (
     <details className="panel hh-rules" open={open}>
@@ -558,7 +528,6 @@ function HouseRules({ notes, open }: { notes: string; open: boolean }) {
 function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<RoomView>) => Promise<boolean | undefined>; busy: boolean }) {
   const [menu, setMenu] = useState<number | null>(null);
   const tests = view.players.filter((p) => p.test).length;
-  if (view.dealt && view.config.groups) return null; // the groups already list everybody
   return (
     <section className="panel hh-players">
       <div className="hh-section-head">
@@ -622,7 +591,7 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
           </li>
         ))}
       </ul>
-      {view.host && !view.dealt && (
+      {view.canTest && !view.dealt && (
         <div className="hh-test-add">
           <p className="muted small">
             <Icon name="robot" size={16} /> Nobody to play with? Add test players and open their cards from your phone.
@@ -661,7 +630,6 @@ function TestCards({ view }: { view: RoomView }) {
         {tests.map((p) => (
           <li key={p.id}>
             <span className="hh-player-name truncate">{p.name}</span>
-            {view.config.groups && p.group !== undefined && <span className="muted small">{view.config.groupNames[p.group]}</span>}
             <button onClick={() => setOpen(p)}>
               <Icon name="eye" size={16} /> Open
             </button>
@@ -716,7 +684,6 @@ function RevealBoard({ view }: { view: RoomView }) {
                 <li key={p.id} className={p.card && !p.card.roleId.startsWith("member:") ? "special" : ""}>
                   <span className="truncate">{p.name}</span>
                   <b className="truncate">{p.card?.name}</b>
-                  {c.groups && p.group !== undefined && <span className="muted small">{c.groupNames[p.group]}</span>}
                 </li>
               ))}
             </ul>
@@ -735,7 +702,7 @@ function RevealBoard({ view }: { view: RoomView }) {
 
 function HostBar({ view, act, busy }: { view: RoomView; act: (f: () => Promise<RoomView>, done?: string) => Promise<boolean | undefined>; busy: boolean }) {
   const n = view.players.length;
-  if (!view.dealt)
+  if (!view.dealt && view.host)
     return (
       <div className="hh-hostbar">
         <button className="primary big shine" disabled={busy || n < 2} onClick={() => act(() => cardsApi.deal(view.code))}>
@@ -746,12 +713,17 @@ function HostBar({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
   return (
     <section className="panel hh-hosttools">
       <h2>
-        <Icon name="crown" /> Host
+        <Icon name="crown" /> {view.host ? "Host" : "Admin"}
       </h2>
       <div className="hh-hosttools-grid">
-        <button disabled={busy} onClick={() => act(() => cardsApi.reveal(view.code, !view.revealed))}>
-          <Icon name="eye" size={18} /> {view.revealed ? "Hide cards again" : "Reveal all cards"}
-        </button>
+        {/* Revealing every card is an admin's call, whoever hosts. */}
+        {view.canReveal && (
+          <button disabled={busy} onClick={() => act(() => cardsApi.reveal(view.code, !view.revealed))}>
+            <Icon name="eye" size={18} /> {view.revealed ? "Hide cards again" : "Reveal all cards"}
+          </button>
+        )}
+        {view.host && (
+          <>
         <button
           disabled={busy}
           onClick={() => {
@@ -768,6 +740,8 @@ function HostBar({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
         >
           <Icon name="reset" size={18} /> Collect cards
         </button>
+          </>
+        )}
       </div>
     </section>
   );

@@ -15,7 +15,7 @@ export interface LibraryRole {
   show: ShowRule;
   /** A team share shows another team's colour. */
   disguise: boolean;
-  /** Copies added at once (twins come in a pair). */
+  /** Copies added at once. */
   copies: number;
 }
 
@@ -27,10 +27,9 @@ export const ROLE_GROUPS: { id: RoleGroup; name: string; blurb: string }[] = [
 ];
 
 export const LIBRARY: LibraryRole[] = [
-  { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your team's key card. Your side's goal is about where you end up." },
+  { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your side's key card. Everything your side wants turns on where you end up." },
   { id: "deputy", name: "Deputy", group: "key", copies: 1, show: "any", disguise: false, description: "If your team's Leader was set aside and nobody holds it, you become the Leader." },
 
-  { id: "twin", name: "Twin", group: "helper", copies: 2, show: "any", disguise: false, description: "There are two of you on the same side. Find your twin and show each other your full cards before the last round ends." },
   { id: "scout", name: "Scout", group: "helper", copies: 1, show: "any", disguise: false, description: "Once a round you may ask anyone to show you their team. They can refuse, but everyone will know they did." },
   { id: "open-book", name: "Open Book", group: "helper", copies: 1, show: "full", disguise: false, description: "You can't hide behind a colour: whenever you show, you show your whole card." },
   { id: "herald", name: "Herald", group: "helper", copies: 1, show: "any", disguise: false, description: "When a round ends, you may tell the whole group one thing you have seen. It must be true." },
@@ -42,7 +41,6 @@ export const LIBRARY: LibraryRole[] = [
 
   { id: "drifter", name: "Drifter", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if you end the game in the group with more people in it." },
   { id: "shadow", name: "Shadow", group: "loner", copies: 1, show: "any", disguise: false, description: "Before the first round, secretly tell the host one player's name. You win if you end in the same group as them." },
-  { id: "collector", name: "Collector", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if, by the end, you have seen at least four other players' full cards." },
 ];
 
 export const LIBRARY_BY_ID: Record<string, LibraryRole> = Object.fromEntries(LIBRARY.map((r) => [r.id, r]));

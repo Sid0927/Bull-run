@@ -15,6 +15,8 @@ export interface Team {
   fills: boolean;
   /** The name printed on a plain card of this team. */
   memberName: string;
+  /** What this side is trying to do, printed on every card of the side. Empty for loners, whose roles carry their own. */
+  goal: string;
 }
 
 export interface Role {
@@ -60,6 +62,8 @@ export interface Card {
   description: string;
   show: ShowRule;
   showsAsTeamId: string;
+  /** The side's goal, copied from its team when the cards are dealt. */
+  goal: string;
 }
 
 export interface Timer {
@@ -76,7 +80,6 @@ export interface PlayerView {
   host: boolean;
   /** Only present once the host reveals every card. */
   card?: Card;
-  group?: 0 | 1;
   /** A pretend player the host added to try the game alone. */
   test?: boolean;
   /** A test player's card, sent to the host only: there is no phone to hold it. */
@@ -99,6 +102,10 @@ export interface RoomView {
   setAside: Card | null;
   timer: Timer;
   version: number;
+  /** This phone may reveal everybody's cards: an admin, host or not. */
+  canReveal: boolean;
+  /** This phone may add test players: it is the host, and an admin. */
+  canTest: boolean;
   /** Which start of the server this view is from (versions restart with it). */
   boot: number;
   /** The host's phone has not been heard from for a while: anyone may take over. */

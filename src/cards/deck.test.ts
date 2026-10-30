@@ -13,8 +13,15 @@ const deck = (c: Config, n: number) => {
 };
 const count = (cards: { teamId: string }[], team: string) => cards.filter((c) => c.teamId === team).length;
 
-test("every preset is a usable setup", () => {
-  for (const p of PRESETS) assert.deepEqual(configProblems(p.config), [], p.name);
+test("every ready-made setup is usable, except the blank one, which asks for goals", () => {
+  for (const p of PRESETS.filter((p) => p.id !== "blank")) assert.deepEqual(configProblems(p.config), [], p.name);
+  assert.match(configProblems(PRESETS.find((p) => p.id === "blank")!.config)[0], /Write a goal for Team A/);
+});
+
+test("every card carries its side's goal; a loner's role is its own", () => {
+  const cards = deck(twoTeams(), 11);
+  for (const c of cards.filter((c) => c.teamId !== "loners")) assert.ok(c.goal.length > 10, c.name);
+  assert.ok(cards.filter((c) => c.teamId === "loners").every((c) => c.goal === "" && c.description.startsWith("You win")));
 });
 
 test("an even table splits evenly, with each key card once", () => {
@@ -101,6 +108,7 @@ test("a Mole needs a team to show as", () => {
 test("every library role is a usable role on its own", () => {
   for (const lib of LIBRARY) {
     const c = structuredClone(PRESETS.find((p) => p.id === "blank")!.config);
+    for (const t of c.teams) t.goal = "Win.";
     c.roles = [roleFrom(lib.id, "t1", { showsAsTeamId: "t2" })];
     assert.ok("cards" in buildDeck(c, 8), lib.id);
   }

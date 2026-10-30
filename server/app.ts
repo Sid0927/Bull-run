@@ -547,9 +547,6 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
         case "timer":
           cards.timer(code, user, String(b.action ?? ""));
           break;
-        case "move":
-          cards.move(code, user, pid);
-          break;
         case "kick":
           cards.kick(code, user, pid);
           break;

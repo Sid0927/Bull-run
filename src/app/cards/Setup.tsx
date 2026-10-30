@@ -90,7 +90,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
       const used = new Set(d.teams.map((t) => t.color));
       const color = fills ? (Object.keys(TEAM_COLORS).find((k) => k !== "grey" && !used.has(k)) ?? "black") : "grey";
       const name = fills ? `Team ${String.fromCharCode(65 + d.teams.filter((t) => t.fills).length)}` : "Loners";
-      d.teams.push({ id: rid(), name, color, fills, memberName: fills ? name : "Loner" });
+      d.teams.push({ id: rid(), name, color, fills, memberName: fills ? name : "Loner", goal: "" });
     });
   /** Adds a library role to the team it fits best, or one more copy if it is already there. */
   const addRole = (libId: string) => {
@@ -103,7 +103,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
       if (lib.group === "loner") {
         team = d.teams.find((t) => !t.fills);
         if (!team) {
-          team = { id: rid(), name: "Loners", color: "grey", fills: false, memberName: "Loner" };
+          team = { id: rid(), name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" };
           d.teams.push(team);
         }
       } else {
@@ -268,6 +268,14 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                   </button>
                 ))}
               </div>
+              {t.fills || t.goal ? (
+                <label className="hh-inline-field">
+                  <span className="field-label">Goal, printed on every {t.name || "team"} card</span>
+                  <textarea rows={2} value={t.goal} maxLength={300} placeholder="What does this side need to happen to win?" onChange={(e) => setTeam(t.id, { goal: e.target.value })} />
+                </label>
+              ) : (
+                <p className="muted small">Loners play for the goal written on their own role.</p>
+              )}
               <Switch checked={t.fills} onChange={(v) => setTeam(t.id, { fills: v })} label="Fills the deck" hint="Plain cards of this team make up the rest of the players, kept level with the other sides that fill." />
               {t.fills && (
                 <label className="hh-inline-field">

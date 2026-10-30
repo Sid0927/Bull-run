@@ -58,8 +58,16 @@ export function CardFace({ card, config, compact = false }: { card: Card; config
         </div>
         <h3 className="hh-face-name">{card.name}</h3>
         {!compact && card.description && <p className="hh-face-desc">{card.description}</p>}
-        {!compact && isPlain && <p className="hh-face-desc muted">A plain {team?.name ?? ""} card.</p>}
+        {!compact && isPlain && !card.goal && <p className="hh-face-desc muted">A plain {team?.name ?? ""} card.</p>}
       </div>
+      {!compact && card.goal && (
+        <div className="hh-face-goal">
+          <span className="hh-face-goal-label">
+            <Icon name="flag" size={13} /> {team?.name ?? "Your side"}'s goal
+          </span>
+          <p>{card.goal}</p>
+        </div>
+      )}
       {!compact && (
         <div className="hh-face-foot">
           {SHOW_SHORT[card.show] ? (

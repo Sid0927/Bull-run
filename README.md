@@ -85,8 +85,13 @@ sets it up; everyone else needs only the room code.
   shows the other side's colour on a team share). There is no typing in roles of your own: every
   card says something that has been thought through. Start from a ready-made setup, keep your
   own on your phone, or copy one and send it to somebody.
-- **Trying it alone:** **Try it alone** on the Undercover screen (or **+ test player** in a
-  room) adds pretend players. Only the host sees their cards, and can open any of them and
+- **Goals on the cards:** every side has a goal, written in the setup and printed on each of
+  its cards, so nobody plays without knowing what they are after. A loner's role is its own
+  goal. A side with no goal can't be dealt.
+- **Groups:** when the players are split, each phone says which group its player starts in.
+  Who goes across after that is played out in the room; the app doesn't track it.
+- **Test games (admins only):** **Test game** on the Undercover screen (or **+ test player** in
+  a room) adds pretend players. Only the host sees their cards, and can open any of them and
   hold it up as that player would, so a setup can be dealt and played through on one phone.
 - **If the host's phone dies:** after 90 seconds without a word from it, anyone in the room
   can take over as host.
@@ -98,8 +103,8 @@ sets it up; everyone else needs only the room code.
   view up to somebody.
 - **Rounds:** an optional shared countdown on every phone, with how many players each group sends
   across at the end of a round. The host starts, pauses and moves between rounds.
-- **The end:** the host reveals every card at once, deals again, or collects the cards to change
-  the setup.
+- **The end:** an admin reveals every card at once (no other host can); the host deals again,
+  or collects the cards to change the setup.
 
 Rooms are kept in the same database (`card_rooms`), so a deploy does not end a game; a room
 nobody has touched for twelve hours is dropped. The rules for building a deck are in
