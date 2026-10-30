@@ -43,7 +43,6 @@ export const LIBRARY: LibraryRole[] = [
   { id: "drifter", name: "Drifter", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if you end the game in the group with more people in it." },
   { id: "shadow", name: "Shadow", group: "loner", copies: 1, show: "any", disguise: false, description: "Before the first round, secretly tell the host one player's name. You win if you end in the same group as them." },
   { id: "collector", name: "Collector", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if, by the end, you have seen at least four other players' full cards." },
-  { id: "peacemaker", name: "Peacemaker", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if both sides' Leaders end the game in the same group, whoever else wins." },
 ];
 
 export const LIBRARY_BY_ID: Record<string, LibraryRole> = Object.fromEntries(LIBRARY.map((r) => [r.id, r]));
