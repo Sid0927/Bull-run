@@ -107,6 +107,10 @@ export interface Store {
   replacePlayer(gameId: number, seat: number, userId: number): Promise<void>;
   actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
+  /** Hidden Hand rooms, kept whole as JSON: one evening's state, read back after a restart. */
+  cardRooms(): Promise<{ code: string; data: unknown }[]>;
+  saveCardRoom(code: string, data: unknown): Promise<void>;
+  deleteCardRoom(code: string): Promise<void>;
 }
 
 // ─── Memory ─────────────────────────────────────────────────────────────────────────────
@@ -118,9 +122,19 @@ export class MemoryStore implements Store {
   private players: { gameId: number; userId: number; seat: number }[] = [];
   private log = new Map<number, TimedAction[]>();
   private loginLog: LoginEvent[] = [];
+  private cards = new Map<string, unknown>();
 
   async init() {}
   async close() {}
+  async cardRooms() {
+    return [...this.cards].map(([code, data]) => ({ code, data: structuredClone(data) }));
+  }
+  async saveCardRoom(code: string, data: unknown) {
+    this.cards.set(code, structuredClone(data));
+  }
+  async deleteCardRoom(code: string) {
+    this.cards.delete(code);
+  }
   async userByName(username: string) {
     return this.users.find((u) => u.username.toLowerCase() === username.toLowerCase()) ?? null;
   }
@@ -346,6 +360,12 @@ CREATE TABLE IF NOT EXISTS email_tokens (
   expires_at TIMESTAMPTZ NOT NULL
 );
 DELETE FROM email_tokens WHERE expires_at < now();
+CREATE TABLE IF NOT EXISTS card_rooms (
+  code TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DELETE FROM card_rooms WHERE updated_at < now() - interval '2 days';
 `;
 
 type Row = Record<string, unknown>;
@@ -403,6 +423,15 @@ export class PgStore implements Store {
   }
   async close() {
     await this.pool.end();
+  }
+  async cardRooms() {
+    return (await this.q("SELECT code, data FROM card_rooms")).map((r) => ({ code: r.code as string, data: r.data }));
+  }
+  async saveCardRoom(code: string, data: unknown) {
+    await this.q("INSERT INTO card_rooms (code, data, updated_at) VALUES ($1, $2, now()) ON CONFLICT (code) DO UPDATE SET data = EXCLUDED.data, updated_at = now()", [code, JSON.stringify(data)]);
+  }
+  async deleteCardRoom(code: string) {
+    await this.q("DELETE FROM card_rooms WHERE code = $1", [code]);
   }
   async userByName(username: string) {
     const [r] = await this.q("SELECT * FROM users WHERE lower(username) = lower($1)", [username]);

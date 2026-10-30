@@ -63,6 +63,25 @@ const PATHS = {
   sound: "M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5ZM15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11",
   mute: "M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5ZM16 10l5 5M21 10l-5 5",
   robot: "M7 9h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM12 5v4M10 14h.01M14 14h.01M3 13v2M21 13v2",
+  minus: "M5 12h14",
+  crown: "M4 18h16M5 15 4 7l5 4 3-6 3 6 5-4-1 8H5Z",
+  eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
+  card: "M7.5 3h9A2.5 2.5 0 0 1 19 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 18.5v-13A2.5 2.5 0 0 1 7.5 3ZM9 8h6M9 12h6M9 16h3",
+  cards: "M9 3.5h8.5A2 2 0 0 1 19.5 5.5v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2ZM7 6.5 5.6 6.9a2 2 0 0 0-1.4 2.4l2.6 9.8",
+  play: "M8 5.5v13l10.5-6.5L8 5.5Z",
+  pause: "M8 5v14M16 5v14",
+  next: "M6 5.5v13L15 12 6 5.5ZM18 5v14",
+  prev: "M18 5.5v13L9 12l9-6.5ZM6 5v14",
+  reset: "M4 12a8 8 0 1 0 2.3-5.7M4 4v4.5h4.5",
+  shuffle: "M4 7h3.5c4 0 5 10 9 10H20M17 14l3 3-3 3M4 17h3.5c1.4 0 2.4-1.2 3.3-2.8M13.2 9.8C14.1 8.2 15.1 7 16.5 7H20M17 4l3 3-3 3",
+  gear: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM12 2.5v3M12 18.5v3M4.2 6.3l2.2 2M17.6 15.7l2.2 2M2.5 12h3M18.5 12h3M4.2 17.7l2.2-2M17.6 8.3l2.2-2",
+  swap: "M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7",
+  trash: "M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13",
+  timer: "M12 6a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM12 9.5v4l2.5 2M9.5 2.5h5",
+  lock: "M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM8 11V8a4 4 0 0 1 8 0v3",
+  chevron: "M9 6l6 6-6 6",
+  back: "M15 6l-6 6 6 6",
+  sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z",
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -168,5 +187,38 @@ export function When({ at }: { at: string | null }) {
     <time dateTime={at} title={`${new Date(at).toLocaleString("en-IN", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" })} IST`}>
       {rel === "just now" ? rel : `${clock(at)} (${rel})`}
     </time>
+  );
+}
+
+/** Boxes for a room code; the real input lies over them. */
+export function CodeInput({ value, onChange, length = 5, id = "join-code", label = "Game code", letters = false }: { value: string; onChange: (v: string) => void; length?: number; id?: string; label?: string; letters?: boolean }) {
+  return (
+    <label className="code-boxes">
+      <span className="sr-only">{label}</span>
+      <input
+        id={id}
+        value={value}
+        inputMode="text"
+        autoCorrect="off"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              .toUpperCase()
+              .replace(letters ? /[^A-Z]/g : /[^A-Z0-9]/g, "")
+              .slice(0, length),
+          )
+        }
+      />
+      <span className="boxes" aria-hidden="true">
+        {Array.from({ length }, (_, i) => (
+          <span key={i} className={`box ${i === value.length ? "cursor" : ""} ${value[i] ? "filled" : ""}`}>
+            {value[i] ?? ""}
+          </span>
+        ))}
+      </span>
+    </label>
   );
 }

@@ -15,6 +15,7 @@ import { mailerFromEnv } from "./mail.ts";
 import { fileURLToPath } from "node:url";
 import { createApp, ensureAdmin } from "./app.ts";
 import { MemoryStore, PgStore } from "./store.ts";
+import { CardRooms } from "./cards.ts";
 
 const log = (m: string) => console.log(`[bull-run] ${m}`);
 const production = process.env.NODE_ENV === "production";
@@ -39,7 +40,9 @@ if (!adminUser || !adminPass) {
 } else await ensureAdmin(store, adminUser, adminPass, log);
 
 const staticDir = fileURLToPath(new URL("../dist", import.meta.url));
-const { server, hub } = createApp({ store, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, openSignup: process.env.OPEN_SIGNUP !== "0", mailer: mailerFromEnv(process.env, log), appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL, log });
+const cards = new CardRooms(store, log);
+await cards.init();
+const { server, hub } = createApp({ store, cards, staticDir, secureCookies: production, trustProxy: process.env.TRUST_PROXY === "1" || !!process.env.RENDER, openSignup: process.env.OPEN_SIGNUP !== "0", mailer: mailerFromEnv(process.env, log), appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL, log });
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port, () => log(`Listening on port ${port}${url ? "" : " (memory store: nothing is saved)"}`));
 
@@ -53,7 +56,7 @@ function shutdown(signal: string) {
   setTimeout(() => process.exit(0), 10_000).unref();
   hub.closeAll();
   server.close(() => {
-    store.close().finally(() => process.exit(0));
+    cards.flush().finally(() => store.close().finally(() => process.exit(0)));
   });
   server.closeIdleConnections();
 }

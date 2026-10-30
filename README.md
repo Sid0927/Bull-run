@@ -1,4 +1,14 @@
-# Bull Run — play-test software
+# Sid's Game Centre
+
+One website, one account, several games. Everyone signs in first (with an account they create,
+or one the admin gives them) and then picks a game:
+
+- **Bull Run**: a physical tabletop stock market game for 3–5 players, played online. Its rules,
+  engine and simulator are described below.
+- **Hidden Hand**: secret role cards for a game played together in one room. Each phone is a
+  player's card. See [Hidden Hand](#hidden-hand) below.
+
+## Bull Run: play-test software
 
 Bull Run is a physical tabletop stock market game for 3–5 players. This repository is the
 software used to test its rules before printing:
@@ -58,6 +68,31 @@ npm start            # http://localhost:3000, admin / admin123, nothing saved wi
 ```
 
 For development, `npm run server` (API with reload) and `npm run dev` (app on :5173) together.
+
+## Hidden Hand
+
+For any game of hidden teams and roles played around a table, without a deck of cards. The host
+sets it up; everyone else needs only the room code.
+
+- **Host:** Hidden Hand → **Start a room**, then **Edit setup**: name the teams (and their
+  colours), add roles with how many copies, what the card says, and how it may be shown (team or
+  full card, team only, full card only, or not at all). A role can also *show as* another team on
+  a team share. Start from a ready-made setup, keep your own on your phone, or copy one and send
+  it to somebody.
+- **Dealing:** roles go in at their counts, and teams marked *fills the deck* make up the rest,
+  kept level. An odd player can get a chosen role instead; one card can be set aside unseen.
+  Players can be split into two groups at random.
+- **Players:** join with the 5-letter code or the shared link. Each phone shows a face-down card:
+  tap to look (it hides itself again), then **Show team** or **Show card** to hold a full-screen
+  view up to somebody.
+- **Rounds:** an optional shared countdown on every phone, with how many players each group sends
+  across at the end of a round. The host starts, pauses and moves between rounds.
+- **The end:** the host reveals every card at once, deals again, or collects the cards to change
+  the setup.
+
+Rooms are kept in the same database (`card_rooms`), so a deploy does not end a game; a room
+nobody has touched for twelve hours is dropped. The rules for building a deck are in
+`src/cards/deck.ts` and tested in `deck.test.ts`; the rooms are `server/cards.ts`.
 
 ## Commands
 

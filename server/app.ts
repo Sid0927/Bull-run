@@ -6,6 +6,7 @@ import type { Action } from "../src/engine/index.ts";
 import type { AdminUser, Me } from "../src/shared/api.ts";
 import { DUMMY_HASH, LoginLimiter, SESSION_DAYS, checkNewPassword, checkPassword, checkUsername, hashPassword, newToken } from "./auth.ts";
 import { GameError, Hub } from "./hub.ts";
+import { CardRooms, RoomError } from "./cards.ts";
 import type { Store, User } from "./store.ts";
 import { createHash } from "node:crypto";
 import { mailerFromEnv, type Mailer } from "./mail.ts";
@@ -20,6 +21,8 @@ export interface AppOptions {
   /** Override how long computer players pause before moving (tests). */
   botDelayMs?: number;
   store: Store;
+  /** Hidden Hand rooms (made here if not given; the server passes one it has read back from the store). */
+  cards?: CardRooms;
   /** Folder with the built app (vite build). Omit to serve the API only. */
   staticDir?: string;
   /** Mark the session cookie Secure (behind HTTPS in production). */
@@ -53,9 +56,10 @@ class HttpError extends Error {
   }
 }
 
-export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
+export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: CardRooms } {
   const { store } = opts;
   const hub = new Hub(store, { botDelayMs: opts.botDelayMs });
+  const cards = opts.cards ?? new CardRooms(store, opts.log);
   const limiter = new LoginLimiter();
   const joinLimiter = new LoginLimiter(10);
   const ipLimiter = new LoginLimiter(30);
@@ -81,9 +85,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       const token = newToken();
       await store.saveEmailToken(sha256(token), u.id, email, new Date(Date.now() + 3 * 86400_000));
       const link = `${siteUrl(req)}/#/verify/${token}`;
-      const text = `Hi ${u.username},\n\nConfirm this email for your Bull Run account by opening this link:\n${link}\n\nThe link works for 3 days. If you didn't sign up for Bull Run, you can ignore this email.`;
-      const html = `<p>Hi ${escapeHtml(u.username)},</p><p>Confirm this email for your Bull Run account:</p><p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0b7a4b;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Confirm my email</a></p><p style="color:#666;font-size:13px">Or open this link: ${link}<br>It works for 3 days. If you didn't sign up for Bull Run, you can ignore this email.</p>`;
-      await mailer.send(email, "Confirm your email for Bull Run", text, html);
+      const text = `Hi ${u.username},\n\nConfirm this email for your Sid's Game Centre account by opening this link:\n${link}\n\nThe link works for 3 days. If you didn't sign up for Sid's Game Centre, you can ignore this email.`;
+      const html = `<p>Hi ${escapeHtml(u.username)},</p><p>Confirm this email for your Sid's Game Centre account:</p><p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0b7a4b;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Confirm my email</a></p><p style="color:#666;font-size:13px">Or open this link: ${link}<br>It works for 3 days. If you didn't sign up for Sid's Game Centre, you can ignore this email.</p>`;
+      await mailer.send(email, "Confirm your email for Sid's Game Centre", text, html);
     } catch (e) {
       log(`Could not send the confirmation email to ${email}: ${(e as Error).message}`);
     }
@@ -484,6 +488,80 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
       });
       return json(res, 200, await hub.summary(g, user.id));
     }
+    // ── Hidden Hand (secret role cards) ──
+    if (path === "/api/cards/rooms" && method === "GET") return json(res, 200, cards.mine(user));
+    if (path === "/api/cards/rooms" && method === "POST") return json(res, 200, { code: cards.create(user) });
+    const cm = path.match(/^\/api\/cards\/rooms\/([A-Za-z]{5})(?:\/([a-z]+))?$/);
+    if (cm) {
+      const code = cm[1].toUpperCase();
+      const what = cm[2] ?? "";
+      if (method === "GET" && what === "") return json(res, 200, cards.view(code, user));
+      if (method === "GET" && what === "events") {
+        let stop: (() => void) | null = null;
+        let ping: ReturnType<typeof setInterval> | null = null;
+        const alive = () => !res.destroyed && !res.writableEnded;
+        const send = () => {
+          if (!alive()) return;
+          try {
+            res.write(`data: ${cards.view(code, user).version}\n\n`);
+          } catch {
+            res.write("event: gone\ndata: {}\n\n");
+            end();
+          }
+        };
+        const end = () => {
+          stop?.();
+          if (ping) clearInterval(ping);
+          if (alive()) res.end();
+        };
+        stop = cards.watch(code, user, send); // refuses a stranger before the stream opens
+        req.on("close", end);
+        res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+        res.write("retry: 2000\n\n");
+        send();
+        ping = setInterval(() => alive() && res.write(": ping\n\n"), 25_000);
+        return;
+      }
+      if (method !== "POST") throw new HttpError(405, "Not allowed.");
+      const b = await body(req);
+      const pid = Number(b.playerId);
+      switch (what) {
+        case "join":
+          cards.join(code, user);
+          break;
+        case "config":
+          cards.setConfig(code, user, b.config);
+          break;
+        case "deal":
+          cards.deal(code, user);
+          break;
+        case "collect":
+          cards.collect(code, user);
+          break;
+        case "reveal":
+          cards.reveal(code, user, b.on !== false);
+          break;
+        case "timer":
+          cards.timer(code, user, String(b.action ?? ""));
+          break;
+        case "move":
+          cards.move(code, user, pid);
+          break;
+        case "kick":
+          cards.kick(code, user, pid);
+          break;
+        case "host":
+          cards.makeHost(code, user, pid);
+          break;
+        case "leave":
+          cards.leave(code, user);
+          return json(res, 200, { ok: true });
+        default:
+          throw new HttpError(404, "Not found.");
+      }
+      return json(res, 200, cards.view(code, user));
+    }
+
     const gm = path.match(/^\/api\/games\/(\d{1,9})\/(leave|start|action|stream|add-bot|remove-bot)$/);
     if (gm) {
       const id = Number(gm[1]);
@@ -562,13 +640,16 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub } {
 
   const server = createServer((req, res) => {
     route(req, res).catch((e) => {
-      const status = e instanceof HttpError || e instanceof GameError ? e.status : 500;
+      const status = e instanceof HttpError || e instanceof GameError || e instanceof RoomError ? e.status : 500;
       if (status === 500) log(`error: ${(e as Error).stack ?? e}`);
       if (res.headersSent) return res.end();
       json(res, status, { error: status === 500 ? "Something went wrong on the server." : (e as Error).message });
     });
   });
-  return { server, hub };
+  const sweeper = setInterval(() => cards.sweep(), 10 * 60_000);
+  sweeper.unref();
+  server.on("close", () => clearInterval(sweeper));
+  return { server, hub, cards };
 }
 
 /** Make sure there is an admin account to sign in with. */

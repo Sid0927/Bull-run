@@ -4,13 +4,21 @@ import type { AdminUser, GameSummary, LoginRecord, Me } from "../shared/api.ts";
 import { ApiError, api } from "./api.ts";
 import { GameScreen } from "./GameScreen.tsx";
 import { localGame, type GameSource } from "./local.ts";
-import { BullLogo } from "./logos.tsx";
+import { BullLogo, CentreLogo } from "./logos.tsx";
+import { CardsHome } from "./cards/CardsHome.tsx";
+import { CardRoom } from "./cards/CardRoom.tsx";
+import { HandMark } from "./cards/CardArt.tsx";
+import { CARDS_NAME, type CardRoomSummary } from "../cards/types.ts";
+import { cardsApi } from "./cards/api.ts";
 import { Rulebook } from "./Rulebook.tsx";
 import { ThemeToggle } from "./theme.tsx";
 import { chime, setSoundOn, soundOn } from "./sound.ts";
-import { Avatar, AvatarStack, Icon, TickerTape, When, clock, fullTime } from "./ui.tsx";
+import { Avatar, AvatarStack, CodeInput, Icon, When, clock, fullTime } from "./ui.tsx";
 
-type Route = { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" } | { name: "verify"; token: string };
+/** The site's name, in one place. */
+export const CENTRE_NAME = "Sid's Game Centre";
+
+type Route = { name: "hub" } | { name: "cards" } | { name: "cardroom"; code: string } | { name: "lobby" } | { name: "game"; id: number } | { name: "admin" } | { name: "rules" } | { name: "practice" } | { name: "verify"; token: string };
 
 /** The practice game in progress. Kept outside React so reading the rules and coming back resumes it. */
 let practice: { source: GameSource; n: number } | null = null;
@@ -27,7 +35,11 @@ function parse(hash: string): Route {
   const v = hash.match(/^#\/verify\/([A-Za-z0-9_-]{10,200})$/);
   if (v) return { name: "verify", token: v[1] };
   if (hash === "#rules") return { name: "rules" };
-  return { name: "lobby" };
+  if (hash === "#/bull-run") return { name: "lobby" };
+  if (hash === "#/cards") return { name: "cards" };
+  const c = hash.match(/^#\/cards\/([A-Za-z]{5})$/);
+  if (c) return { name: "cardroom", code: c[1].toUpperCase() };
+  return { name: "hub" };
 }
 
 export function go(hash: string) {
@@ -62,7 +74,7 @@ export function App() {
   if (me === undefined)
     return (
       <div className="splash">
-        <BullLogo size={64} />
+        <CentreLogo size={64} />
       </div>
     );
   if (me === null) return <Login onIn={setMe} onRules={openRules} />;
@@ -72,9 +84,10 @@ export function App() {
     setMe(null);
     go("#/");
   };
+  const inBullRun = route.name === "lobby" || route.name === "game" || route.name === "practice";
   const shell = (body: ReactNode, wide = false) => (
     <div className={`app ${wide ? "wide" : ""}`}>
-      <TopBar me={me} onRules={openRules} onSignOut={signOut} />
+      <TopBar me={me} onRules={inBullRun ? openRules : null} onSignOut={signOut} section={inBullRun ? "bull" : route.name === "cards" || route.name === "cardroom" ? "cards" : null} />
       {body}
     </div>
   );
@@ -82,10 +95,13 @@ export function App() {
   if (route.name === "practice" && practice)
     return shell(<GameScreen key={`practice-${practice.n}`} id={0} me={me} onRules={openRules} local={practice.source} />, true);
   if (route.name === "admin" && me.isAdmin) return shell(<Admin me={me} />);
-  return shell(<Lobby me={me} onMe={setMe} />);
+  if (route.name === "lobby") return shell(<Lobby me={me} />);
+  if (route.name === "cards") return shell(<CardsHome me={me} go={go} />);
+  if (route.name === "cardroom") return shell(<CardRoom key={route.code} code={route.code} me={me} go={go} />);
+  return shell(<Hub me={me} onMe={setMe} />);
 }
 
-function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSignOut: () => void }) {
+function TopBar({ me, onRules, onSignOut, section }: { me: Me; onRules: (() => void) | null; onSignOut: () => void; section: "bull" | "cards" | null }) {
   const [open, setOpen] = useState(false);
   const [sound, setSound] = useState(soundOn);
   const ref = useRef<HTMLDivElement>(null);
@@ -104,16 +120,24 @@ function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSig
   }, [open]);
   return (
     <header className="topbar">
-      <a className="brand" href="#/" aria-label="Bull Run: my games">
-        <BullLogo size={30} />
-        <span className="brand-word">
-          Bull<span>Run</span>
+      <a className="brand" href="#/" aria-label={`${CENTRE_NAME}: all games`}>
+        <CentreLogo size={30} />
+        <span className="brand-word centre-word">
+          <small>Sid's</small> Game<span>Centre</span>
         </span>
       </a>
+      {section && (
+        <a className={`section-chip ${section}`} href={section === "bull" ? "#/bull-run" : "#/cards"}>
+          {section === "bull" ? <BullLogo size={20} /> : <HandMark size={20} />}
+          <span>{section === "bull" ? "Bull Run" : CARDS_NAME}</span>
+        </a>
+      )}
       <nav className="topnav">
-        <button className="icon-btn" onClick={onRules} aria-label="How to play" title="How to play">
-          <Icon name="book" />
-        </button>
+        {onRules && (
+          <button className="icon-btn" onClick={onRules} aria-label="How to play Bull Run" title="How to play Bull Run">
+            <Icon name="book" />
+          </button>
+        )}
         <ThemeToggle />
         <div className="me-wrap" ref={ref}>
           <button className="me-btn" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
@@ -133,16 +157,24 @@ function TopBar({ me, onRules, onSignOut }: { me: Me; onRules: () => void; onSig
                 </div>
               </div>
               <a href="#/" role="menuitem">
-                <Icon name="home" size={18} /> My games
+                <Icon name="home" size={18} /> All games
+              </a>
+              <a href="#/bull-run" role="menuitem">
+                <Icon name="chart" size={18} /> Bull Run
+              </a>
+              <a href="#/cards" role="menuitem">
+                <Icon name="cards" size={18} /> {CARDS_NAME}
               </a>
               {me.isAdmin && (
                 <a href="#/admin" role="menuitem">
                   <Icon name="shield" size={18} /> Admin
                 </a>
               )}
-              <button role="menuitem" onClick={onRules}>
-                <Icon name="book" size={18} /> How to play
-              </button>
+              {onRules && (
+                <button role="menuitem" onClick={onRules}>
+                  <Icon name="book" size={18} /> How to play
+                </button>
+              )}
               <button
                 role="menuitem"
                 onClick={() => {
@@ -193,7 +225,6 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
   }
   return (
     <main className="login">
-      <TickerTape />
       <div className="login-glow" aria-hidden="true" />
       <div className="login-theme">
         <ThemeToggle />
@@ -201,16 +232,20 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
       <div className="login-center">
         <div className="login-hero">
           <div className="logo-halo">
-            <BullLogo size={76} />
+            <CentreLogo size={76} />
           </div>
+          <p className="wordmark-pre">Sid's</p>
           <h1 className="wordmark">
-            Bull <span>Run</span>
+            Game <span>Centre</span>
           </h1>
-          <p className="tagline">The Dalal Street board game</p>
-          <ul className="hero-facts" aria-label="At a glance">
-            <li>3–5 traders</li>
-            <li>₹{STARTING_CASH.toLocaleString("en-IN")} each</li>
-            <li>7 companies</li>
+          <p className="tagline">Games for the people you play with</p>
+          <ul className="hero-facts" aria-label="Games here">
+            <li>
+              <BullLogo size={18} /> Bull Run
+            </li>
+            <li>
+              <HandMark size={18} /> {CARDS_NAME}
+            </li>
           </ul>
         </div>
         <form onSubmit={submit} className="login-card">
@@ -237,7 +272,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
               ))}
             </div>
           )}
-          <h2>{signingUp ? "Open your trading account" : "Sign in to trade"}</h2>
+          <h2>{signingUp ? "Make your account" : "Sign in to play"}</h2>
           {signingUp && (
             <label className="float">
               <input id="email" type="email" placeholder=" " autoComplete="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -266,7 +301,7 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
               <span className="spinner" aria-label={signingUp ? "Creating your account" : "Signing in"} />
             ) : (
               <>
-                {signingUp ? "Create my account" : "Enter the market"} <Icon name="arrow" size={18} />
+                {signingUp ? "Create my account" : "Let's play"} <Icon name="arrow" size={18} />
               </>
             )}
           </button>
@@ -278,14 +313,114 @@ function Login({ onIn, onRules }: { onIn: (m: Me) => void; onRules: () => void }
                 : "Had an account before? Sign in with your player name. New here? Choose Create account above."}
           </p>
           <button type="button" className="ghost-link" onClick={onRules}>
-            <Icon name="book" size={16} /> How to play
+            <Icon name="book" size={16} /> How to play Bull Run
           </button>
         </form>
         <p className="credit">
           <span>Created by</span> <b>Siddhant Bansal</b>
         </p>
       </div>
-      <TickerTape reverse />
+    </main>
+  );
+}
+
+// ─── Game Centre home ───────────────────────────────────────────────────────────────────
+
+/** The front page after signing in: pick a game, and the account's own settings. */
+function Hub({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
+  const [mail, setMail] = useState(false);
+  const [games, setGames] = useState<GameSummary[] | null>(null);
+  const [rooms, setRooms] = useState<CardRoomSummary[] | null>(null);
+  useEffect(() => {
+    api.config().then((c) => setMail(c.mail), () => {});
+    api.games().then(setGames, () => setGames([]));
+    cardsApi.mine().then(setRooms, () => setRooms([]));
+  }, []);
+  const moves = games?.filter((g) => g.yourMove).length ?? 0;
+  const liveGames = games?.filter((g) => g.status === "lobby" || g.status === "playing").length ?? 0;
+  const dealt = rooms?.filter((r) => r.dealt).length ?? 0;
+  return (
+    <main className="page hub">
+      <section className="hub-hero">
+        <p className="eyebrow">{greeting()}</p>
+        <h1 className="page-title">{me.username}</h1>
+        <p className="muted">What are we playing?</p>
+      </section>
+
+      <div className="hub-games">
+        <a className="hub-tile bull" href="#/bull-run">
+          <span className="hub-tile-art" aria-hidden="true">
+            <svg viewBox="0 0 120 60">
+              <path d="M2 52 L22 40 L36 46 L56 24 L70 32 L92 10 L118 4" className="hero-line" />
+              <path d="M2 52 L22 40 L36 46 L56 24 L70 32 L92 10 L118 4 L118 60 L2 60 Z" className="hero-fill" />
+            </svg>
+          </span>
+          <span className="hub-tile-logo">
+            <BullLogo size={52} />
+          </span>
+          <span className="hub-tile-text">
+            <b className="hub-tile-name">Bull Run</b>
+            <span className="hub-tile-tag">The Dalal Street board game</span>
+            <span className="hub-tile-facts">
+              <span>3–5 players</span>
+              <span>Online, your own pace</span>
+            </span>
+          </span>
+          <span className="hub-tile-status">
+            {moves > 0 ? (
+              <span className="pill pill-move">
+                <span className="pulse-dot light" /> Your move in {moves}
+              </span>
+            ) : liveGames > 0 ? (
+              <span className="pill pill-playing">{liveGames} on the go</span>
+            ) : (
+              <span className="pill">Start a game</span>
+            )}
+            <Icon name="arrow" className="go" />
+          </span>
+        </a>
+        <a className="hub-tile cards" href="#/cards">
+          <span className="hub-tile-cards" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          <span className="hub-tile-logo">
+            <span className="hh-mark-tile">
+              <HandMark size={40} />
+            </span>
+          </span>
+          <span className="hub-tile-text">
+            <b className="hub-tile-name">{CARDS_NAME}</b>
+            <span className="hub-tile-tag">Secret role cards for the game in the room</span>
+            <span className="hub-tile-facts">
+              <span>2–60 players</span>
+              <span>Together, in person</span>
+            </span>
+          </span>
+          <span className="hub-tile-status">
+            {dealt > 0 ? (
+              <span className="pill pill-move">Cards out in {dealt}</span>
+            ) : rooms && rooms.length > 0 ? (
+              <span className="pill pill-lobby">
+                {rooms.length} {rooms.length === 1 ? "room" : "rooms"}
+              </span>
+            ) : (
+              <span className="pill">Host or join</span>
+            )}
+            <Icon name="arrow" className="go" />
+          </span>
+        </a>
+      </div>
+
+      <EmailCard me={me} onMe={onMe} mail={mail} />
+
+      {me.isAdmin && (
+        <a className="admin-link" href="#/admin">
+          <Icon name="shield" /> <span>See all accounts and Bull Run games</span> <Icon name="arrow" size={18} />
+        </a>
+      )}
+      <ChangePassword />
     </main>
   );
 }
@@ -313,12 +448,12 @@ function VerifyEmail({ token, onDone }: { token: string; onDone: () => void }) {
   return (
     <main className="page">
       <div className="empty-state">
-        <BullLogo size={48} />
+        <CentreLogo size={48} />
         <h1 className="page-title">{state === null ? "Confirming your email…" : state.ok ? "Email confirmed" : "That link didn't work"}</h1>
         {state === null ? <span className="spinner big" /> : <p className={state.ok ? "" : "error"}>{state.text}</p>}
         {state && (
           <button className="primary big" onClick={onDone}>
-            Go to Bull Run <Icon name="arrow" size={18} />
+            Continue <Icon name="arrow" size={18} />
           </button>
         )}
       </div>
@@ -435,11 +570,7 @@ function EmailCard({ me, onMe, mail }: { me: Me; onMe: (m: Me) => void; mail: bo
   );
 }
 
-function Lobby({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
-  const [mail, setMail] = useState(false);
-  useEffect(() => {
-    api.config().then((c) => setMail(c.mail), () => {});
-  }, []);
+function Lobby({ me }: { me: Me }) {
   const [games, setGames] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -507,19 +638,12 @@ function Lobby({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
         </div>
       </section>
 
-      <EmailCard me={me} onMe={onMe} mail={mail} />
-
       {error && (
         <p className="error banner" role="alert">
           {error}
         </p>
       )}
 
-      {me.isAdmin && (
-        <a className="admin-link" href="#/admin">
-          <Icon name="shield" /> <span>See all games and accounts</span> <Icon name="arrow" size={18} />
-        </a>
-      )}
 
       {yours.length > 0 && (
         <section className="stack">
@@ -616,37 +740,11 @@ function Lobby({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
           <GameList games={done} />
         </section>
       )}
-      <ChangePassword />
     </main>
   );
 }
 
 /** Five letter boxes over one real input, so paste, autofill and screen readers all just work. */
-function CodeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="code-boxes">
-      <span className="sr-only">Game code</span>
-      <input
-        id="join-code"
-        value={value}
-        inputMode="text"
-        autoCorrect="off"
-        autoCapitalize="characters"
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))}
-      />
-      <span className="boxes" aria-hidden="true">
-        {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} className={`box ${i === value.length ? "cursor" : ""} ${value[i] ? "filled" : ""}`}>
-            {value[i] ?? ""}
-          </span>
-        ))}
-      </span>
-    </label>
-  );
-}
-
 /** Give one player's seat to another account: their cash, shares, cards and moves carry on. */
 function SwapPlayer({ g, users, onSwap }: { g: GameSummary; users: AdminUser[]; onSwap: (seat: number, username: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);

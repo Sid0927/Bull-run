@@ -112,7 +112,7 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
           <div className="empty-state">
             <Icon name="x" size={32} />
             <p className="error">{error}</p>
-            <a className="button primary" href="#/">
+            <a className="button primary" href="#/bull-run">
               Back to my games
             </a>
           </div>
@@ -131,7 +131,7 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
           <Icon name="flag" size={32} />
           <h1 className="page-title">Game {u.game.code}</h1>
           <p>{u.game.startedAt ? "This game was ended by the admin before it finished." : "This game was cancelled before it started."}</p>
-          <a className="button primary" href="#/">
+          <a className="button primary" href="#/bull-run">
             Back to my games
           </a>
         </div>
@@ -164,7 +164,7 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
 
   const action =
     s.phase.kind === "ended" ? (
-      <EndScreen s={s} viewer={mySeat} onNew={() => go("#/")} />
+      <EndScreen s={s} viewer={mySeat} onNew={() => go("#/bull-run")} />
     ) : mySeat === null ? (
       u.revealed ? (
         <AdminDesks s={s} />
@@ -187,7 +187,7 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
       {local && s.phase.kind !== "ended" && (
         <div className="admin-chip practice-chip" role="note">
           <Icon name="robot" size={16} /> Practice game against the computer — nothing is saved.
-          <a href="#/">Leave</a>
+          <a href="#/bull-run">Leave</a>
         </div>
       )}
       <Notifications items={notes} onClose={closeNote} />
@@ -432,7 +432,7 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
               {need > 0 ? `Need ${need} more to start` : "Start the game"}
             </button>
             {isCreator && (
-              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/"))}>
+              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/bull-run"))}>
                 Cancel this game
               </button>
             )}
@@ -448,7 +448,7 @@ function WaitingRoom({ u, me, onError, error }: { u: GameUpdate; me: Me; onError
               Waiting for {g.createdBy} to start the game
             </p>
             {u.mySeat !== null && (
-              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/"))}>
+              <button className="ghost-link danger-text" disabled={busy} onClick={() => act(() => api.leave(g.id), () => go("#/bull-run"))}>
                 Leave this game
               </button>
             )}
