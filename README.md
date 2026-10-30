@@ -39,8 +39,7 @@ only what that player may see.
 1. **Database (Neon).** Sign up at neon.tech, create a project, and copy its **connection string**
    (it starts `postgresql://` and ends `?sslmode=require`).
 2. **Server (Render).** Sign up at render.com with your GitHub account, then **New → Blueprint** and
-   pick this repository. The service is called `sids-arcade`, so the site is at
-   https://sids-arcade.onrender.com (if that name is free on Render). Render reads `render.yaml` and asks for three values:
+   pick this repository. Render reads `render.yaml` and asks for three values:
    - `DATABASE_URL`: the Neon connection string;
    - `ADMIN_USERNAME` and `ADMIN_PASSWORD`: the admin account created on first start (password at
      least 6 characters).

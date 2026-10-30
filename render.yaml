@@ -1,7 +1,7 @@
 # Render Blueprint: New → Blueprint → pick this repository. Render asks for the three secrets below.
 services:
   - type: web
-    name: sids-arcade # the address: https://sids-arcade.onrender.com
+    name: bull-run
     runtime: node
     plan: free
     region: singapore # closest Render region to India; create the Neon database in Singapore too
