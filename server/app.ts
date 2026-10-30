@@ -536,7 +536,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
           cards.setConfig(code, user, b.config);
           break;
         case "deal":
-          cards.deal(code, user);
+          cards.deal(code, user, b.again === true);
           break;
         case "collect":
           cards.collect(code, user);
@@ -555,6 +555,16 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
           break;
         case "host":
           cards.makeHost(code, user, pid);
+          break;
+        case "claim":
+          cards.claimHost(code, user);
+          break;
+        case "unkick":
+          cards.unkick(code, user, pid);
+          break;
+        case "tests":
+          if (b.remove === true) cards.removeTestPlayers(code, user);
+          else cards.addTestPlayers(code, user, Number(b.count ?? 1));
           break;
         case "leave":
           cards.leave(code, user);

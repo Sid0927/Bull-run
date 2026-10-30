@@ -109,6 +109,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
       } else {
         // The first side that doesn't have this role yet, so a Leader each is two taps.
         team = sides.find((t) => !d.roles.some((r) => r.libId === libId && r.teamId === t.id)) ?? sides[0] ?? d.teams[0];
+        if (!team) return; // no team at all yet: nothing to put it on
       }
       const have = d.roles.find((r) => r.libId === libId && r.teamId === team!.id);
       if (have) {
@@ -135,6 +136,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
   const loadPreset = (config: Config) => {
     setC(structuredClone(config));
     setOpenRole(null);
+    setPicking(false);
   };
   const saveAsMine = () => {
     const name = (c.title || "My setup").trim();
