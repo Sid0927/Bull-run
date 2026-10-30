@@ -16,7 +16,7 @@ export interface Mailer {
 
 function parseFrom(from: string): { name: string; email: string } {
   const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
-  return m ? { name: m[1] || "Bull Run", email: m[2] } : { name: "Bull Run", email: from.trim() };
+  return m ? { name: m[1] || "Sid's Game Centre", email: m[2] } : { name: "Sid's Game Centre", email: from.trim() };
 }
 
 export function mailerFromEnv(env: NodeJS.ProcessEnv, log: (line: string) => void): Mailer {

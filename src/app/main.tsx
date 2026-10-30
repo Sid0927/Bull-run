@@ -5,6 +5,7 @@ import { App } from "./App.tsx";
 import { CrashScreen, reportUncaughtErrors } from "./crash.tsx";
 import { initTheme } from "./theme.tsx";
 import "./styles.css";
+import "./centre.css";
 
 initTheme();
 unlockSoundOnFirstTouch();
