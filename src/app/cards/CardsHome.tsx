@@ -92,6 +92,7 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
           <button className="primary big shine" disabled={busy} onClick={() => run(async () => (await cardsApi.create()).code)}>
             Start a room <Icon name="arrow" size={18} />
           </button>
+          {me.isAdmin && (
           <button
             className="ghost big"
             disabled={busy}
@@ -103,8 +104,9 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
               })
             }
           >
-            <Icon name="robot" size={18} /> Try it alone, with 5 test players
+            <Icon name="robot" size={18} /> Test game, with 5 test players
           </button>
+          )}
         </section>
       </div>
 

@@ -27,7 +27,7 @@ export const ROLE_GROUPS: { id: RoleGroup; name: string; blurb: string }[] = [
 ];
 
 export const LIBRARY: LibraryRole[] = [
-  { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your team's key card. Your side's goal is about where you end up." },
+  { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your side's key card. Everything your side wants turns on where you end up." },
   { id: "deputy", name: "Deputy", group: "key", copies: 1, show: "any", disguise: false, description: "If your team's Leader was set aside and nobody holds it, you become the Leader." },
 
   { id: "twin", name: "Twin", group: "helper", copies: 2, show: "any", disguise: false, description: "There are two of you on the same side. Find your twin and show each other your full cards before the last round ends." },

@@ -23,6 +23,9 @@ const base = (over: Partial<Config>): Config => ({
   ...over,
 });
 
+/** The two-sided presets' goal: each side is after the same thing, so both are hunting their own Leader. */
+const SIDE_GOAL = "Your side wins if, at the end, your Leader is in a group with more of your side than of the other side.";
+
 export const PRESETS: Preset[] = [
   {
     id: "two-sides",
@@ -31,9 +34,9 @@ export const PRESETS: Preset[] = [
     config: base({
       title: "Sun & Moon",
       teams: [
-        { id: "sun", name: "Sun", color: "gold", fills: true, memberName: "Sun" },
-        { id: "moon", name: "Moon", color: "purple", fills: true, memberName: "Moon" },
-        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner" },
+        { id: "sun", name: "Sun", color: "gold", fills: true, memberName: "Sun", goal: SIDE_GOAL },
+        { id: "moon", name: "Moon", color: "purple", fills: true, memberName: "Moon", goal: SIDE_GOAL },
+        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
       ],
       roles: [roleFrom("leader", "sun"), roleFrom("leader", "moon"), roleFrom("drifter", "loners", { count: 0 })],
       oddRoleId: "drifter-loners",
@@ -43,7 +46,7 @@ export const PRESETS: Preset[] = [
         { minutes: 2, swap: 1 },
         { minutes: 1, swap: 1 },
       ],
-      notes: "Agree each side's goal before you deal. Showing is always both ways: you both show, or nobody does.",
+      notes: "Showing is always both ways: you both show, or nobody does.",
     }),
   },
   {
@@ -53,9 +56,9 @@ export const PRESETS: Preset[] = [
     config: base({
       title: "Smoke & Mirrors",
       teams: [
-        { id: "red", name: "Red", color: "red", fills: true, memberName: "Red" },
-        { id: "blue", name: "Blue", color: "blue", fills: true, memberName: "Blue" },
-        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner" },
+        { id: "red", name: "Red", color: "red", fills: true, memberName: "Red", goal: SIDE_GOAL },
+        { id: "blue", name: "Blue", color: "blue", fills: true, memberName: "Blue", goal: SIDE_GOAL },
+        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
       ],
       roles: [
         roleFrom("leader", "red"),
@@ -88,8 +91,8 @@ export const PRESETS: Preset[] = [
     config: base({
       title: "Crew & Infiltrators",
       teams: [
-        { id: "crew", name: "Crew", color: "teal", fills: true, memberName: "Crew" },
-        { id: "inf", name: "Infiltrators", color: "red", fills: false, memberName: "Infiltrator" },
+        { id: "crew", name: "Crew", color: "teal", fills: true, memberName: "Crew", goal: "The Crew wins if, at the end, every Infiltrator is in the same group." },
+        { id: "inf", name: "Infiltrators", color: "red", fills: false, memberName: "Infiltrator", goal: "The Infiltrators win if, at the end, at least one of you is in each group." },
       ],
       roles: [roleFrom("leader", "inf", { count: 2 }), roleFrom("mole", "inf", { showsAsTeamId: "crew" }), roleFrom("open-book", "crew"), roleFrom("scout", "crew")],
       rounds: [{ minutes: 5, swap: 0 }],
@@ -102,8 +105,8 @@ export const PRESETS: Preset[] = [
     config: base({
       title: "My game",
       teams: [
-        { id: "t1", name: "Team A", color: "red", fills: true, memberName: "Team A" },
-        { id: "t2", name: "Team B", color: "blue", fills: true, memberName: "Team B" },
+        { id: "t1", name: "Team A", color: "red", fills: true, memberName: "Team A", goal: "" },
+        { id: "t2", name: "Team B", color: "blue", fills: true, memberName: "Team B", goal: "" },
       ],
     }),
   },
@@ -129,7 +132,7 @@ export function cleanConfig(input: unknown): Config {
     .map((t) => {
       const x = obj(t);
       const color = str(x.color, 20);
-      return { id: str(x.id, 40) || rid(), name: str(x.name, 30), color: TEAM_COLORS[color] ? color : "grey", fills: x.fills === true, memberName: str(x.memberName, 40) };
+      return { id: str(x.id, 40) || rid(), name: str(x.name, 30), color: TEAM_COLORS[color] ? color : "grey", fills: x.fills === true, memberName: str(x.memberName, 40), goal: str(x.goal, 300) };
     });
   // Only roles from the library survive, and their name, text and show rule always come from it.
   const roles: Role[] = arr(o.roles)

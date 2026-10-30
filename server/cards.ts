@@ -24,6 +24,7 @@ export class RoomError extends Error {
 export interface Who {
   id: number;
   username: string;
+  isAdmin?: boolean;
 }
 
 interface Player {
@@ -158,7 +159,7 @@ export class CardRooms {
         ...(p.test ? { test: true } : {}),
         ...(p.test && p.card && me.userId === room.hostId ? { testCard: p.card } : {}),
         ...(room.revealed && p.card ? { card: p.card } : {}),
-        ...(room.dealt && p.group !== null ? { group: p.group } : {}),
+        // Nobody is sent where anyone else is: who goes across is played out in the room, not tracked.
       })),
       dealt: room.dealt,
       deal: room.deal,
@@ -169,6 +170,8 @@ export class CardRooms {
       timer: room.timer,
       version: room.version,
       boot: this.boot,
+      canTest: me.userId === room.hostId && user.isAdmin === true,
+      canReveal: user.isAdmin === true,
       hostAway: me.userId !== room.hostId && this.away(room, room.hostId),
       serverNow: this.now(),
     };
@@ -228,19 +231,13 @@ export class CardRooms {
     this.changed(room);
   }
 
+  /** Showing everybody's cards is an admin's call, whoever is hosting. */
   reveal(code: string, user: Who, on: boolean) {
-    const room = this.hostRoom(code, user);
+    const room = this.get(code);
+    this.player(room, user);
+    if (!user.isAdmin) throw new RoomError(403, "Only an admin can reveal everyone's cards.");
     if (!room.dealt) throw new RoomError(400, "Deal the cards first.");
     room.revealed = on;
-    this.changed(room);
-  }
-
-  /** Moves a player to the other group (the host keeps the groups true to the table). */
-  move(code: string, user: Who, playerId: number) {
-    const room = this.hostRoom(code, user);
-    const p = room.players.find((x) => x.userId === playerId);
-    if (!p || p.group === null) throw new RoomError(404, "That player is not in a group.");
-    p.group = p.group === 0 ? 1 : 0;
     this.changed(room);
   }
 
@@ -316,6 +313,7 @@ export class CardRooms {
    */
   addTestPlayers(code: string, user: Who, count: number) {
     const room = this.hostRoom(code, user);
+    if (!user.isAdmin) throw new RoomError(403, "Only an admin can run a test game.");
     if (room.dealt) throw new RoomError(400, "Collect the cards before adding players.");
     const have = room.players.filter((p) => p.test).length;
     const n = Math.min(Math.max(1, Math.floor(Number(count) || 1)), MAX_TEST_PLAYERS - have, MAX_PLAYERS - room.players.length);

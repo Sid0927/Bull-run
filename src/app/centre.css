@@ -423,3 +423,25 @@
 .hh-refusal { margin: 0; min-height: 1.5em; }
 .hh-host-away { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .hh-host-away button { min-height: 40px; }
+/* The side's goal, on the card */
+.hh-face { grid-template-rows: auto 1fr auto auto; }
+.hh-face-body { padding-bottom: 8px; }
+.hh-face-goal { margin: 0 18px 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--team) 10%, white); border: 1px solid color-mix(in srgb, var(--team) 35%, transparent); text-align: left; }
+.hh-face-goal-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #6a6157; }
+.hh-face-goal p { margin: 3px 0 0; font-size: 14px; line-height: 1.35; color: #2b2620; text-wrap: pretty; }
+.hh-face-foot { padding-bottom: 16px; }
+/* A card face grows with its text (a role and a goal) rather than clipping it: 5:7 is its
+   smallest shape, not a fixed one. The flip stacks both sides in one grid cell, so the back
+   takes the face's height and the flip still lines up. */
+.hh-face { overflow: visible; height: auto; }
+.hh-face-seal { width: 60px; height: 60px; }
+.hh-face-body { gap: 6px; padding-top: 10px; }
+/* Face down, every card is the same shape whatever is written on it: a card that grew with its
+   text would tell a neighbour how much its role says. So in the flip the face takes the back's
+   size and long text scrolls inside it; anywhere else (a sheet, held up) it grows freely. */
+.hh-card { aspect-ratio: 5 / 7.4; }
+.hh-flip-side.front > .hh-face { height: 100%; overflow: hidden; }
+.hh-flip-side.front .hh-face-body { overflow-y: auto; min-height: 0; justify-content: center; }
+.hh-flip-side.front .hh-face { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.hh-face-desc { font-size: 14px; }
+.hh-face-goal p { font-size: 13.5px; }
