@@ -5,7 +5,7 @@ import { CARDS_NAME, MAX_TEST_PLAYERS, SHOW_LABELS, type Card, type Config, type
 import type { Me } from "../../shared/api.ts";
 import { Avatar, Icon } from "../ui.tsx";
 import { CardsError, cardsApi } from "./api.ts";
-import { CardBack, CardFace, ShowScreen, teamOf, teamStyle } from "./CardArt.tsx";
+import { CardBack, CardFace, ShowScreen, possessive, teamOf, teamStyle } from "./CardArt.tsx";
 import { Setup } from "./Setup.tsx";
 
 /** The room, kept fresh by the server's change pings (with a slow poll in case the stream drops). */
@@ -185,28 +185,41 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
           </button>
         </div>
       )}
-      {view.revealed ? (
-        <RevealBoard view={view} />
-      ) : view.dealt ? (
-        <Dealt view={view} me={me} />
+      {view.dealt && !view.revealed ? (
+        // During play: the card on the left and everything the table runs on beside it (on a
+        // laptop), or one under the other, timer and host tools first (on a phone).
+        <div className="hh-table">
+          <div className="hh-table-card">
+            <Dealt view={view} me={me} />
+          </div>
+          <div className="hh-table-side">
+            {view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
+            {view.host || view.canReveal ? <HostBar view={view} act={act} busy={busy} /> : null}
+            {view.host && view.players.some((p) => p.test) && <TestCards view={view} />}
+            {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={false} />}
+            <Players view={view} act={act} busy={busy} />
+          </div>
+        </div>
       ) : (
-        <Waiting view={view} hostName={host?.name ?? ""} onEdit={() => setEditing(true)} />
-      )}
-      {view.host && view.dealt && !view.revealed && view.players.some((p) => p.test) && <TestCards view={view} />}
-      {view.dealt && view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
-      {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={!view.dealt} />}
-      <Players view={view} act={act} busy={busy} />
-      {view.host || (view.canReveal && view.dealt) ? <HostBar view={view} act={act} busy={busy} /> : null}
-      {!view.dealt && (
-        <button
-          className="ghost-link danger-text hh-leave"
-          disabled={busy}
-          onClick={() => {
-            if (confirm("Leave this room?")) act(() => cardsApi.leave(code)).then((ok) => ok && go("#/cards"));
-          }}
-        >
-          <Icon name="out" size={16} /> Leave room
-        </button>
+        <>
+          {view.revealed ? <RevealBoard view={view} /> : <Waiting view={view} hostName={host?.name ?? ""} onEdit={() => setEditing(true)} />}
+          {view.dealt && view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
+          {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={!view.dealt} />}
+          <Players view={view} act={act} busy={busy} />
+          {/* Above the host's Deal bar, which is pinned to the bottom and would otherwise cover it. */}
+          {!view.dealt && (
+            <button
+              className="ghost-link danger-text hh-leave"
+              disabled={busy}
+              onClick={() => {
+                if (confirm("Leave this room?")) act(() => cardsApi.leave(code)).then((ok) => ok && go("#/cards"));
+              }}
+            >
+              <Icon name="out" size={16} /> Leave room
+            </button>
+          )}
+          {view.host || (view.canReveal && view.dealt) ? <HostBar view={view} act={act} busy={busy} /> : null}
+        </>
       )}
     </main>
   );
@@ -656,6 +669,13 @@ function TestCards({ view }: { view: RoomView }) {
     setOpen(null);
     setShowing(null);
   }, [view.deal]);
+  // Escape closes the sheet, as it does the full-screen view (which closes itself first).
+  useEffect(() => {
+    if (!open || showing) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open, showing]);
   const card = open?.testCard;
   return (
     <section className="panel hh-testcards">
@@ -675,7 +695,7 @@ function TestCards({ view }: { view: RoomView }) {
       </ul>
       {open && card && (
         <div className="hh-sheet-backdrop" onClick={() => setOpen(null)}>
-          <div className="hh-sheet" role="dialog" aria-modal="true" aria-label={`${open.name}'s card`} onClick={(e) => e.stopPropagation()}>
+          <div className="hh-sheet" role="dialog" aria-modal="true" aria-label={`${possessive(open.name)} card`} onClick={(e) => e.stopPropagation()}>
             <div className="hh-sheet-head">
               <b>{open.name}</b>
               <button className="icon-btn" aria-label="Close" onClick={() => setOpen(null)}>

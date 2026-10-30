@@ -1063,3 +1063,8 @@ body::before {
 .email-form input { flex: 1 1 220px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; }
 .email-card .ghost-link { justify-self: start; }
 .email-card-done { margin: 0 4px; color: var(--accent); }
+/* A page's column is never wider than the screen: without this, one long line that won't wrap
+   (a room title, a game code) set the column's minimum width and a phone zoomed the page out. */
+.page { grid-template-columns: minmax(0, 1fr); }
+.page > * { min-width: 0; }
+.practice-chip a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 6px; margin: -10px -6px -10px auto; }

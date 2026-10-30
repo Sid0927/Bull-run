@@ -63,7 +63,7 @@ export function CardFace({ card, config, compact = false }: { card: Card; config
       {!compact && card.goal && (
         <div className="hh-face-goal">
           <span className="hh-face-goal-label">
-            <Icon name="flag" size={13} /> {team?.name ?? "Your side"}'s goal
+            <Icon name="flag" size={13} /> {possessive(team?.name ?? "Your side")} goal
           </span>
           <p>{card.goal}</p>
         </div>
@@ -118,4 +118,9 @@ export function ShowScreen({ card, config, mode, name, onClose }: { card: Card; 
     </div>,
     document.body,
   );
+}
+
+/** "Rebels' goal", "Government's goal". */
+export function possessive(name: string): string {
+  return /s$/i.test(name.trim()) ? `${name}'` : `${name}'s`;
 }

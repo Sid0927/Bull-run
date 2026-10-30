@@ -28,6 +28,8 @@ export const ROLE_GROUPS: { id: RoleGroup; name: string; blurb: string }[] = [
 
 export const LIBRARY: LibraryRole[] = [
   { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your side's key card. Everything your side wants turns on where you end up." },
+  { id: "president", name: "President", group: "key", copies: 1, show: "any", disguise: false, description: "Stay away from the Bomber. Your side wins if, when the last round ends, you and the Bomber are in different groups." },
+  { id: "bomber", name: "Bomber", group: "key", copies: 1, show: "any", disguise: false, description: "Get to the President. Your side wins if, when the last round ends, you are in the same group as the President." },
   { id: "deputy", name: "Deputy", group: "key", copies: 1, show: "any", disguise: false, description: "If your team's Leader was set aside and nobody holds it, you become the Leader." },
 
   { id: "scout", name: "Scout", group: "helper", copies: 1, show: "any", disguise: false, description: "Once a round you may ask anyone to show you their team. They can refuse, but everyone will know they did." },

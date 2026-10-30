@@ -122,3 +122,22 @@ test("a pasted setup that repeats an id gets unique ids", () => {
   assert.equal(new Set(c.teams.map((t) => t.id)).size, 2);
   assert.equal(new Set(c.roles.map((r) => r.id)).size, 2);
 });
+
+test("President & Bomber: one of each, on opposite sides, each with its side's goal", () => {
+  const c = structuredClone(PRESETS.find((p) => p.id === "president-bomber")!.config);
+  for (const n of [5, 8, 11]) {
+    const cards = deck(c, n);
+    const president = cards.filter((x) => x.roleId === "president-gov");
+    const bomber = cards.filter((x) => x.roleId === "bomber-reb");
+    assert.equal(president.length, 1);
+    assert.equal(bomber.length, 1);
+    assert.equal(president[0].teamId, "gov");
+    assert.equal(bomber[0].teamId, "reb");
+    assert.match(president[0].goal, /different groups/);
+    assert.match(bomber[0].goal, /same group as the President/);
+    assert.match(president[0].description, /Stay away from the Bomber/);
+    assert.match(bomber[0].description, /Get to the President/);
+  }
+  // Either card can be put on any side by the host, like every library role.
+  assert.equal(roleFrom("bomber", "gov").teamId, "gov");
+});

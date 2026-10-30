@@ -354,7 +354,7 @@
 .hh-setup-preview { display: grid; gap: 8px; }
 .hh-setup-preview .error { margin: 0; }
 .hh-preview-head { justify-content: space-between; flex-wrap: nowrap; }
-.hh-preview-head .hh-stepper button { min-height: 34px; width: 34px; }
+.hh-preview-head .hh-stepper button { min-height: 40px; width: 40px; }
 .hh-deck-bar { display: flex; gap: 3px; height: 30px; border-radius: 10px; overflow: hidden; }
 .hh-deck-bar span { display: grid; place-items: center; min-width: 2.5em; padding: 0 6px; background: var(--team); color: var(--team-ink); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: flex-grow 0.3s var(--ease); }
 .hh-setup-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
@@ -391,7 +391,7 @@
 .hh-setup-preview { display: flex; align-items: center; gap: 8px; }
 .hh-setup-preview .hh-deck-bar, .hh-preview-msg { flex: 1; min-width: 0; }
 .hh-preview-msg { line-height: 1.3; }
-.hh-setup-preview .hh-stepper button { min-height: 32px; width: 32px; }
+.hh-setup-preview .hh-stepper button { min-height: 40px; width: 40px; }
 .hh-setup-preview .hh-stepper output { min-width: 1.8em; font-size: 14px; }
 .hh-setup-actions button { min-height: 44px; }
 .hh-setup { padding-bottom: 120px; }
@@ -466,3 +466,25 @@
 .hh-removed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .hh-removed li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .hh-removed li button { min-height: 36px; }
+.hh-roomhead-title { overflow: hidden; }
+.hh textarea.grow { resize: none; overflow: hidden; }
+
+/* During play: one column on a phone; on a laptop the card stays in view on the left while the
+   timer, host tools and players sit beside it, instead of a long scroll down the middle. */
+.hh-table { display: grid; gap: 18px; }
+.hh-table-side { display: grid; gap: 18px; align-content: start; min-width: 0; }
+.hh-table-card { min-width: 0; }
+@media (min-width: 1000px) {
+  .page.hh-room.dealt { max-width: 70rem; }
+  .hh-table { grid-template-columns: minmax(0, 1fr) minmax(0, 27rem); align-items: start; gap: 24px; }
+  .hh-table-card { position: sticky; top: 76px; }
+}
+/* On a phone a long room name wraps onto a second line rather than losing its end to "…". */
+@media (max-width: 600px) {
+  .hh-roomhead h1.truncate { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 24px; line-height: 1.05; overflow-wrap: anywhere; }
+}
+/* Phone tap targets: 40px or more for anything a finger has to hit. */
+@media (max-width: 600px) {
+  .hh-color { width: 40px; height: 40px; min-height: 40px; }
+  .section-chip { min-height: 40px; min-width: 40px; justify-content: center; }
+}

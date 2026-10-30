@@ -1,5 +1,5 @@
 /** The host's setup: teams, roles, the deal, groups, rounds and house rules. Nothing is saved until Save. */
-import { useMemo, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { buildDeck, configProblems } from "../../cards/deck.ts";
 import { PRESETS, cleanConfig, rid } from "../../cards/presets.ts";
 import { LIBRARY, LIBRARY_BY_ID, ROLE_GROUPS, roleFrom } from "../../cards/library.ts";
@@ -271,7 +271,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
               {t.fills || t.goal ? (
                 <label className="hh-inline-field">
                   <span className="field-label">Goal, printed on every {t.name || "team"} card</span>
-                  <textarea rows={2} value={t.goal} maxLength={300} placeholder="What does this side need to happen to win?" onChange={(e) => setTeam(t.id, { goal: e.target.value })} />
+                  <GrowArea rows={2} value={t.goal} maxLength={300} placeholder="What does this side need to happen to win?" onChange={(e) => setTeam(t.id, { goal: e.target.value })} />
                 </label>
               ) : (
                 <p className="muted small">Loners play for the goal written on their own role.</p>
@@ -435,7 +435,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
       </Section>
 
       <Section title="House rules" icon="book">
-        <textarea rows={5} value={c.notes} maxLength={2000} placeholder="Goals, how the game ends, anything everyone should be able to read on their phone" onChange={(e) => up((d) => void (d.notes = e.target.value))} aria-label="House rules" />
+        <GrowArea rows={5} value={c.notes} maxLength={2000} placeholder="Goals, how the game ends, anything everyone should be able to read on their phone" onChange={(e) => up((d) => void (d.notes = e.target.value))} aria-label="House rules" />
       </Section>
 
       <div className="hh-setup-bar">
@@ -508,4 +508,16 @@ function RolePicker({ config, onAdd }: { config: Config; onAdd: (libId: string) 
       ))}
     </div>
   );
+}
+
+/** A text box that grows to fit what is in it, so a goal or a rule is never cut off mid-line. */
+function GrowArea(props: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [props.value]);
+  return <textarea ref={ref} {...props} className={`grow ${props.className ?? ""}`} />;
 }
