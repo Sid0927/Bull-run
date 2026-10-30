@@ -20,17 +20,15 @@ export interface LibraryRole {
 }
 
 export const ROLE_GROUPS: { id: RoleGroup; name: string; blurb: string }[] = [
-  { id: "key", name: "Key cards", blurb: "The cards a team's goal is built around." },
+  { id: "key", name: "In every game", blurb: "The President (Blue) and the Bomber (Red): both sides' goals turn on where they end up." },
   { id: "helper", name: "Team players", blurb: "On a side, with something extra to do." },
   { id: "trick", name: "Tricksters", blurb: "On a side, but hard to read." },
   { id: "loner", name: "Loners", blurb: "On nobody's side. Each plays for a goal of their own." },
 ];
 
 export const LIBRARY: LibraryRole[] = [
-  { id: "leader", name: "Leader", group: "key", copies: 1, show: "any", disguise: false, description: "Your side's key card. Everything your side wants turns on where you end up." },
   { id: "president", name: "President", group: "key", copies: 1, show: "any", disguise: false, description: "Stay away from the Bomber. Your side wins if, when the last round ends, you are not in the same room as the Bomber." },
   { id: "bomber", name: "Bomber", group: "key", copies: 1, show: "any", disguise: false, description: "Get to the President. Your side wins if, when the last round ends, you are in the same room as the President." },
-  { id: "deputy", name: "Deputy", group: "key", copies: 1, show: "any", disguise: false, description: "If your team's Leader was set aside and nobody holds it, you become the Leader." },
 
   { id: "scout", name: "Scout", group: "helper", copies: 1, show: "any", disguise: false, description: "Once a round you may ask anyone to show you their team. They can refuse, but everyone will know they did." },
   { id: "open-book", name: "Open Book", group: "helper", copies: 1, show: "full", disguise: false, description: "You can't hide behind a colour: whenever you show, you show your whole card." },

@@ -488,3 +488,8 @@
   .hh-color { width: 40px; height: 40px; min-height: 40px; }
   .section-chip { min-height: 40px; min-width: 40px; justify-content: center; }
 }
+/* Blue and Red, as they are in every game: shown, not edited. */
+.hh-team-edit.core .hh-team-top { align-items: center; }
+.hh-team-fixed-name { flex: 1; font-size: 17px; }
+.hh-team-fixed-goal { margin: 8px 0 0; font-size: 14px; line-height: 1.45; }
+.hh-core-tag { flex: none; white-space: nowrap; }

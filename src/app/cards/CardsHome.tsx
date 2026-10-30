@@ -125,7 +125,7 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
           </li>
           <li>
             <span className="hh-how-icon"><Icon name="flag" /></span>
-            <span><b>Play for your goal.</b> Your side's goal is written on your card; a Loner's is its own.</span>
+            <span><b>Play for your side.</b> Blue has the President, Red has the Bomber. When the last round ends, Red wins if the Bomber is in the same room as the President; Blue wins if not. A Loner plays for the goal on their own card.</span>
           </li>
           <li>
             <span className="hh-how-icon"><Icon name="shield" /></span>
@@ -133,7 +133,7 @@ export function CardsHome({ me, go }: { me: Me; go: (hash: string) => void }) {
           </li>
           <li>
             <span className="hh-how-icon"><Icon name="timer" /></span>
-            <span><b>Rounds</b> run on a shared timer. When it ends, the groups trade players in person.</span>
+            <span><b>Rounds</b> run on a shared timer. When one ends, the two rooms trade players in person.</span>
           </li>
         </ol>
       </details>

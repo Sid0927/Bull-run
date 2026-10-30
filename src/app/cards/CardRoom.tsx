@@ -312,7 +312,7 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
         </ul>
         {c.roles.filter((r) => r.count > 0).length > 0 && (
           <ul className="hh-role-list">
-            {/* One row per role, with a dot for each side holding it: two Leaders read as one role. */}
+            {/* One row per role, with a dot for each side holding it: a Scout on each side reads as one role. */}
             {[...new Set(c.roles.filter((r) => r.count > 0).map((r) => r.libId))].map((libId) => {
               const held = c.roles.filter((r) => r.libId === libId && r.count > 0);
               const r = held[0];

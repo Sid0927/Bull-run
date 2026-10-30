@@ -6,6 +6,7 @@ import { LIBRARY, LIBRARY_BY_ID, ROLE_GROUPS, roleFrom } from "../../cards/libra
 import { SHOW_LABELS, TEAM_COLORS, type Config, type Role, type Team } from "../../cards/types.ts";
 import { Icon } from "../ui.tsx";
 import { teamOf, teamStyle } from "./CardArt.tsx";
+import { isCoreRole, isCoreTeam } from "../../cards/core.ts";
 
 const SAVED = "hh.setups";
 
@@ -107,7 +108,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           d.teams.push(team);
         }
       } else {
-        // The first side that doesn't have this role yet, so a Leader each is two taps.
+        // The first side that does not have this role yet, so one on each side is two taps.
         team = sides.find((t) => !d.roles.some((r) => r.libId === libId && r.teamId === t.id)) ?? sides[0] ?? d.teams[0];
         if (!team) return; // no team at all yet: nothing to put it on
       }
@@ -241,18 +242,25 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
         icon="shield"
         aside={
           <span className="row hh-add-team">
-            <button className="ghost-link" onClick={() => addTeam(true)} disabled={c.teams.length >= 8}>
-              <Icon name="plus" size={18} /> Side
-            </button>
             <button className="ghost-link" onClick={() => addTeam(false)} disabled={c.teams.length >= 8 || c.teams.some((t) => !t.fills && t.name === "Loners")}>
               <Icon name="plus" size={18} /> Loners
             </button>
           </span>
         }
       >
-        <p className="muted small hh-section-hint">A side competes and fills the deck with plain cards. Loners holds the roles that play only for themselves.</p>
+        <p className="muted small hh-section-hint">Blue and Red are in every game and split the plain cards between them. Loners holds the roles that play only for themselves.</p>
         <div className="hh-list">
-          {c.teams.map((t) => (
+          {c.teams.map((t) =>
+            isCoreTeam(t.id) ? (
+              <div key={t.id} className="hh-team-edit core" style={teamStyle(t)}>
+                <div className="row hh-team-top">
+                  <span className="hh-team-swatch" aria-hidden="true" />
+                  <b className="hh-team-fixed-name">{t.name}</b>
+                  <span className="tag">In every game</span>
+                </div>
+                <p className="hh-team-fixed-goal">{t.goal}</p>
+              </div>
+            ) : (
             <div key={t.id} className="hh-team-edit" style={teamStyle(t)}>
               <div className="row hh-team-top">
                 <span className="hh-team-swatch" aria-hidden="true" />
@@ -268,23 +276,11 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                   </button>
                 ))}
               </div>
-              {t.fills || t.goal ? (
-                <label className="hh-inline-field">
-                  <span className="field-label">Goal, printed on every {t.name || "team"} card</span>
-                  <GrowArea rows={2} value={t.goal} maxLength={300} placeholder="What does this side need to happen to win?" onChange={(e) => setTeam(t.id, { goal: e.target.value })} />
-                </label>
-              ) : (
-                <p className="muted small">Loners play for the goal written on their own role.</p>
-              )}
-              <Switch checked={t.fills} onChange={(v) => setTeam(t.id, { fills: v })} label="Fills the deck" hint="Plain cards of this team make up the rest of the players, kept level with the other sides that fill." />
-              {t.fills && (
-                <label className="hh-inline-field">
-                  <span className="field-label">A plain card is called</span>
-                  <input value={t.memberName} maxLength={40} placeholder={t.name} onChange={(e) => setTeam(t.id, { memberName: e.target.value })} />
-                </label>
-              )}
+              {/* Only Blue and Red fill the deck and have a side's goal: a loner plays for its own role. */}
+              <p className="muted small">Loners play for the goal written on their own role.</p>
             </div>
-          ))}
+            ),
+          )}
         </div>
       </Section>
 
@@ -322,9 +318,20 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                       </span>
                       <Icon name="chevron" size={18} className="hh-chev" />
                     </button>
-                    <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name}`} />
+                    {isCoreRole(r) ? <span className="tag hh-core-tag">In every game</span> : <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name}`} />}
                   </div>
-                  {open && (
+                  {open && isCoreRole(r) && (
+                    <div className="hh-role-body">
+                      <p className="hh-role-desc">{r.description}</p>
+                      <p className="muted small">One in every game, always on {team?.name}. It can't be set aside.</p>
+                      <div className="row hh-role-actions">
+                        <button className="ghost-link" onClick={() => setOpenRole(null)}>
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {open && !isCoreRole(r) && (
                     <div className="hh-role-body">
                       <p className="hh-role-desc">{r.description}</p>
                       <div className="field">
@@ -381,7 +388,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           <span className="field-label">With an odd number of players, add</span>
           <select className="hh-select" value={c.oddRoleId} onChange={(e) => up((d) => void (d.oddRoleId = e.target.value))}>
             <option value="">Nothing: one team gets the extra card</option>
-            {c.roles.map((r) => (
+            {c.roles.filter((r) => !isCoreRole(r)).map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name || "Unnamed role"}
               </option>
@@ -391,13 +398,13 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
         <Switch checked={c.setAside} onChange={(v) => up((d) => void (d.setAside = v))} label="Set one card aside" hint="One card more than there are players is dealt, and nobody gets it. Nobody knows which." />
       </Section>
 
-      <Section title="Groups" icon="swap">
-        <Switch checked={c.groups} onChange={(v) => up((d) => void (d.groups = v))} label="Split players into two groups" hint="Each phone says which group its player starts in." />
+      <Section title="Rooms" icon="swap">
+        <p className="muted small hh-section-hint">Every game has two rooms: the President and the Bomber are played for by where they end up. Each phone says which room its player starts in.</p>
         {c.groups && (
           <div className="hh-two">
             {[0, 1].map((i) => (
               <label key={i}>
-                <span className="field-label">Group {i + 1}</span>
+                <span className="field-label">Room {i + 1}</span>
                 <input value={c.groupNames[i]} maxLength={24} onChange={(e) => up((d) => void (d.groupNames[i as 0 | 1] = e.target.value))} />
               </label>
             ))}
@@ -471,7 +478,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
 function RolePicker({ config, onAdd }: { config: Config; onAdd: (libId: string) => void }) {
   return (
     <div className="hh-picker">
-      {ROLE_GROUPS.map((g) => (
+      {ROLE_GROUPS.filter((g) => g.id !== "key").map((g) => (
         <section key={g.id} className={`hh-picker-group g-${g.id}`}>
           <h3>{g.name}</h3>
           <p className="muted small">{g.blurb}</p>

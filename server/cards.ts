@@ -6,7 +6,7 @@
  * deploy) does not end a game; a room nobody has touched for twelve hours is dropped.
  */
 import { randomInt } from "node:crypto";
-import { buildDeck, shuffle, splitGroups } from "../src/cards/deck.ts";
+import { buildDeck, keepKeyCardsDealt, shuffle, splitGroups } from "../src/cards/deck.ts";
 import { PRESETS, cleanConfig } from "../src/cards/presets.ts";
 import type { Card, CardRoomSummary, Config, RoomView, Timer } from "../src/cards/types.ts";
 import { MAX_PLAYERS, MAX_TEST_PLAYERS } from "../src/cards/types.ts";
@@ -210,7 +210,7 @@ export class CardRooms {
     if (room.dealt && !again) throw new RoomError(409, "The cards are already out. Use Deal again to reshuffle.");
     const built = buildDeck(room.config, room.players.length);
     if ("error" in built) throw new RoomError(400, built.error);
-    const cards = shuffle(built.cards, random);
+    const cards = keepKeyCardsDealt(shuffle(built.cards, random), room.players.length);
     const groups = room.config.groups ? splitGroups(room.players.length, random) : [];
     room.players.forEach((p, i) => {
       p.card = cards[i];

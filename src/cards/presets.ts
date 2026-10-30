@@ -2,6 +2,7 @@
 import type { Config, Role, Round, Team } from "./types.ts";
 import { TEAM_COLORS } from "./types.ts";
 import { LIBRARY_BY_ID, roleFrom } from "./library.ts";
+import { withCore } from "./core.ts";
 
 export interface Preset {
   id: string;
@@ -23,114 +24,61 @@ const base = (over: Partial<Config>): Config => ({
   ...over,
 });
 
-/** The two-sided presets' goal: each side is after the same thing, so both are hunting their own Leader. */
-const SIDE_GOAL = "Your side wins if, at the end, your Leader is in a group with more of your side than of the other side.";
+/** Every game: Blue with the President, Red with the Bomber, two rooms (see core.ts). */
+const core = (over: Partial<Config>): Config => withCore(base(over));
+const LONERS: Team = { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" };
+const ROUNDS: Round[] = [
+  { minutes: 3, swap: 1 },
+  { minutes: 2, swap: 1 },
+  { minutes: 1, swap: 1 },
+];
+const END_RULE = "When the last round ends, the President and the Bomber show their cards. Same room: Red wins. Different rooms: Blue wins.";
 
 export const PRESETS: Preset[] = [
   {
-    id: "two-sides",
-    name: "Two sides, a Leader each",
-    blurb: "Sun and Moon, a Leader on each side, everyone else filled in evenly. Two groups and three timed rounds.",
-    config: base({
-      title: "Sun & Moon",
-      teams: [
-        { id: "sun", name: "Sun", color: "gold", fills: true, memberName: "Sun", goal: SIDE_GOAL },
-        { id: "moon", name: "Moon", color: "purple", fills: true, memberName: "Moon", goal: SIDE_GOAL },
-        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
-      ],
-      roles: [roleFrom("leader", "sun"), roleFrom("leader", "moon"), roleFrom("drifter", "loners", { count: 0 })],
+    id: "president-bomber",
+    name: "President & Bomber",
+    blurb: "Blue has the President, Red has the Bomber, everyone else is split evenly. Two rooms and three timed rounds.",
+    config: core({
+      title: "President & Bomber",
+      teams: [LONERS],
+      roles: [roleFrom("drifter", "loners", { count: 0 })],
       oddRoleId: "drifter-loners",
-      groups: true,
-      rounds: [
-        { minutes: 3, swap: 1 },
-        { minutes: 2, swap: 1 },
-        { minutes: 1, swap: 1 },
-      ],
-      notes: "Showing is always both ways: you both show, or nobody does.",
+      rounds: ROUNDS,
+      notes: `${END_RULE}\nShowing is always both ways: you both show, or nobody does.`,
     }),
   },
   {
     id: "tricky",
-    name: "Two sides, full of tricks",
-    blurb: "Leaders and Deputies, a Mole and a Scout on each side, plus a Shadow and a Drifter playing for themselves.",
-    config: base({
+    name: "Full of tricks",
+    blurb: "The President and the Bomber, plus a Mole and a Scout on each side, and a Shadow and a Drifter playing for themselves.",
+    config: core({
       title: "Smoke & Mirrors",
-      teams: [
-        { id: "red", name: "Red", color: "red", fills: true, memberName: "Red", goal: SIDE_GOAL },
-        { id: "blue", name: "Blue", color: "blue", fills: true, memberName: "Blue", goal: SIDE_GOAL },
-        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
-      ],
+      teams: [LONERS],
       roles: [
-        roleFrom("leader", "red"),
-        roleFrom("leader", "blue"),
-        roleFrom("deputy", "red"),
-        roleFrom("deputy", "blue"),
-        roleFrom("mole", "red", { showsAsTeamId: "blue" }),
         roleFrom("mole", "blue", { showsAsTeamId: "red" }),
-        roleFrom("scout", "red"),
+        roleFrom("mole", "red", { showsAsTeamId: "blue" }),
         roleFrom("scout", "blue"),
+        roleFrom("scout", "red"),
         roleFrom("shadow", "loners"),
         roleFrom("drifter", "loners", { count: 0 }),
       ],
       oddRoleId: "drifter-loners",
       setAside: true,
-      groups: true,
       rounds: [
         { minutes: 5, swap: 2 },
         { minutes: 3, swap: 2 },
         { minutes: 2, swap: 1 },
         { minutes: 1, swap: 1 },
       ],
-      notes: "One card is set aside, so a Leader may not be in play: that is what the Deputies are for.",
-    }),
-  },
-  {
-    id: "president-bomber",
-    name: "President & Bomber",
-    blurb: "Sun has the President, Moon has the Bomber. Moon wants the Bomber in the President's room at the end; Sun wants them apart.",
-    config: base({
-      title: "President & Bomber",
-      teams: [
-        { id: "sun", name: "Sun", color: "gold", fills: true, memberName: "Sun", goal: "Sun wins if, when the last round ends, the President is not in the same room as the Bomber." },
-        { id: "moon", name: "Moon", color: "purple", fills: true, memberName: "Moon", goal: "Moon wins if, when the last round ends, the Bomber is in the same room as the President." },
-        { id: "loners", name: "Loners", color: "grey", fills: false, memberName: "Loner", goal: "" },
-      ],
-      roles: [roleFrom("president", "sun"), roleFrom("bomber", "moon"), roleFrom("drifter", "loners", { count: 0 })],
-      oddRoleId: "drifter-loners",
-      groups: true,
-      rounds: [
-        { minutes: 3, swap: 1 },
-        { minutes: 2, swap: 1 },
-        { minutes: 1, swap: 1 },
-      ],
-      notes: "When the last round ends, the President and the Bomber show their cards. Same room: Moon wins. Different rooms: Sun wins.",
-    }),
-  },
-  {
-    id: "hidden-few",
-    name: "A hidden few",
-    blurb: "A big crew and a few Infiltrators. One of them shows as crew on a team share.",
-    config: base({
-      title: "Crew & Infiltrators",
-      teams: [
-        { id: "crew", name: "Crew", color: "teal", fills: true, memberName: "Crew", goal: "The Crew wins if, at the end, every Infiltrator is in the same group." },
-        { id: "inf", name: "Infiltrators", color: "red", fills: false, memberName: "Infiltrator", goal: "The Infiltrators win if, at the end, at least one of you is in each group." },
-      ],
-      roles: [roleFrom("leader", "inf", { count: 2 }), roleFrom("mole", "inf", { showsAsTeamId: "crew" }), roleFrom("open-book", "crew"), roleFrom("scout", "crew")],
-      rounds: [{ minutes: 5, swap: 0 }],
+      notes: `${END_RULE}\nOne card is set aside, but never the President or the Bomber.`,
     }),
   },
   {
     id: "blank",
     name: "Start from scratch",
-    blurb: "Two empty sides. Pick the roles you want from the list.",
-    config: base({
-      title: "My game",
-      teams: [
-        { id: "t1", name: "Team A", color: "red", fills: true, memberName: "Team A", goal: "" },
-        { id: "t2", name: "Team B", color: "blue", fills: true, memberName: "Team B", goal: "" },
-      ],
-    }),
+    blurb: "Just the President and the Bomber. Add the roles and rounds you want.",
+    config: core({ title: "My game", notes: END_RULE }),
   },
 ];
 
@@ -180,7 +128,8 @@ export function cleanConfig(input: unknown): Config {
     }
   }
   const g = arr(o.groupNames);
-  return {
+  // Whatever came in, the President, the Bomber, Blue and Red are put back as they are in every game.
+  return withCore({
     title: str(o.title, 40),
     teams,
     roles,
@@ -190,7 +139,7 @@ export function cleanConfig(input: unknown): Config {
     groupNames: [str(g[0], 24) || "Room 1", str(g[1], 24) || "Room 2"],
     rounds,
     notes: str(o.notes, 2000),
-  };
+  });
 }
 
 export function rid(): string {
