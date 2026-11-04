@@ -960,6 +960,8 @@ body::before {
 /* On a phone the pop-up is one small strip under the round bar, so it never covers the buttons you are pressing. */
 @media (max-width: 1100px) {
   .notes { left: 12px; right: 12px; width: auto; top: calc(140px + env(safe-area-inset-top, 0px)); }
+  /* Below the practice banner, so its Leave link is never under a pop-up. */
+  .game:has(.practice-chip) .notes { top: calc(var(--practice-chip-bottom, 196px) + 8px + env(safe-area-inset-top, 0px)); }
   .note { padding: 9px 12px; gap: 2px; }
   .note b { font-size: 13.5px; }
   .note-lines { font-size: 12px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }

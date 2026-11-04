@@ -440,7 +440,17 @@
    size and long text scrolls inside it; anywhere else (a sheet, held up) it grows freely. */
 .hh-card { aspect-ratio: 5 / 7.4; }
 .hh-flip-side.front > .hh-face { height: 100%; overflow: hidden; }
-.hh-flip-side.front .hh-face-body { overflow-y: auto; min-height: 0; justify-content: safe center; }
+.hh-flip-side.front .hh-face-body { overflow-y: auto; min-height: 0; align-content: safe center; }
+/* A small phone's card is about 360px tall: the seal goes and the type tightens, so the longest
+   roles (the President, a Lover) fit without scrolling inside the card. */
+@media (max-width: 360px) {
+  .hh-flip-side.front .hh-face-seal { display: none; }
+  .hh-flip-side.front .hh-face-body { gap: 4px; padding: 8px 14px 6px; }
+  .hh-flip-side.front .hh-face-name { font-size: 28px; }
+  .hh-flip-side.front .hh-face-desc { font-size: 13px; line-height: 1.32; }
+  .hh-flip-side.front .hh-face-goal { margin: 0 12px 8px; padding: 7px 10px; }
+  .hh-flip-side.front .hh-face-goal p { font-size: 12.5px; line-height: 1.3; }
+}
 .hh-flip-side.front .hh-face { grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .hh-face-desc { font-size: 14px; }
 .hh-face-goal p { font-size: 13.5px; }
