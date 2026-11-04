@@ -91,26 +91,43 @@ export function BullLogo({ size = 36 }: { size?: number }) {
   );
 }
 
-/** The arcade's mark: a die and a card leaning on each other, one from each kind of game. */
+/** The arcade's mark: a green die and a purple card leaning on each other, one from each kind of game. */
 export function CentreLogo({ size = 36 }: { size?: number }) {
   return (
-    <svg className="centre-logo" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+    <svg className="centre-logo" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
       <defs>
-        <linearGradient id="centre-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--accent)" />
-          <stop offset="1" stopColor="#7c4ddb" />
+        <radialGradient id="centre-bg" cx=".3" cy=".2" r="1">
+          <stop offset="0" stopColor="#2a2160" />
+          <stop offset="1" stopColor="#0c0d1c" />
+        </radialGradient>
+        <linearGradient id="centre-card" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#9b7bff" />
+          <stop offset="1" stopColor="#5b34c9" />
         </linearGradient>
+        <linearGradient id="centre-die" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#3fe0a0" />
+          <stop offset="1" stopColor="#0f9a62" />
+        </linearGradient>
+        <filter id="centre-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#000" floodOpacity=".45" />
+        </filter>
       </defs>
-      <rect x="0" y="0" width="48" height="48" rx="12" fill="url(#centre-bg)" />
-      <rect x="22" y="10" width="15" height="22" rx="2.5" transform="rotate(14 29.5 21)" fill="none" stroke="#fff" strokeWidth="2.6" />
-      <path d="M29.6 17.4 l1.4 3.3 l-1.4 3.3 l-1.4 -3.3 Z" fill="#fff" transform="rotate(14 29.5 21)" />
-      <rect x="9" y="19" width="19" height="19" rx="4.5" fill="#fff" />
-      <g fill="url(#centre-bg)">
-        <circle cx="14" cy="24" r="1.9" />
-        <circle cx="23" cy="24" r="1.9" />
-        <circle cx="18.5" cy="28.5" r="1.9" />
-        <circle cx="14" cy="33" r="1.9" />
-        <circle cx="23" cy="33" r="1.9" />
+      <rect width="100" height="100" rx="23" fill="url(#centre-bg)" />
+      <g filter="url(#centre-shadow)" transform="rotate(13 62 42)">
+        <rect x="46" y="18" width="33" height="46" rx="6" fill="url(#centre-card)" />
+        <path
+          transform="translate(62.5 41)"
+          d="M0 -12 C0 -12 -8.5 -5 -8.5 0.5 C-8.5 4 -5.5 6 -2.9 5 C-1.9 4.6 -1 4 -0.5 3.3 L-2 10 H2 L0.5 3.3 C1 4 1.9 4.6 2.9 5 C5.5 6 8.5 4 8.5 0.5 C8.5 -5 0 -12 0 -12 Z"
+          fill="#fff"
+        />
+      </g>
+      <g filter="url(#centre-shadow)" transform="rotate(-11 36 63)">
+        <rect x="17" y="44" width="38" height="38" rx="9" fill="url(#centre-die)" />
+        <g fill="#fff">
+          <circle cx="27" cy="54" r="4" />
+          <circle cx="36" cy="63" r="4" />
+          <circle cx="45" cy="72" r="4" />
+        </g>
       </g>
     </svg>
   );

@@ -3,7 +3,7 @@
    midnight violet and a gold foil, so you always know which table you are sitting at. */
 
 /* ── Brand and the game picker ────────────────────────────────────── */
-.centre-logo { flex: none; display: inline-block; vertical-align: middle; filter: drop-shadow(0 4px 12px color-mix(in srgb, #7c4ddb 35%, transparent)); }
+.centre-logo { flex: none; display: inline-block; vertical-align: middle; filter: drop-shadow(0 4px 12px color-mix(in srgb, #5b34c9 40%, transparent)); }
 .centre-word { display: inline-flex; align-items: baseline; gap: 0.18em; white-space: nowrap; }
 .centre-word small { font-family: var(--font-serif); font-style: italic; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 0.82em; color: var(--ink); opacity: 0.8; }
 @media (max-width: 420px) { .centre-word { font-size: 19px; } }
