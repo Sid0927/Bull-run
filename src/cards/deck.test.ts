@@ -199,3 +199,22 @@ test("Lovers: one on each side, always a pair, and never the card set aside", ()
     assert.ok(!dealt[6].roleId.startsWith("lover-") && dealt[6].roleId !== PRESIDENT_ROLE && dealt[6].roleId !== BOMBER_ROLE);
   }
 });
+
+test("a Spy can show its team and its whole card: the team share is the other colour, the card its real side", () => {
+  const cards = deck(setSpyEach(classic(), true), 8);
+  const blueSpy = cards.find((c) => c.roleId === "spy-blue")!;
+  const redSpy = cards.find((c) => c.roleId === "spy-red")!;
+  assert.equal(blueSpy.show, "any", "team or full card");
+  assert.equal(blueSpy.teamId, "blue", "the full card says Blue");
+  assert.equal(blueSpy.showsAsTeamId, "red", "a team share shows Red");
+  assert.equal(blueSpy.goal, BLUE_GOAL, "and it plays for Blue's goal");
+  assert.equal(redSpy.teamId, "red");
+  assert.equal(redSpy.showsAsTeamId, "blue");
+});
+
+test("the Veil and the Bluffer are gone, and a setup that had them loads without them", () => {
+  assert.ok(!LIBRARY.some((r) => r.id === "veil" || r.id === "bluffer"));
+  const c = cleanConfig({ ...classic(), roles: [...classic().roles, { id: "v", libId: "veil", teamId: "blue" }, { id: "b", libId: "bluffer", teamId: "red" }] });
+  assert.ok(!c.roles.some((r) => r.libId === "veil" || r.libId === "bluffer"));
+  assert.deepEqual(configProblems(c), []);
+});

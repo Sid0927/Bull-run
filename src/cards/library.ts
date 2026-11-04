@@ -35,10 +35,8 @@ export const LIBRARY: LibraryRole[] = [
   { id: "herald", name: "Herald", group: "helper", copies: 1, show: "any", disguise: false, description: "When a round ends, you may tell the whole group one thing you have seen. It must be true." },
 
   { id: "lover", name: "Lover", group: "helper", copies: 1, show: "any", disguise: false, description: "You and your Lover, on the other side, know each other: the app tells you who. You both win if you end the game in the same room." },
-  { id: "spy", name: "Spy", group: "trick", copies: 1, show: "any", disguise: true, description: "You play for your side, but a team share shows you in the other side's colour. Your full card tells the truth." },
+  { id: "spy", name: "Spy", group: "trick", copies: 1, show: "any", disguise: true, description: "You play for your own side. When you show your team, you show the other side's colour; when you show your whole card, it shows your real side." },
   { id: "silent", name: "Silent", group: "trick", copies: 1, show: "none", disguise: false, description: "You can't show your card to anyone. Talk your way through." },
-  { id: "veil", name: "Veil", group: "trick", copies: 1, show: "team", disguise: false, description: "You may only ever show your team. Never let anyone see the rest of your card." },
-  { id: "bluffer", name: "Bluffer", group: "trick", copies: 1, show: "team", disguise: false, description: "Say you are any role you like. All you can ever show is your team colour." },
 
   { id: "drifter", name: "Drifter", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if you end the game in the group with more people in it." },
   { id: "gambler", name: "Gambler", group: "loner", copies: 1, show: "any", disguise: false, description: "Secretly bets on which team will win. Correct prediction gives a personal win." },

@@ -508,7 +508,7 @@ function Dealt({ view, me, act, busy }: { view: RoomView; me: Me; act: Act; busy
         />
       )}
       {/* Both buttons look the same on every card: a disabled one would tell a neighbour the card is
-          Silent or a Veil. A card that can't be shown that way says so only when it is asked to. */}
+          Silent or an Open Book. A card that can't be shown that way says so only when it is asked to. */}
       <div className="hh-show-btns">
         <button className="hh-show-btn team" onClick={() => (canTeam ? setShowing("team") : refuse())}>
           <Icon name="shield" /> <span>Show team</span>
