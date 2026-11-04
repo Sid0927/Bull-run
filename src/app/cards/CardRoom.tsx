@@ -414,6 +414,19 @@ function BetPanel({ view, bet, act, busy, playerId, onUse }: { view: RoomView; b
   );
 }
 
+/** Who a Lover's partner is. Like the bet, only drawn while the card is turned over. */
+function LoverNote({ view, lover }: { view: RoomView; lover: { name: string; teamId: string } }) {
+  const side = teamOf(view.config, lover.teamId);
+  return (
+    <p className="hh-lover" style={teamStyle(side)}>
+      <span aria-hidden="true">♥</span>
+      <span>
+        Your Lover is <b>{lover.name}</b>, on {side?.name ?? "the other side"}. You both win if you end the game in the same room.
+      </span>
+    </p>
+  );
+}
+
 function Dealt({ view, me, act, busy }: { view: RoomView; me: Me; act: Act; busy: boolean }) {
   const card = view.myCard as Card;
   const [open, setOpen] = useState(false);
@@ -480,6 +493,7 @@ function Dealt({ view, me, act, busy }: { view: RoomView; me: Me; act: Act; busy
         </span>
       </button>
       <p className="muted small center hh-flip-note">{open ? "Tap the card to hide it. It hides by itself after a few seconds." : "Only you can see this. Shield the screen when you look."}</p>
+      {open && view.myLover && <LoverNote view={view} lover={view.myLover} />}
       {open && isGambler(view, card) && (
         <BetPanel
           view={view}
@@ -763,6 +777,7 @@ function TestCards({ view, act, busy }: { view: RoomView; act: Act; busy: boolea
               </button>
             </div>
             <CardFace card={card} config={view.config} />
+            {view.players.find((p) => p.id === open.id)?.testLover && <LoverNote view={view} lover={view.players.find((p) => p.id === open.id)!.testLover!} />}
             {isGambler(view, card) && <BetPanel view={view} bet={view.players.find((p) => p.id === open.id)?.testBet ?? null} act={act} busy={busy} playerId={open.id} />}
             <div className="hh-show-btns">
               <button className="hh-show-btn team" disabled={card.show === "full" || card.show === "none"} onClick={() => setShowing("team")}>

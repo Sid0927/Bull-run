@@ -84,6 +84,8 @@ export interface PlayerView {
   test?: boolean;
   /** A test player's card, sent to the host only: there is no phone to hold it. */
   testCard?: Card;
+  /** That test player's Lover, if its card is a Lover. */
+  testLover?: { name: string; teamId: string } | null;
   /** That test player's bet, if its card is the Gambler. */
   testBet?: string | null;
   /** Revealed only: a Gambler's bet (a team id), or null if they never placed one. */
@@ -104,6 +106,8 @@ export interface RoomView {
   myGroup: 0 | 1 | null;
   /** This phone's own bet, if its card is the Gambler: a team id, or null before choosing. */
   myBet: string | null;
+  /** For a Lover: the other Lover's name and side. Null for everyone else. */
+  myLover: { name: string; teamId: string } | null;
   /** Bets can still be placed or changed (until the first round starts). */
   betsOpen: boolean;
   /** Revealed only: the card set aside, if any. */

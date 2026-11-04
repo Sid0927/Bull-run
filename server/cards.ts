@@ -8,7 +8,7 @@
 import { randomInt } from "node:crypto";
 import { buildDeck, keepKeyCardsDealt, shuffle, splitGroups } from "../src/cards/deck.ts";
 import { PRESETS, cleanConfig } from "../src/cards/presets.ts";
-import { BLUE, RED } from "../src/cards/core.ts";
+import { BLUE, LOVER_ROLES, RED } from "../src/cards/core.ts";
 import type { Card, CardRoomSummary, Config, RoomView, Timer } from "../src/cards/types.ts";
 import { MAX_PLAYERS, MAX_TEST_PLAYERS } from "../src/cards/types.ts";
 import type { Store } from "./store.ts";
@@ -166,7 +166,7 @@ export class CardRooms {
         name: p.name,
         host: p.userId === room.hostId,
         ...(p.test ? { test: true } : {}),
-        ...(p.test && p.card && me.userId === room.hostId && user.isAdmin ? { testCard: p.card, testBet: p.bet ?? null } : {}),
+        ...(p.test && p.card && me.userId === room.hostId && user.isAdmin ? { testCard: p.card, testBet: p.bet ?? null, testLover: this.loverOf(room, p) } : {}),
         ...(room.revealed && p.card ? { card: p.card, bet: p.bet ?? null } : {}),
         // Nobody is sent where anyone else is: who goes across is played out in the room, not tracked.
       })),
@@ -177,6 +177,8 @@ export class CardRooms {
       myGroup: me.group,
       // Only the Gambler's own phone is told their bet; everyone else sees it when the cards are revealed.
       myBet: me.bet ?? null,
+      // A Lover is told who the other Lover is; nobody else is.
+      myLover: this.loverOf(room, me),
       betsOpen: this.betsOpen(room),
       setAside: room.revealed ? room.setAside : null,
       timer: room.timer,
@@ -307,6 +309,13 @@ export class CardRooms {
     if (!this.betsOpen(room)) throw new RoomError(409, "Bets closed when the first round started.");
     who.bet = team;
     this.changed(room);
+  }
+
+  /** The other Lover, for a player holding a Lover card. */
+  private loverOf(room: Room, p: Player): { name: string; teamId: string } | null {
+    if (!p.card || !(LOVER_ROLES as readonly string[]).includes(p.card.roleId)) return null;
+    const other = room.players.find((x) => x !== p && x.card && x.card.roleId !== p.card!.roleId && (LOVER_ROLES as readonly string[]).includes(x.card.roleId));
+    return other ? { name: other.name, teamId: other.card!.teamId } : null;
   }
 
   /** Which library role a dealt card is, from the room's setup (role ids are the host's to choose). */

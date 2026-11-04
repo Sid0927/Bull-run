@@ -223,3 +223,22 @@ test("the Gambler bets on Blue or Red in secret, can change it until round 1 sta
   rooms.deal(code, ann, true);
   assert.equal(rooms.view(code, gambler).myBet, null, "a new deal clears the bet");
 });
+
+test("each Lover is told the other's name and side, and nobody else is told anything", async () => {
+  const store = new MemoryStore();
+  const rooms = new CardRooms(store);
+  const code = rooms.create(ann);
+  const dee = { id: 4, username: "dee" };
+  for (const u of [ben, cy, dee]) rooms.join(code, u);
+  const setup = rooms.view(code, ann).config;
+  rooms.setConfig(code, ann, { ...setup, roles: [...setup.roles, { id: "x", libId: "lover", teamId: "blue" }, { id: "y", libId: "lover", teamId: "red" }], oddRoleId: "" });
+  rooms.deal(code, ann);
+  const people = [ann, ben, cy, dee];
+  const lovers = people.filter((u) => rooms.view(code, u).myCard?.roleId.startsWith("lover-"));
+  assert.equal(lovers.length, 2, "4 players: President, Bomber and the two Lovers");
+  const [a, b] = lovers;
+  assert.deepEqual(rooms.view(code, a).myLover, { name: b.username, teamId: rooms.view(code, b).myCard!.teamId });
+  assert.deepEqual(rooms.view(code, b).myLover, { name: a.username, teamId: rooms.view(code, a).myCard!.teamId });
+  assert.notEqual(rooms.view(code, a).myCard!.teamId, rooms.view(code, b).myCard!.teamId, "one Blue, one Red");
+  for (const u of people.filter((x) => !lovers.includes(x))) assert.equal(rooms.view(code, u).myLover, null);
+});

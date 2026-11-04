@@ -5,7 +5,7 @@
 import type { Card, Config, Role, Team } from "./types.ts";
 import { MAX_PLAYERS, TEAM_COLORS } from "./types.ts";
 import { LIBRARY_BY_ID } from "./library.ts";
-import { BOMBER_ROLE, PRESIDENT_ROLE } from "./core.ts";
+import { NEVER_SET_ASIDE } from "./core.ts";
 
 export type Random = () => number;
 
@@ -95,13 +95,14 @@ export function shuffle<T>(items: T[], random: Random): T[] {
 
 /**
  * After shuffling, the card past the last player is the one set aside. It must never be the
- * President or the Bomber, since every game is decided by where they end up: if it is, it trades
- * places with the first card dealt that isn't one of them (the order is already random, so that
+ * President or the Bomber, since every game is decided by where they end up, nor a Lover, who
+ * would be left without a pair: if it is, it trades places with the first card dealt that isn't
+ * one of them (the order is already random, so that
  * card is a random one).
  */
 export function keepKeyCardsDealt<T extends { roleId: string }>(cards: T[], players: number): T[] {
   const out = cards.slice();
-  const key = (c: T | undefined) => !!c && (c.roleId === PRESIDENT_ROLE || c.roleId === BOMBER_ROLE);
+  const key = (c: T | undefined) => !!c && NEVER_SET_ASIDE.has(c.roleId);
   if (out.length > players && key(out[players])) {
     const i = out.findIndex((c, j) => j < players && !key(c));
     if (i >= 0) [out[i], out[players]] = [out[players], out[i]];

@@ -521,3 +521,7 @@
 .hh-bet-note { margin: 0; }
 .hh-sheet .hh-bet { justify-self: center; }
 .hh-reveal-bet { font-weight: 500; opacity: 0.8; }
+/* A Lover's partner, under the turned-over card. */
+.hh-lover { display: flex; gap: 10px; align-items: flex-start; width: min(100%, 26rem); margin: 0; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--team) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--team) 40%, transparent); font-size: 14px; line-height: 1.45; }
+.hh-lover > span[aria-hidden] { color: #d94f8f; font-size: 18px; line-height: 1.2; }
+.hh-sheet .hh-lover { justify-self: center; }

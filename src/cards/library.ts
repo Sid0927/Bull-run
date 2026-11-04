@@ -34,6 +34,7 @@ export const LIBRARY: LibraryRole[] = [
   { id: "open-book", name: "Open Book", group: "helper", copies: 1, show: "full", disguise: false, description: "You can't hide behind a colour: whenever you show, you show your whole card." },
   { id: "herald", name: "Herald", group: "helper", copies: 1, show: "any", disguise: false, description: "When a round ends, you may tell the whole group one thing you have seen. It must be true." },
 
+  { id: "lover", name: "Lover", group: "helper", copies: 1, show: "any", disguise: false, description: "You and your Lover, on the other side, know each other: the app tells you who. You both win if you end the game in the same room." },
   { id: "spy", name: "Spy", group: "trick", copies: 1, show: "any", disguise: true, description: "You play for your side, but a team share shows you in the other side's colour. Your full card tells the truth." },
   { id: "silent", name: "Silent", group: "trick", copies: 1, show: "none", disguise: false, description: "You can't show your card to anyone. Talk your way through." },
   { id: "veil", name: "Veil", group: "trick", copies: 1, show: "team", disguise: false, description: "You may only ever show your team. Never let anyone see the rest of your card." },

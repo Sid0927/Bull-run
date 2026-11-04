@@ -6,7 +6,7 @@ import { LIBRARY, LIBRARY_BY_ID, ROLE_GROUPS, roleFrom } from "../../cards/libra
 import { SHOW_LABELS, TEAM_COLORS, type Config, type Role, type Team } from "../../cards/types.ts";
 import { Icon } from "../ui.tsx";
 import { teamOf, teamStyle } from "./CardArt.tsx";
-import { hasSpyEach, isCoreRole, isCoreTeam, setSpyEach } from "../../cards/core.ts";
+import { hasLovers, hasSpyEach, isCoreRole, isCoreTeam, setLovers, setSpyEach } from "../../cards/core.ts";
 
 const SAVED = "hh.setups";
 
@@ -299,6 +299,12 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           label="A Spy on each side"
           hint="One Spy on Blue and one on Red. A Spy plays for its own side, but showing its team shows the other side's colour."
         />
+        <Switch
+          checked={hasLovers(c)}
+          onChange={(v) => setC((prev) => setLovers(prev, v))}
+          label="Lovers: one on Blue, one on Red"
+          hint="The app tells each Lover who the other is. They both win if they end the game in the same room."
+        />
         {picking && <RolePicker config={c} onAdd={addRole} />}
         {c.roles.length === 0 ? (
           !picking && <p className="muted small">No roles yet: every card will be a plain team card. Tap Add roles to pick some.</p>
@@ -324,12 +330,16 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                       </span>
                       <Icon name="chevron" size={18} className="hh-chev" />
                     </button>
-                    {isCoreRole(r) ? <span className="tag hh-core-tag">In every game</span> : <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name}`} />}
+                    {isCoreRole(r) || r.libId === "lover" ? <span className="tag hh-core-tag">{isCoreRole(r) ? "In every game" : "Pair"}</span> : <Stepper value={r.count} onChange={(v) => setRole(r.id, { count: v })} min={0} max={20} label={`Copies of ${r.name}`} />}
                   </div>
-                  {open && isCoreRole(r) && (
+                  {open && (isCoreRole(r) || r.libId === "lover") && (
                     <div className="hh-role-body">
                       <p className="hh-role-desc">{r.description}</p>
-                      <p className="muted small">One in every game, always on {team?.name}. It can't be set aside.</p>
+                      <p className="muted small">
+                        {isCoreRole(r)
+                          ? `One in every game, always on ${team?.name}. It can't be set aside.`
+                          : `One Lover on Blue and one on Red, always as a pair. Turn them off with the Lovers switch above.`}
+                      </p>
                       <div className="row hh-role-actions">
                         <button className="ghost-link" onClick={() => setOpenRole(null)}>
                           Done
@@ -337,7 +347,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                       </div>
                     </div>
                   )}
-                  {open && !isCoreRole(r) && (
+                  {open && !isCoreRole(r) && r.libId !== "lover" && (
                     <div className="hh-role-body">
                       <p className="hh-role-desc">{r.description}</p>
                       <div className="field">
@@ -489,7 +499,7 @@ function RolePicker({ config, onAdd }: { config: Config; onAdd: (libId: string) 
           <h3>{g.name}</h3>
           <p className="muted small">{g.blurb}</p>
           <ul>
-            {LIBRARY.filter((r) => r.group === g.id).map((r) => {
+            {LIBRARY.filter((r) => r.group === g.id && r.id !== "lover").map((r) => {
               const inDeck = config.roles.filter((x) => x.libId === r.id).reduce((n, x) => n + x.count, 0);
               return (
                 <li key={r.id}>

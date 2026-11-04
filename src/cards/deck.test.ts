@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildDeck, configProblems, keepKeyCardsDealt, shuffle, splitGroups } from "./deck.ts";
-import { BLUE_GOAL, BOMBER_ROLE, PRESIDENT_ROLE, RED_GOAL, hasSpyEach, setSpyEach, withCore } from "./core.ts";
+import { BLUE_GOAL, BOMBER_ROLE, PRESIDENT_ROLE, RED_GOAL, hasLovers, hasSpyEach, setLovers, setSpyEach, withCore } from "./core.ts";
 import { PRESETS, cleanConfig } from "./presets.ts";
 import { LIBRARY, roleFrom } from "./library.ts";
 import type { Config } from "./types.ts";
@@ -175,4 +175,27 @@ test("one Spy on each side: on Blue it shows as Red, on Red as Blue, and it can 
   assert.equal(hasSpyEach(cleanConfig(on)), true);
   assert.equal(setSpyEach(on, false).roles.some((r) => r.libId === "spy"), false);
   assert.equal(hasSpyEach(setSpyEach(on, true)), true, "turning it on twice still means one each");
+});
+
+test("Lovers: one on each side, always a pair, and never the card set aside", () => {
+  const on = setLovers(classic(), true);
+  assert.equal(hasLovers(on), true);
+  assert.deepEqual(configProblems(on), []);
+  const cards = deck(on, 8);
+  assert.deepEqual(cards.filter((c) => c.roleId.startsWith("lover-")).map((c) => c.teamId).sort(), ["blue", "red"]);
+  assert.equal(count(cards, "blue"), 4, "a Lover is one of its side's players");
+  // A Lover on one side only, or two on one side, is not a pair: it is dropped on save.
+  const stray = cleanConfig({ ...classic(), roles: [...classic().roles, roleFrom("lover", "blue")] });
+  assert.equal(stray.roles.some((r) => r.libId === "lover"), false);
+  assert.equal(hasLovers(cleanConfig(on)), true);
+  assert.equal(setLovers(on, false).roles.some((r) => r.libId === "lover"), false);
+  // With a card set aside, neither Lover is ever it.
+  const aside = { ...on, setAside: true };
+  const all = deck(aside, 6);
+  let s = 3;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 300; i++) {
+    const dealt = keepKeyCardsDealt(shuffle(all, rnd), 6);
+    assert.ok(!dealt[6].roleId.startsWith("lover-") && dealt[6].roleId !== PRESIDENT_ROLE && dealt[6].roleId !== BOMBER_ROLE);
+  }
 });
