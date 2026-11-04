@@ -45,6 +45,8 @@ export interface Game {
   rounds: 6 | 9 | 12;
   maxPlayers: number;
   seed: number | null;
+  /** The game's 256-bit random secret (hex); null for games started before there was one. */
+  secret: string | null;
   /** Which rule set the game is played under (see rules.ts). */
   rules: number;
   createdAt: string;
@@ -99,7 +101,7 @@ export interface Store {
   gameByCode(code: string): Promise<Game | null>;
   gamesFor(userId: number): Promise<Game[]>;
   allGames(): Promise<Game[]>;
-  updateGame(id: number, patch: { status?: GameStatus; seed?: number }): Promise<void>;
+  updateGame(id: number, patch: { status?: GameStatus; seed?: number; secret?: string }): Promise<void>;
   /** Hands a waiting game to another account (the admin swapped its creator's seat). */
   setGameCreator(id: number, userId: number): Promise<void>;
   seated(gameId: number): Promise<Seated[]>;
@@ -227,7 +229,7 @@ export class MemoryStore implements Store {
     for (const [t, s] of this.sessions) if (s.userId === userId) this.sessions.delete(t);
   }
   async createGame(g: { code: string; createdBy: number; rounds: 6 | 9 | 12; maxPlayers: number }) {
-    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, rules: CURRENT_RULES, startedAt: null, endedAt: null, createdAt: new Date().toISOString(), ...g };
+    const game: Game = { id: this.games.length + 1, status: "lobby", seed: null, secret: null, rules: CURRENT_RULES, startedAt: null, endedAt: null, createdAt: new Date().toISOString(), ...g };
     this.games.push(game);
     return { ...game };
   }
@@ -250,7 +252,7 @@ export class MemoryStore implements Store {
     const g = this.games.find((x) => x.id === id);
     if (g) g.createdBy = userId;
   }
-  async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
+  async updateGame(id: number, patch: { status?: GameStatus; seed?: number; secret?: string }) {
     const g = this.games.find((x) => x.id === id);
     if (!g) return;
     Object.assign(g, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
@@ -353,6 +355,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rules INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+-- Games started before this have none and keep replaying from their 32-bit seed.
+ALTER TABLE games ADD COLUMN IF NOT EXISTS secret TEXT;
 ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS at TIMESTAMPTZ;
 ALTER TABLE game_actions ALTER COLUMN at SET DEFAULT now();
 -- A game that has not started yet (no seed) has no moves to replay, so it starts under today's rules.
@@ -398,6 +402,7 @@ const toGame = (r: Row): Game => ({
   rounds: r.rounds as 6 | 9 | 12,
   maxPlayers: r.max_players as number,
   seed: (r.seed as number | null) ?? null,
+  secret: (r.secret as string | null) ?? null,
   rules: r.rules as number,
   createdAt: new Date(r.created_at as string).toISOString(),
   startedAt: r.started_at ? new Date(r.started_at as string).toISOString() : null,
@@ -574,14 +579,14 @@ export class PgStore implements Store {
   async setGameCreator(id: number, userId: number) {
     await this.q("UPDATE games SET created_by = $2 WHERE id = $1", [id, userId]);
   }
-  async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
+  async updateGame(id: number, patch: { status?: GameStatus; seed?: number; secret?: string }) {
     // One statement, so a game is never left "playing" without its seed.
     await this.q(
-      `UPDATE games SET status = COALESCE($2, status), seed = COALESCE($3, seed),
+      `UPDATE games SET status = COALESCE($2, status), seed = COALESCE($3, seed), secret = COALESCE($4, secret),
          started_at = CASE WHEN $2 = 'playing' THEN now() ELSE started_at END,
          ended_at = CASE WHEN $2 IN ('ended', 'abandoned') THEN now() ELSE ended_at END
        WHERE id = $1`,
-      [id, patch.status ?? null, patch.seed ?? null],
+      [id, patch.status ?? null, patch.seed ?? null, patch.secret ?? null],
     );
   }
   async seated(gameId: number) {

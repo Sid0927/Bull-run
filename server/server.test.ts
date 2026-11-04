@@ -119,6 +119,11 @@ describe("a game played from three phones", () => {
     assert.ok(a.view!.players[1].hand.every((x) => x === 0));
     assert.ok(b.view!.players[1].hand.every((x) => x > 0));
     assert.equal(a.view!.config.seed, 0);
+    // The deal comes from a 256-bit secret kept on the server, and no phone is sent it.
+    const secret = (await store.gameById(game.id))!.secret!;
+    assert.match(secret, /^[0-9a-f]{64}$/);
+    assert.equal(a.view!.config.secret, undefined);
+    assert.ok(!JSON.stringify(a).includes(secret.slice(0, 16)));
     assert.equal(a.view!.players[0].cash, 1000); // the final rules: ₹1,000 each
     assert.deepEqual(a.waiting, [0, 1, 2]);
   });

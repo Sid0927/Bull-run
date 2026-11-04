@@ -2,7 +2,7 @@
  * Live games. The server is the only place a game's full state exists: it applies every action
  * through the rules engine, saves it, and sends each player only what they may see.
  */
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { rulesConfig } from "./rules.ts";
 import { apply, newGame, type Action, type GameEvent, type GameState, type Seat } from "../src/engine/index.ts";
 import type { GameSummary, GameUpdate } from "../src/shared/api.ts";
@@ -48,6 +48,8 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export class Hub {
   private live = new Map<number, Live>();
   private loading = new Map<number, Promise<Live | null>>();
+  /** Bumped when a seat is swapped, so a replay started before the swap is not cached. */
+  private gens = new Map<number, number>();
   private locks = new Map<number, Promise<unknown>>();
   private inFlight = new Map<number, number>();
   private listeners = new Map<number, Set<Listener>>();
@@ -91,13 +93,14 @@ export class Hub {
     const pending = this.loading.get(game.id);
     if (pending) return pending;
     const seed = game.seed;
-    const p = (async () => {
+    const gen = this.gens.get(game.id) ?? 0;
+    const p: Promise<Live | null> = (async () => {
       const seated = await this.store.seated(game.id);
       // The IPO company was called ZOM before it became Oracle Group (ORG); old saved moves still say ZOM.
       const saved = await this.store.actions(game.id);
       const actions = saved.map(({ action: x }) => ("company" in x && (x.company as string) === "ZOM" ? { ...x, company: "ORG" as const } : x));
       // Replayed a move at a time so every event keeps the time of the move that caused it.
-      const start = newGame({ ...rulesConfig(game.rules), players: seated.map((x) => x.username), rounds: game.rounds, seed });
+      const start = newGame({ ...rulesConfig(game.rules), players: seated.map((x) => x.username), rounds: game.rounds, seed, ...(game.secret ? { secret: game.secret } : {}) });
       let state = start.state;
       const events = [...start.events];
       const times: (string | null)[] = start.events.map(() => game.startedAt);
@@ -108,12 +111,18 @@ export class Hub {
         events.push(...r.events);
         times.push(...r.events.map(() => saved[i].at));
       });
-      const live = this.live.get(game.id) ?? { state, events, times, seq: actions.length, lastMoveAt: saved.at(-1)?.at ?? null };
+      const built = { state, events, times, seq: actions.length, lastMoveAt: saved.at(-1)?.at ?? null };
+      // A seat was swapped while this ran: what it built has the old name, so it is not kept (the
+      // next read replays again with the new one).
+      if ((this.gens.get(game.id) ?? 0) !== gen) return built;
+      const live = this.live.get(game.id) ?? built;
       this.live.set(game.id, live);
       this.trimCache();
       if (game.status === "playing") this.scheduleBots(game.id, live.state);
       return live;
-    })().finally(() => this.loading.delete(game.id));
+    })().finally(() => {
+      if (this.loading.get(game.id) === p) this.loading.delete(game.id);
+    });
     this.loading.set(game.id, p);
     return p;
   }
@@ -131,7 +140,14 @@ export class Hub {
     const creator = await this.store.userById(game.createdBy);
     // A finished or abandoned game is not replayed just to be listed.
     const done = game.status === "ended" || game.status === "abandoned";
-    const live = done ? this.live.get(game.id) ?? null : await this.load(game);
+    // A game that won't replay is listed without its live details rather than taking the whole
+    // list down with it; opening it still shows the error.
+    const live = done
+      ? this.live.get(game.id) ?? null
+      : await this.load(game).catch((e: Error) => {
+          console.error(`Game ${game.id} could not be replayed: ${e.message}`);
+          return null;
+        });
     const mine = seated.find((p) => p.userId === forUser);
     return {
       id: game.id,
@@ -339,6 +355,9 @@ export class Hub {
       // In the waiting room the creator is the host who starts it: their seat's new holder takes that over.
       if (g.status === "lobby" && g.createdBy === old.userId) await this.store.setGameCreator(gameId, u.id);
       this.live.delete(gameId); // replayed with the new name next time it is read
+      // …and a replay already running when the name changed must not put the old one back.
+      this.loading.delete(gameId);
+      this.gens.set(gameId, (this.gens.get(gameId) ?? 0) + 1);
       for (const set of [this.listeners.get(gameId)].filter((x): x is Set<Listener> => !!x)) {
         for (const l of set) {
           if (l.userId === old.userId) {
@@ -360,8 +379,11 @@ export class Hub {
       const seated = await this.store.seated(g.id);
       if (seated.length < 3) throw new GameError("A game needs at least 3 players.");
       const seed = randomInt(2 ** 31);
-      const { state, events } = newGame({ ...rulesConfig(g.rules), players: seated.map((p) => p.username), rounds: g.rounds, seed });
-      await this.store.updateGame(g.id, { status: "playing", seed }); // one write: never "playing" without a seed
+      // Every draw comes from this 256-bit secret, which never leaves the server: a 32-bit seed
+      // could be found by trying them all against one's own hand and the face-up cards.
+      const secret = randomBytes(32).toString("hex");
+      const { state, events } = newGame({ ...rulesConfig(g.rules), players: seated.map((p) => p.username), rounds: g.rounds, seed, secret });
+      await this.store.updateGame(g.id, { status: "playing", seed, secret }); // one write: never "playing" without them
       const now = new Date().toISOString();
       this.live.set(g.id, { state, events: [...events], times: events.map(() => now), seq: 0, lastMoveAt: null });
       this.push(g.id);

@@ -48,3 +48,32 @@ test("a move survives its game being dropped from the cache while it is saved", 
   await hub.act(us[1], a.id, { type: "openingOrder", player: 1, orders: {}, card: (await view()).players[1].hand[0] });
   assert.equal((await store.actions(a.id)).length, 2);
 });
+
+test("a seat swapped while the game is being replayed keeps its new name", async () => {
+  class SlowReads extends MemoryStore {
+    slow = false;
+    override async actions(g: number) {
+      if (this.slow) await delay(200);
+      return super.actions(g);
+    }
+  }
+  const store = new SlowReads();
+  const hub = new Hub(store, { botDelayMs: 1e9 });
+  const admin = await store.createUser("boss", "x", true);
+  const us = await Promise.all(["ann", "bob", "cat", "dan"].map((n) => store.createUser(n, "x", false)));
+  const g = await hub.create(us[0], 6, 3);
+  await hub.join(us[1], g.code);
+  await hub.join(us[2], g.code);
+  await hub.start(us[0], g.id);
+  (hub as unknown as { live: Map<number, unknown> }).live.delete(g.id); // as after a restart
+  store.slow = true;
+  const listing = hub.summary((await store.gameById(g.id))!, us[0].id); // starts a replay
+  await delay(20);
+  await hub.replaceSeat(admin, g.id, 1, "dan");
+  await listing;
+  store.slow = false;
+  const after = await hub.summary((await store.gameById(g.id))!, us[0].id);
+  assert.ok(JSON.stringify(after).includes("dan"));
+  const live = await (hub as unknown as { load(x: unknown): Promise<{ state: { players: { name: string }[] } }> }).load(await store.gameById(g.id));
+  assert.equal(live.state.players[1].name, "dan");
+});

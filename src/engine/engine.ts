@@ -37,7 +37,7 @@ import {
   indexOfPrice,
   type CompanyId,
 } from "./data.ts";
-import { Rng } from "./rng.ts";
+import { Rng, isSecret } from "./rng.ts";
 import type {
   Action,
   GameConfig,
@@ -154,6 +154,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
   if (config.ipoBand !== undefined && (config.ipoBand.length === 0 || !config.ipoBand.every((p) => p > 0 && (TRACK as readonly number[]).includes(p))))
     throw new IllegalAction("The IPO band must be one or more spaces on the price track above ₹0.");
   if (!Number.isInteger(config.seed)) throw new IllegalAction("The seed must be a whole number.");
+  if (config.secret !== undefined && !isSecret(config.secret)) throw new IllegalAction("The secret must be 64 hex digits.");
   if (new Set(config.players).size !== config.players.length) throw new IllegalAction("Give every player a different name.");
   if (config.dividendBands !== undefined) {
     const ok = (n: unknown) => Number.isInteger(n) && (n as number) >= 0;
@@ -169,7 +170,7 @@ export function newGame(config: GameConfig): { state: GameState; events: GameEve
     if (!COMPANY_IDS.includes(c as CompanyId)) throw new IllegalAction(`No company ${c}.`);
     if (!(TRACK as readonly number[]).includes(p!) || p === 0) throw new IllegalAction(`${c} cannot start at ₹${p}: not a space on the track.`);
   }
-  const rng = new Rng(config.seed);
+  const rng = new Rng(config.secret ? `${config.secret}:0` : config.seed);
   const deck = rng.shuffle(NEWS_CARDS.map((c) => c.id));
   const players = config.players.map((name) => ({
     name,

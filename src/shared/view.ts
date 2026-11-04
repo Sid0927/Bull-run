@@ -16,6 +16,7 @@ export function viewFor(s: GameState, seat: Seat | null, reveal = false): GameSt
   const ended = s.phase.kind === "ended" || reveal;
   v.rng = 0;
   v.config = { ...v.config, seed: 0 };
+  delete v.config.secret;
   v.deck = v.deck.map(() => HIDDEN_CARD);
   v.players = v.players.map((p, i) =>
     i === seat || ended ? p : { ...p, cash: 0, hand: p.hand.map(() => HIDDEN_CARD) },

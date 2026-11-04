@@ -7,6 +7,11 @@ export interface GameConfig {
   players: string[]; // seat order, fixed for the whole game
   rounds: GameLength; // rounds of turns after the opening (round 0)
   seed: number;
+  /**
+   * 64 hex digits (256 bits) the server keeps secret; when set, every draw comes from it rather
+   * than from `seed`. Never sent to a player.
+   */
+  secret?: string;
   /** Play-test variant: override some starting prices (each must be a track space). */
   startPrices?: Partial<Record<CompanyId, number>>;
   /** Play-test variant: starting cash per player (default STARTING_CASH, ₹1,000). */
@@ -121,7 +126,8 @@ export interface Standing {
 
 export interface GameState {
   config: GameConfig;
-  rng: number;
+  /** The generator's state: a number (mulberry32, older games) or "<secret>:<counter>". */
+  rng: number | string;
   round: number; // 0 = the opening
   phase: Phase;
   players: Player[];
