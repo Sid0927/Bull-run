@@ -1,5 +1,5 @@
-/* Sid's Arcade: the shell around the games, and Undercover.
-   The arcade keeps Bull Run's paper-and-terminal look; Undercover swaps the green for a
+/* Sid's Arcade: the shell around the games, and The Dallas Incident.
+   The arcade keeps Bull Run's paper-and-terminal look; The Dallas Incident swaps the green for a
    midnight violet and a gold foil, so you always know which table you are sitting at. */
 
 /* ── Brand and the game picker ────────────────────────────────────── */
@@ -62,7 +62,7 @@
 .hub-tile-cards span { transition: transform 0.35s var(--ease); }
 @media (max-width: 420px) { .hub-tile { padding: 18px; min-height: 0; } .hub-tile-name { font-size: 28px; } .hub-tile-cards { opacity: 0.5; } }
 
-/* ── Undercover: its own colours ─────────────────────────────────── */
+/* ── The Dallas Incident: its own colours ─────────────────────────────────── */
 .hh {
   --accent: #6a3fd1; --accent-2: #8a5cf0; --accent-soft: #ece4fd; --on-accent: #ffffff;
   --foil: #b8923a; --midnight: #1b1436; --midnight-2: #2a1f59;

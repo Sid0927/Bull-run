@@ -1,4 +1,4 @@
-/** Talking to the Undercover routes. The session cookie says who is asking. */
+/** Talking to the The Dallas Incident routes. The session cookie says who is asking. */
 import type { CardRoomSummary, Config, RoomView } from "../../cards/types.ts";
 
 export class CardsError extends Error {

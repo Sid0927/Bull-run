@@ -109,7 +109,7 @@ export interface Store {
   replacePlayer(gameId: number, seat: number, userId: number): Promise<void>;
   actions(gameId: number): Promise<TimedAction[]>;
   appendAction(gameId: number, seq: number, action: Action): Promise<void>;
-  /** Undercover rooms, kept whole as JSON: one evening's state, read back after a restart. */
+  /** The Dallas Incident rooms, kept whole as JSON: one evening's state, read back after a restart. */
   cardRooms(): Promise<{ code: string; data: unknown }[]>;
   saveCardRoom(code: string, data: unknown): Promise<void>;
   deleteCardRoom(code: string): Promise<void>;
@@ -433,7 +433,7 @@ export class PgStore implements Store {
 
   /**
    * The October 2026 fresh start: every account except the admins, every Bull Run game and
-   * every Undercover room goes, so that everybody signs up again with an email. Runs once,
+   * every room of The Dallas Incident goes, so that everybody signs up again with an email. Runs once,
    * the first time a server with this code starts; the marker row stops it running again.
    */
   private async resetAccountsOnce() {
@@ -447,7 +447,7 @@ export class PgStore implements Store {
         await client.query("DELETE FROM card_rooms");
         await client.query("DELETE FROM games"); // their players and moves go with them
         await client.query("DELETE FROM users WHERE NOT is_admin"); // sessions and email links go with them
-        console.log("[bull-run] Accounts reset: every non-admin account, Bull Run game and Undercover room was removed.");
+        console.log("[bull-run] Accounts reset: every non-admin account, Bull Run game and The Dallas Incident room was removed.");
       }
       await client.query("COMMIT");
     } catch (e) {

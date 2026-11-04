@@ -1,4 +1,4 @@
-/** Undercover's front door: join a room with its code, host one, or go back to one you are in. */
+/** The Dallas Incident's front door: join a room with its code, host one, or go back to one you are in. */
 import { useEffect, useState } from "react";
 import { CARDS_NAME, type CardRoomSummary } from "../../cards/types.ts";
 import type { Me } from "../../shared/api.ts";

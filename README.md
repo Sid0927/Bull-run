@@ -5,8 +5,8 @@ or one the admin gives them; every account needs an email) and then picks a game
 
 - **Bull Run**: a physical tabletop stock market game for 3–5 players, played online. Its rules,
   engine and simulator are described below.
-- **Undercover**: secret role cards for a game played together in one room. Each phone is a
-  player's card. See [Undercover](#undercover) below.
+- **The Dallas Incident**: secret role cards for a game played together in one room. Each phone is a
+  player's card. See [The Dallas Incident](#the-dallas-incident) below.
 
 On 30 October 2026 every account except the admins was removed, with every Bull Run game, so
 that everybody signs up again with an email. That ran once, on the first start of the server
@@ -73,12 +73,12 @@ npm start            # http://localhost:3000, admin / admin123, nothing saved wi
 
 For development, `npm run server` (API with reload) and `npm run dev` (app on :5173) together.
 
-## Undercover
+## The Dallas Incident
 
 For any game of hidden teams and roles played around a table, without a deck of cards. The host
 sets it up; everyone else needs only the room code.
 
-- **Host:** Undercover → **Start a room**, then **Edit setup**: name the sides (and their
+- **Host:** The Dallas Incident → **Start a room**, then **Edit setup**: name the sides (and their
   colours), add a Loners team if you want roles that play for themselves, and pick roles from
   the list (`src/cards/library.ts`): key cards, team players, tricksters and loners, each with
   its own text and, where it matters, how it may be shown (a Silent card can't be shown, a Mole
@@ -90,7 +90,7 @@ sets it up; everyone else needs only the room code.
   goal. A side with no goal can't be dealt.
 - **Groups:** when the players are split, each phone says which group its player starts in.
   Who goes across after that is played out in the room; the app doesn't track it.
-- **Test games (admins only):** **Test game** on the Undercover screen (or **+ test player** in
+- **Test games (admins only):** **Test game** on the The Dallas Incident screen (or **+ test player** in
   a room) adds pretend players. Only the host sees their cards, and can open any of them and
   hold it up as that player would, so a setup can be dealt and played through on one phone.
 - **If the host's phone dies:** after 90 seconds without a word from it, anyone in the room

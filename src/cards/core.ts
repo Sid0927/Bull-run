@@ -1,5 +1,5 @@
 /**
- * What every Undercover game is built on: two sides, Blue and Red, a President on Blue and a
+ * What every game of The Dallas Incident is built on: two sides, Blue and Red, a President on Blue and a
  * Bomber on Red, and two rooms. Blue wins if, when the last round ends, the President is not in
  * the same room as the Bomber; Red wins if the Bomber is. Everything else (the other roles, the
  * rounds, the house rules) is the host's to choose, but this part is in every game, so every

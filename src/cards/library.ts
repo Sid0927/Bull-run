@@ -1,5 +1,5 @@
 /**
- * Undercover's roles. A host picks from this list rather than writing roles from scratch, so
+ * The Dallas Incident's roles. A host picks from this list rather than writing roles from scratch, so
  * every card says something that has been thought through. The app enforces what it can (how a
  * card may be shown, and a disguised team colour); the rest the players keep to themselves.
  */

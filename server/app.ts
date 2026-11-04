@@ -21,7 +21,7 @@ export interface AppOptions {
   /** Override how long computer players pause before moving (tests). */
   botDelayMs?: number;
   store: Store;
-  /** Undercover rooms (made here if not given; the server passes one it has read back from the store). */
+  /** The Dallas Incident rooms (made here if not given; the server passes one it has read back from the store). */
   cards?: CardRooms;
   /** Folder with the built app (vite build). Omit to serve the API only. */
   staticDir?: string;
@@ -506,7 +506,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       });
       return json(res, 200, await hub.summary(g, user.id));
     }
-    // ── Undercover (secret role cards) ──
+    // ── The Dallas Incident (secret role cards) ──
     if (path === "/api/cards/rooms" && method === "GET") return json(res, 200, cards.mine(user));
     if (path === "/api/cards/rooms" && method === "POST") return json(res, 200, { code: cards.create(user) });
     const cm = path.match(/^\/api\/cards\/rooms\/([A-Za-z]{5})(?:\/([a-z]+))?$/);
