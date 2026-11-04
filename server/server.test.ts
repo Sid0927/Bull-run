@@ -519,3 +519,67 @@ describe("confirming emails", () => {
     assert.ok(codes.includes(429), codes.join(","));
   });
 });
+
+describe("fixes from the second review", () => {
+  test("swapping the creator's seat in the waiting room hands over the game, so it can still be started", async () => {
+    const [a, b] = [players[0], players[2]];
+    const g: GameSummary = (await a.call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    await b.call("/api/games/join", { code: g.code });
+    await admin.call("/api/admin/users", { username: "newhost", email: "newhost@example.com", password: "newhost-pw" });
+    const nh = new Client();
+    await nh.login("newhost", "newhost-pw");
+    assert.equal((await admin.call(`/api/admin/games/${g.id}/seat`, { seat: 0, username: "newhost" })).status, 200);
+    assert.equal((await nh.call(`/api/games/${g.id}/add-bot`, {})).status, 200, "the new creator can add a computer player");
+    assert.equal((await nh.call(`/api/games/${g.id}/start`, {})).status, 200, "and start the game");
+    await admin.call(`/api/admin/games/${g.id}/abandon`, {});
+  });
+
+  test("a computer player whose move fails to save tries again instead of freezing the game", async () => {
+    const a = players[0];
+    const g: GameSummary = (await a.call("/api/games", { rounds: 6, maxPlayers: 3 })).data;
+    await a.call(`/api/games/${g.id}/add-bot`, {});
+    await a.call(`/api/games/${g.id}/add-bot`, {});
+    const original = store.appendAction.bind(store);
+    let failures = 1;
+    store.appendAction = async (...args: Parameters<Store["appendAction"]>) => {
+      if (failures-- > 0) throw new Error("database blip");
+      return original(...args);
+    };
+    const errorLog = console.error;
+    console.error = () => {};
+    try {
+      assert.equal((await a.call(`/api/games/${g.id}/start`, {})).status, 200);
+      // Both bots write their opening orders: the first save fails once, then they carry on.
+      let waiting: number[] = [];
+      for (let i = 0; i < 80; i++) {
+        waiting = (await a.snapshot(g.id)).waiting;
+        if (waiting.length === 1 && waiting[0] === 0) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.deepEqual(waiting, [0], "only the person is left to write their order");
+    } finally {
+      store.appendAction = original;
+      console.error = errorLog;
+      await admin.call(`/api/admin/games/${g.id}/abandon`, {});
+    }
+  });
+
+  test("sign-up attempts from one address are capped, refused ones included", async () => {
+    const codes: number[] = [];
+    for (let i = 0; i < 22; i++) {
+      const r = await fetch(`${base}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.77" }, body: JSON.stringify({ email: `probe${i}@example.com`, username: "asha", password: "probe-pass" }) });
+      codes.push(r.status);
+    }
+    assert.ok(codes.slice(0, 20).every((c) => c === 409), codes.join(","));
+    assert.equal(codes[21], 429);
+  });
+
+  test("changing only the capitals of a confirmed email keeps it confirmed", async () => {
+    const c = new Client();
+    await c.login("kiran", "kiran-pass");
+    assert.equal((await c.call("/api/me")).data.emailVerified, true);
+    const r = await c.call("/api/me/email", { email: "KIRAN@example.com" });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.emailVerified, true);
+  });
+});

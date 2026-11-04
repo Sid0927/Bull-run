@@ -66,6 +66,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
   const ipLimiter = new LoginLimiter(30);
   // New accounts from one address: a few at a time is a family on one Wi-Fi; more is a script.
   const signupLimiter = new LoginLimiter(5);
+  // Every sign-up attempt from one address, refused ones included, so the form can't be used to
+  // test a list of emails for accounts.
+  const signupTries = new LoginLimiter(20);
   const openSignup = opts.openSignup !== false;
   const log = opts.log ?? (() => {});
   const mailer = opts.mailer ?? mailerFromEnv({}, log);
@@ -269,7 +272,8 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       const bad = checkUsername(username) ?? checkNewPassword(password);
       if (bad) throw new HttpError(400, bad);
       const ip = clientIp(req);
-      if (signupLimiter.blocked(`ip:${ip}`)) throw new HttpError(429, "Too many new accounts from here. Wait ten minutes and try again.");
+      if (signupLimiter.blocked(`ip:${ip}`) || signupTries.blocked(`ip:${ip}`)) throw new HttpError(429, "Too many new accounts from here. Wait ten minutes and try again.");
+      signupTries.fail(`ip:${ip}`);
       if (await store.userByEmail(email)) throw new HttpError(409, "There is already an account with that email. Sign in instead.");
       if (await store.userByName(username)) throw new HttpError(409, `The name ${username} is taken. Pick another.`);
       let u: User;
@@ -345,6 +349,20 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       return json(res, 200, { ok: true });
     }
 
+    // A crash on someone's screen, so it shows up in the server log instead of only as a blank page.
+    // Before the sign-in check: the sign-in and sign-up screens can break too. Capped per account or address.
+    if (path === "/api/client-error" && method === "POST") {
+      const b = await body(req);
+      const who = await userOf(req);
+      const key = who ? `err:${who.id}` : `err-ip:${clientIp(req)}`;
+      if (!limiter.blocked(key)) {
+        limiter.fail(key);
+        const clip = (x: unknown, n: number) => String(x ?? "").replace(/[\r\n]+/g, " | ").slice(0, n);
+        console.error(`Screen error for ${who?.username ?? "someone signed out"} at ${clip(b.where, 400)}: ${clip(b.message, 300)} :: ${clip(b.stack, 1500)}`);
+      }
+      return json(res, 200, { ok: true });
+    }
+
     const user = await userOf(req);
     if (!user) throw new HttpError(401, "Please sign in.");
 
@@ -386,17 +404,6 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
       await sendConfirmation(user, user.email, req);
       return json(res, 200, me(user));
     }
-    // A crash on someone's screen, so it shows up in the server log instead of only as a blank page.
-    if (path === "/api/client-error" && method === "POST") {
-      const b = await body(req);
-      const key = `err:${user.id}`;
-      if (!limiter.blocked(key)) {
-        limiter.fail(key);
-        const clip = (x: unknown, n: number) => String(x ?? "").replace(/[\r\n]+/g, " | ").slice(0, n);
-        console.error(`Screen error for ${user.username} at ${clip(b.where, 100)}: ${clip(b.message, 300)} :: ${clip(b.stack, 1500)}`);
-      }
-      return json(res, 200, { ok: true });
-    }
     if (path === "/api/me/password" && method === "POST") {
       const b = await body(req);
       const key = `pw:${user.id}`;
@@ -430,7 +437,14 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
         if (bad) throw new HttpError(400, bad);
         if (await store.userByName(username)) throw new HttpError(409, `There is already an account called ${username}.`);
         if (await store.userByEmail(email)) throw new HttpError(409, `There is already an account with ${email}.`);
-        const u = await store.createUser(username, await hashPassword(String(b.password)), b.isAdmin === true, email);
+        let u: User;
+        try {
+          u = await store.createUser(username, await hashPassword(String(b.password)), b.isAdmin === true, email);
+        } catch (e) {
+          // Two creations racing for one name or email: the database's unique index decides.
+          if ((e as { code?: string }).code === "23505") throw new HttpError(409, "That name or email was just taken.");
+          throw e;
+        }
         log(`admin ${user.username} created ${u.username}`);
         return json(res, 200, adminView(u));
       }

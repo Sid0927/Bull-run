@@ -495,7 +495,12 @@ function EmailGate({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onS
 /** Opened from the link in a confirmation email. */
 function VerifyEmail({ token, onDone }: { token: string; onDone: () => void }) {
   const [state, setState] = useState<{ ok: boolean; text: string } | null>(null);
+  // The link works once: a second request (React runs effects twice in development) would report
+  // "already used" over the success, so it is only ever sent once.
+  const sent = useRef(false);
   useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
     api.verifyEmail(token).then(
       (r) => setState({ ok: true, text: `${r.email} is confirmed. Thank you!` }),
       (e) => setState({ ok: false, text: (e as Error).message }),

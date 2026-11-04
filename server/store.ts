@@ -100,6 +100,8 @@ export interface Store {
   gamesFor(userId: number): Promise<Game[]>;
   allGames(): Promise<Game[]>;
   updateGame(id: number, patch: { status?: GameStatus; seed?: number }): Promise<void>;
+  /** Hands a waiting game to another account (the admin swapped its creator's seat). */
+  setGameCreator(id: number, userId: number): Promise<void>;
   seated(gameId: number): Promise<Seated[]>;
   addPlayer(gameId: number, userId: number): Promise<void>;
   removePlayer(gameId: number, userId: number): Promise<void>;
@@ -156,7 +158,9 @@ export class MemoryStore implements Store {
     const other = await this.userByEmail(email);
     if (other && other.id !== userId) throw Object.assign(new Error("duplicate email"), { code: "23505" });
     const u = this.users.find((x) => x.id === userId);
-    if (u && u.email !== email) Object.assign(u, { email, emailVerifiedAt: null });
+    // A change of capitals only is the same address: it keeps its confirmation (as Postgres does).
+    if (u && u.email?.toLowerCase() !== email.toLowerCase()) Object.assign(u, { email, emailVerifiedAt: null });
+    else if (u) u.email = email;
   }
   async confirmEmail(userId: number, email: string) {
     const u = this.users.find((x) => x.id === userId);
@@ -241,6 +245,10 @@ export class MemoryStore implements Store {
   }
   async allGames() {
     return this.games.map((g) => ({ ...g })).reverse();
+  }
+  async setGameCreator(id: number, userId: number) {
+    const g = this.games.find((x) => x.id === id);
+    if (g) g.createdBy = userId;
   }
   async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
     const g = this.games.find((x) => x.id === id);
@@ -475,7 +483,10 @@ export class PgStore implements Store {
   async botUser(name: string) {
     const [have] = await this.q("SELECT * FROM users WHERE is_bot AND username = $1", [name]);
     if (have) return toUser(have);
-    const [r] = await this.q("INSERT INTO users (username, password_hash, is_bot) VALUES ($1, 'bot', TRUE) RETURNING *", [name]);
+    // Two games adding the same computer player at once: the second insert finds it there.
+    await this.q("INSERT INTO users (username, password_hash, is_bot) VALUES ($1, 'bot', TRUE) ON CONFLICT DO NOTHING", [name]);
+    const [r] = await this.q("SELECT * FROM users WHERE is_bot AND username = $1", [name]);
+    if (!r) throw new Error(`Could not make the computer player ${name}`);
     return toUser(r);
   }
   async createUser(username: string, passwordHash: string, isAdmin: boolean, email?: string) {
@@ -559,6 +570,9 @@ export class PgStore implements Store {
   }
   async allGames() {
     return (await this.q("SELECT * FROM games ORDER BY id DESC LIMIT 200")).map(toGame);
+  }
+  async setGameCreator(id: number, userId: number) {
+    await this.q("UPDATE games SET created_by = $2 WHERE id = $1", [id, userId]);
   }
   async updateGame(id: number, patch: { status?: GameStatus; seed?: number }) {
     // One statement, so a game is never left "playing" without its seed.

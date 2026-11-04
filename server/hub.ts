@@ -336,6 +336,8 @@ export class Hub {
       if (!u || !u.active || u.isBot) throw new GameError("There is no active account with that name. Create it first.", 404);
       if (seated.some((p) => p.userId === u.id)) throw new GameError(`${u.username} is already in this game.`);
       await this.store.replacePlayer(gameId, seat, u.id);
+      // In the waiting room the creator is the host who starts it: their seat's new holder takes that over.
+      if (g.status === "lobby" && g.createdBy === old.userId) await this.store.setGameCreator(gameId, u.id);
       this.live.delete(gameId); // replayed with the new name next time it is read
       for (const set of [this.listeners.get(gameId)].filter((x): x is Set<Listener> => !!x)) {
         for (const l of set) {
@@ -435,7 +437,17 @@ export class Hub {
     if (this.botTimers.has(gameId) || state.phase.kind === "ended") return;
     const t = setTimeout(() => {
       this.botTimers.delete(gameId);
-      this.botMove(gameId).catch((e) => console.error(`Computer player in game ${gameId} could not move:`, e));
+      this.botMove(gameId).catch((e) => {
+        console.error(`Computer player in game ${gameId} could not move:`, e);
+        // A failed save (a database blip) mustn't leave the game waiting on the bot for ever: try again.
+        const retry = setTimeout(() => {
+          const live = this.live.get(gameId);
+          if (live) this.scheduleBots(gameId, live.state);
+          // Not in memory any more: loading it schedules the bot again.
+          else void this.store.gameById(gameId).then((g) => (g && g.status === "playing" ? this.load(g) : null)).catch(() => {});
+        }, 5000);
+        retry.unref?.();
+      });
     }, this.opts.botDelayMs ?? botThinkMs(state));
     t.unref?.();
     this.botTimers.set(gameId, t);

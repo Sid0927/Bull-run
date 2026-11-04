@@ -269,13 +269,6 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                   <Icon name="trash" size={18} />
                 </button>
               </div>
-              <div className="hh-colors" role="radiogroup" aria-label={`Colour of ${t.name}`}>
-                {Object.entries(TEAM_COLORS).map(([k, v]) => (
-                  <button key={k} role="radio" aria-checked={t.color === k} aria-label={v.label} className={`hh-color ${t.color === k ? "on" : ""}`} style={{ background: v.bg }} onClick={() => setTeam(t.id, { color: k })}>
-                    {t.color === k && <Icon name="check" size={16} />}
-                  </button>
-                ))}
-              </div>
               {/* Only Blue and Red fill the deck and have a side's goal: a loner plays for its own role. */}
               <p className="muted small">Loners play for the goal written on their own role.</p>
             </div>
