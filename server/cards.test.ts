@@ -242,3 +242,37 @@ test("each Lover is told the other's name and side, and nobody else is told anyt
   assert.notEqual(rooms.view(code, a).myCard!.teamId, rooms.view(code, b).myCard!.teamId, "one Blue, one Red");
   for (const u of people.filter((x) => !lovers.includes(x))) assert.equal(rooms.view(code, u).myLover, null);
 });
+
+test("bets stay closed once round 1 has started or the cards were seen, until the next deal", async () => {
+  const { rooms, code } = await table(3);
+  const setup = rooms.view(code, ann).config;
+  rooms.setConfig(code, ann, { ...setup, roles: [...setup.roles, { id: "g", libId: "gambler", teamId: "loners", count: 1 }], oddRoleId: "", rounds: [{ minutes: 2, swap: 1 }, { minutes: 1, swap: 1 }] });
+  const gamblerOf = () => [ann, ben, cy].find((u) => rooms.view(code, u).myCard?.roleId === "g")!;
+  const closed = (u: { id: number; username: string }) => assert.throws(() => rooms.bet(code, u, "blue"), (e: unknown) => e instanceof RoomError && e.status === 409);
+
+  // Started, then restarted: still closed.
+  rooms.deal(code, ann);
+  rooms.timer(code, ann, "start");
+  rooms.timer(code, ann, "reset");
+  closed(gamblerOf());
+  rooms.timer(code, ann, "next");
+  rooms.timer(code, ann, "prev");
+  closed(gamblerOf());
+
+  // Skipping round 1 starts the game too.
+  rooms.deal(code, ann, true);
+  rooms.bet(code, gamblerOf(), "red");
+  rooms.timer(code, ann, "next");
+  closed(gamblerOf());
+
+  // Revealed and hidden again: closed.
+  rooms.deal(code, ann, true);
+  rooms.reveal(code, ann, true);
+  rooms.reveal(code, ann, false);
+  closed(gamblerOf());
+
+  // A new deal opens them again.
+  rooms.deal(code, ann, true);
+  rooms.bet(code, gamblerOf(), "blue");
+  assert.equal(rooms.view(code, gamblerOf()).myBet, "blue");
+});

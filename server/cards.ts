@@ -55,6 +55,8 @@ interface Room {
   kicked?: number[];
   /** Their names, so the host can see who to let back in. */
   kickedNames?: Record<number, string>;
+  /** Set once the first round has started or the cards were revealed: bets stay closed until the next deal. */
+  betsClosed?: boolean;
 }
 
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I or O: they read as 1 and 0
@@ -226,6 +228,7 @@ export class CardRooms {
       p.bet = null;
     });
     room.setAside = room.config.setAside ? cards[room.players.length] : null;
+    room.betsClosed = false;
     room.dealt = true;
     room.revealed = false;
     room.deal += 1;
@@ -243,6 +246,7 @@ export class CardRooms {
     }
     room.dealt = false;
     room.revealed = false;
+    room.betsClosed = false;
     room.setAside = null;
     room.timer = { round: 0, endsAt: null, remaining: this.roundMs(room, 0) };
     this.changed(room);
@@ -255,6 +259,8 @@ export class CardRooms {
     if (!user.isAdmin) throw new RoomError(403, "Only an admin can reveal everyone's cards.");
     if (!room.dealt) throw new RoomError(400, "Deal the cards first.");
     room.revealed = on;
+    // Somebody who has seen every card must not be able to bet afterwards, even if they're hidden again.
+    if (on) room.betsClosed = true;
     this.changed(room);
   }
 
@@ -265,6 +271,8 @@ export class CardRooms {
     switch (action) {
       case "start":
         if (t.endsAt === null) t.endsAt = now + (t.remaining > 0 ? t.remaining : this.roundMs(room, t.round));
+        // Once a round has been played, restarting or going back to it doesn't reopen the bets.
+        if (room.dealt) room.betsClosed = true;
         break;
       case "pause":
         if (t.endsAt !== null) t.remaining = Math.max(0, t.endsAt - now);
@@ -276,6 +284,7 @@ export class CardRooms {
         break;
       case "next":
       case "prev": {
+        if (action === "next" && room.dealt) room.betsClosed = true; // skipping the first round starts the game too
         const last = Math.max(0, room.config.rounds.length - 1);
         t.round = Math.min(last, Math.max(0, t.round + (action === "next" ? 1 : -1)));
         t.endsAt = null;
@@ -323,12 +332,9 @@ export class CardRooms {
     return room.config.roles.find((r) => r.id === card.roleId)?.libId;
   }
 
-  /** Bets stay open until the first round has been started, or with no rounds, until the reveal. */
+  /** Bets stay open until the first round is started (or skipped), or the cards are revealed; then until the next deal. */
   private betsOpen(room: Room): boolean {
-    if (!room.dealt || room.revealed) return false;
-    const t = room.timer;
-    if (room.config.rounds.length === 0) return true;
-    return t.round === 0 && t.endsAt === null && t.remaining >= this.roundMs(room, 0);
+    return room.dealt && !room.revealed && !room.betsClosed;
   }
 
   kick(code: string, user: Who, playerId: number) {

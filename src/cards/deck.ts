@@ -81,6 +81,11 @@ export function buildDeck(config: Config, players: number): { cards: Card[] } | 
     }
     cards.push(memberCard(fillers[counts.indexOf(least)]));
   }
+  // The set-aside card is swapped for an ordinary one if it is a key card; with nothing ordinary in
+  // the deck there is nothing to swap, and the President or the Bomber would go unplayed.
+  if (config.setAside && cards.every((c) => NEVER_SET_ASIDE.has(c.roleId))) {
+    return { error: "With a card set aside, the deck needs at least one card besides the President, the Bomber and the Lovers. Wait for more players or turn off Set one card aside." };
+  }
   return { cards };
 }
 

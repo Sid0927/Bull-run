@@ -218,3 +218,48 @@ test("the Veil and the Bluffer are gone, and a setup that had them loads without
   assert.ok(!c.roles.some((r) => r.libId === "veil" || r.libId === "bluffer"));
   assert.deepEqual(configProblems(c), []);
 });
+
+test("a Lover is never the odd-player card", () => {
+  const c = setLovers(classic(), true);
+  const cleaned = cleanConfig({ ...c, oddRoleId: "lover-blue" });
+  assert.equal(cleaned.oddRoleId, "");
+  const cards = deck(cleaned, 5);
+  assert.equal(cards.filter((x) => x.roleId.startsWith("lover-")).length, 2, "two Lovers, never three");
+});
+
+test("turning the Spies or Lovers off clears an odd-player choice that pointed at them", () => {
+  const spies = { ...setSpyEach(classic(), true), oddRoleId: "spy-blue" };
+  const off = setSpyEach(spies, false);
+  assert.equal(off.oddRoleId, "");
+  assert.deepEqual(configProblems(off), []);
+  const lovers = { ...setLovers(classic(), true), oddRoleId: "lover-red" };
+  assert.equal(setLovers(lovers, false).oddRoleId, "");
+});
+
+test("with a card set aside and only key cards in the deck, the deal is refused rather than setting aside the President or Bomber", () => {
+  const c = { ...setLovers(classic(), true), setAside: true, oddRoleId: "" };
+  const d = buildDeck(c, 3); // President, Bomber, two Lovers: four cards, all key cards
+  assert.ok("error" in d);
+  assert.match(d.error, /besides the President, the Bomber and the Lovers/);
+  assert.ok("cards" in buildDeck(c, 4), "one more player brings an ordinary card");
+});
+
+test("a team role can't sit on Loners, and a loner role can't sit on a side", () => {
+  const c = cleanConfig({
+    ...classic(),
+    roles: [...classic().roles, { id: "s", libId: "scout", teamId: "loners" }, { id: "d", libId: "drifter", teamId: "red" }, { id: "m", libId: "spy", teamId: "loners", showsAsTeamId: "blue" }],
+  });
+  assert.equal(c.roles.find((r) => r.id === "s")!.teamId, "blue");
+  assert.equal(c.roles.find((r) => r.id === "d")!.teamId, "loners");
+  const spy = c.roles.find((r) => r.id === "m")!;
+  assert.deepEqual([spy.teamId, spy.showsAsTeamId], ["blue", "red"], "a Spy moved to Blue shows as Red, not as its own side");
+  assert.deepEqual(configProblems(c), [], "and the setup can be saved");
+});
+
+test("turning the Spy switch on never leaves two roles with one id", () => {
+  const tricky = structuredClone(PRESETS.find((p) => p.id === "tricky")!.config);
+  const moved = { ...tricky, roles: tricky.roles.map((r) => (r.id === "spy-blue" ? { ...r, teamId: "loners" } : r)) };
+  const on = setSpyEach(moved, true);
+  assert.equal(new Set(on.roles.map((r) => r.id)).size, on.roles.length);
+  assert.equal(hasSpyEach(on), true);
+});

@@ -353,7 +353,8 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
                       <div className="field">
                         <span className="field-label">On the side of</span>
                         <div className="hh-team-pick">
-                          {c.teams.map((t) => (
+                          {/* A loner role plays for itself, so it only goes on Loners; a team role only on Blue or Red. */}
+                          {c.teams.filter((t) => isCoreTeam(t.id) === (lib?.group !== "loner")).map((t) => (
                             <button key={t.id} className={r.teamId === t.id ? "on" : ""} style={teamStyle(t)} onClick={() => setRole(r.id, { teamId: t.id, showsAsTeamId: r.showsAsTeamId === t.id ? "" : r.showsAsTeamId })}>
                               <span className="hh-dot" aria-hidden="true" /> {t.name}
                             </button>
@@ -404,7 +405,7 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           <span className="field-label">With an odd number of players, add</span>
           <select className="hh-select" value={c.oddRoleId} onChange={(e) => up((d) => void (d.oddRoleId = e.target.value))}>
             <option value="">Nothing: one team gets the extra card</option>
-            {c.roles.filter((r) => !isCoreRole(r)).map((r) => (
+            {c.roles.filter((r) => !isCoreRole(r) && r.libId !== "lover").map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name || "Unnamed role"}
               </option>
