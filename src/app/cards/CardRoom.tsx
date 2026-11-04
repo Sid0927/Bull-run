@@ -12,7 +12,9 @@ import { Setup } from "./Setup.tsx";
 /** The room, kept fresh by the server's change pings (with a slow poll in case the stream drops). */
 function useRoom(code: string) {
   const [view, setView] = useState<RoomView | null>(null);
-  const [error, setError] = useState<{ status: number; text: string } | null>(null);
+  // `gone`: this phone was in the room and now isn't (it left on another tab, was removed, or the
+  // room closed). It is offered Join again rather than being put back without asking.
+  const [error, setError] = useState<{ status: number; text: string; gone?: boolean } | null>(null);
   const offset = useRef(0);
   const wasIn = useRef(false);
   const take = useCallback((v: RoomView) => {
@@ -27,14 +29,9 @@ function useRoom(code: string) {
       cardsApi.view(code).then(take, (e: CardsError) => {
         if (e.status !== 404) return setError({ status: e.status, text: e.message });
         // Not in it (the server says so the same way as "no such room"). The first time, a shared
-        // link joins by itself. After having been in it, the room closed or the host removed this
-        // player: joining would say which, but must never quietly put them back.
-        if (wasIn.current) {
-          return cardsApi.join(code).then(
-            take,
-            (j: CardsError) => setError({ status: j.status === 403 ? 403 : 404, text: j.status === 403 ? j.message : "This room has closed." }),
-          );
-        }
+        // link joins by itself. After having been in it, it must never quietly put them back: they
+        // may have left on purpose from another tab. They are asked instead.
+        if (wasIn.current) return setError({ status: 404, gone: true, text: "You left it, the host removed you, or it closed." });
         return cardsApi.join(code).then(take, (j: CardsError) => setError({ status: j.status, text: j.message }));
       }),
     [code, take],
@@ -74,7 +71,14 @@ function useRoom(code: string) {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [code, load, out]);
-  return { view, error, take, load, offset };
+  const rejoin = useCallback(
+    () =>
+      cardsApi.join(code).then(take, (j: CardsError) =>
+        setError({ status: j.status === 403 ? 403 : 404, text: j.status === 403 ? j.message : "This room has closed." }),
+      ),
+    [code, take],
+  );
+  return { view, error, take, load, offset, rejoin };
 }
 
 /** Keeps the screen awake while the cards are out, where the browser allows it. */
@@ -102,7 +106,7 @@ function useWakeLock(on: boolean) {
 }
 
 export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: string) => void }) {
-  const { view, error, take, offset } = useRoom(code);
+  const { view, error, take, offset, rejoin } = useRoom(code);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -130,9 +134,14 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
       <main className="page hh">
         <div className="empty-state">
           <Icon name="cards" size={36} />
-          <h1 className="page-title">{error.status === 404 ? (view ? "This room has closed" : "Room not found") : "Can't open this room"}</h1>
+          <h1 className="page-title">{error.gone ? "You're not in this room" : error.status === 404 ? (view ? "This room has closed" : "Room not found") : "Can't open this room"}</h1>
           <p>{error.text}</p>
-          <a className="button primary" href="#/cards">
+          {error.gone && (
+            <button className="button primary" onClick={() => void rejoin()}>
+              Join again
+            </button>
+          )}
+          <a className={`button ${error.gone ? "" : "primary"}`} href="#/cards">
             Back to {CARDS_NAME}
           </a>
         </div>

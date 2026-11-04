@@ -64,7 +64,7 @@ test("setting a card aside deals one more than the players, and it is never the 
   let s = 7;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 300; i++) {
-    const dealt = keepKeyCardsDealt(shuffle(cards, rnd), 8);
+    const dealt = keepKeyCardsDealt(shuffle(cards, rnd), 8, rnd);
     assert.equal(dealt.length, 9);
     assert.ok(dealt[8].roleId !== PRESIDENT_ROLE && dealt[8].roleId !== BOMBER_ROLE);
     assert.ok(dealt.slice(0, 8).some((x) => x.roleId === PRESIDENT_ROLE));
@@ -195,7 +195,7 @@ test("Lovers: one on each side, always a pair, and never the card set aside", ()
   let s = 3;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 300; i++) {
-    const dealt = keepKeyCardsDealt(shuffle(all, rnd), 6);
+    const dealt = keepKeyCardsDealt(shuffle(all, rnd), 6, rnd);
     assert.ok(!dealt[6].roleId.startsWith("lover-") && dealt[6].roleId !== PRESIDENT_ROLE && dealt[6].roleId !== BOMBER_ROLE);
   }
 });

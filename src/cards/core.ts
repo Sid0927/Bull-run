@@ -55,7 +55,21 @@ export function withCore(c: Config): Config {
     })
     .map((r) => ({ ...r, showsAsTeamId: !r.showsAsTeamId ? "" : ids.has(r.showsAsTeamId) && r.showsAsTeamId !== r.teamId ? r.showsAsTeamId : r.teamId === BLUE ? RED : BLUE }));
   const pair = lovers ? [roleFrom("lover", BLUE, { id: `lover-${BLUE}` }), roleFrom("lover", RED, { id: `lover-${RED}` })] : [];
-  const roles = [roleFrom(PRESIDENT, BLUE, { id: PRESIDENT_ROLE }), roleFrom(BOMBER, RED, { id: BOMBER_ROLE }), ...pair, ...extras];
+  const core = [roleFrom(PRESIDENT, BLUE, { id: PRESIDENT_ROLE }), roleFrom(BOMBER, RED, { id: BOMBER_ROLE }), ...pair];
+  // The key cards' ids are reserved: an extra role holding one (from a pasted or old setup) would
+  // be taken for the President, the Bomber or a Lover. It, and any repeated id, gets a fresh one.
+  const used = new Set<string>([PRESIDENT_ROLE, BOMBER_ROLE, ...LOVER_ROLES]);
+  const fresh = (base: string) => {
+    let n = 2;
+    while (used.has(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+  };
+  const renamed = extras.map((r) => {
+    const id = used.has(r.id) ? fresh(r.libId) : r.id;
+    used.add(id);
+    return id === r.id ? r : { ...r, id };
+  });
+  const roles = [...core, ...renamed];
   return { ...c, teams, roles, oddRoleId: oddRoleFor(roles, c.oddRoleId), groups: true };
 }
 

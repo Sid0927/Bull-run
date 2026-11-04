@@ -223,7 +223,7 @@ export class CardRooms {
     if (room.dealt && !again) throw new RoomError(409, "The cards are already out. Use Deal again to reshuffle.");
     const built = buildDeck(room.config, room.players.length);
     if ("error" in built) throw new RoomError(400, built.error);
-    const cards = keepKeyCardsDealt(shuffle(built.cards, random), room.players.length);
+    const cards = keepKeyCardsDealt(shuffle(built.cards, random), room.players.length, random);
     const groups = room.config.groups ? splitGroups(room.players.length, random) : [];
     room.players.forEach((p, i) => {
       p.card = cards[i];
@@ -338,7 +338,9 @@ export class CardRooms {
     if (team !== BLUE && team !== RED) throw new RoomError(400, "Bet on Blue or Red.");
     if (!this.betsOpen(room)) throw new RoomError(409, "Bets closed when the first round started.");
     who.bet = team;
-    this.changed(room);
+    // Saved without a ping or a new version: a ping to every phone would tell the table that
+    // somebody holds the Gambler, and when they bet. The bettor gets their view in the reply.
+    this.saved(room);
   }
 
   /** The other Lover, for a player holding a Lover card. */
@@ -488,10 +490,15 @@ export class CardRooms {
   /** Every change: a new version for the phones, a write to the store, a ping to every watcher. */
   private changed(room: Room) {
     room.version += 1;
+    this.saved(room);
+    for (const fn of this.watchers.get(room.code) ?? []) fn();
+  }
+
+  /** A write to the store only, for a change nobody else's phone may hear about. */
+  private saved(room: Room) {
     room.touched = this.now();
     const snapshot = structuredClone(room);
     this.queue(room.code, () => this.store.saveCardRoom(room.code, snapshot));
-    for (const fn of this.watchers.get(room.code) ?? []) fn();
   }
 
   /** Writes for one room go in order, so an older snapshot can never land after a newer one. */

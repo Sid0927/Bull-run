@@ -293,3 +293,66 @@ test("after the reveal the host says how it ended, everyone sees it, and a new d
   rooms.reveal(code, ann, true);
   assert.deepEqual(rooms.view(code, ben).outcome, { sameRoom: null, loversTogether: null });
 });
+
+test("with a card set aside, the host is no likelier than anyone to hold the President", () => {
+  const rooms = new CardRooms(new MemoryStore());
+  const users = Array.from({ length: 5 }, (_, i) => ({ id: 100 + i, username: `p${i}` }));
+  const code = rooms.create(users[0]);
+  for (const u of users.slice(1)) rooms.join(code, u);
+  rooms.setConfig(code, users[0], { ...rooms.view(code, users[0]).config, setAside: true, oddRoleId: "" });
+  const deals = 3000;
+  let host = 0;
+  for (let k = 0; k < deals; k++) {
+    rooms.deal(code, users[0], true);
+    if (rooms.view(code, users[0]).myCard?.roleId === "president-blue") host++;
+  }
+  assert.ok(host / deals < 0.25, `the host held the President in ${((100 * host) / deals).toFixed(1)}% of deals; fair is 20%`);
+});
+
+test("a Gambler's bet sends nothing to the other phones", () => {
+  const dee = { id: 4, username: "dee" };
+  const { rooms, code } = (() => {
+    const rooms = new CardRooms(new MemoryStore());
+    const code = rooms.create(ann);
+    for (const u of [ben, cy, dee]) rooms.join(code, u);
+    return { rooms, code };
+  })();
+  const setup = rooms.view(code, ann).config;
+  rooms.setConfig(code, ann, { ...setup, roles: [...setup.roles, { id: "g", libId: "gambler", teamId: "loners", count: 1 }], oddRoleId: "" });
+  rooms.deal(code, ann);
+  const people = [ann, ben, cy, dee];
+  const gambler = people.find((u) => rooms.view(code, u).myCard?.roleId === "g")!;
+  const other = people.find((u) => u !== gambler)!;
+  let pings = 0;
+  rooms.watch(code, other, () => pings++);
+  const before = rooms.view(code, other).version;
+  rooms.bet(code, gambler, "blue");
+  assert.equal(pings, 0);
+  assert.equal(rooms.view(code, other).version, before);
+  assert.equal(rooms.view(code, gambler).myBet, "blue");
+});
+
+test("a pasted setup can't give another card the President's, Bomber's or a Lover's id", () => {
+  const dee = { id: 4, username: "dee" };
+  const eve = { id: 5, username: "eve" };
+  const rooms = new CardRooms(new MemoryStore());
+  const code = rooms.create(ann);
+  for (const u of [ben, cy, dee, eve]) rooms.join(code, u);
+  const setup = rooms.view(code, ann).config;
+  rooms.setConfig(code, ann, {
+    ...setup,
+    roles: [
+      { id: "bomber-red", libId: "gambler", teamId: "loners", count: 1 },
+      { id: "lover-blue", libId: "scout", teamId: "blue", count: 1 },
+      { id: "lover-red", libId: "scout", teamId: "red", count: 1 },
+    ],
+    oddRoleId: "",
+  });
+  const ids = rooms.view(code, ann).config.roles.map((r) => r.id);
+  assert.equal(new Set(ids).size, ids.length, `ids repeat: ${ids.join(", ")}`);
+  rooms.deal(code, ann);
+  const people = [ann, ben, cy, dee, eve];
+  const gambler = people.find((u) => rooms.view(code, u).myCard?.name === "Gambler")!;
+  assert.doesNotThrow(() => rooms.bet(code, gambler, "blue"));
+  for (const u of people.filter((u) => rooms.view(code, u).myCard?.name === "Scout")) assert.equal(rooms.view(code, u).myLover, null);
+});

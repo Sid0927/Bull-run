@@ -101,16 +101,19 @@ export function shuffle<T>(items: T[], random: Random): T[] {
 /**
  * After shuffling, the card past the last player is the one set aside. It must never be the
  * President or the Bomber, since every game is decided by where they end up, nor a Lover, who
- * would be left without a pair: if it is, it trades places with the first card dealt that isn't
- * one of them (the order is already random, so that
- * card is a random one).
+ * would be left without a pair: if it is, it trades places with a dealt card that isn't one of
+ * them, chosen at random. (Not the first such card: seats are in joining order, so that would
+ * hand the key card to the host far more often than to anyone else.)
  */
-export function keepKeyCardsDealt<T extends { roleId: string }>(cards: T[], players: number): T[] {
+export function keepKeyCardsDealt<T extends { roleId: string }>(cards: T[], players: number, random: Random): T[] {
   const out = cards.slice();
   const key = (c: T | undefined) => !!c && NEVER_SET_ASIDE.has(c.roleId);
   if (out.length > players && key(out[players])) {
-    const i = out.findIndex((c, j) => j < players && !key(c));
-    if (i >= 0) [out[i], out[players]] = [out[players], out[i]];
+    const ok = out.slice(0, players).flatMap((c, j) => (key(c) ? [] : [j]));
+    if (ok.length) {
+      const i = ok[Math.floor(random() * ok.length)];
+      [out[i], out[players]] = [out[players], out[i]];
+    }
   }
   return out;
 }
