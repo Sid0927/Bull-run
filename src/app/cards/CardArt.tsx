@@ -104,7 +104,7 @@ export function ShowScreen({ card, config, mode, name, onClose }: { card: Card; 
           <Icon name="eye" size={16} /> {name} is showing {mode === "team" ? "their team" : "their card"}
         </p>
         {mode === "team" ? (
-          <div className="hh-show-team">
+          <div className="hh-show-badge">
             <span className="hh-show-label">Team</span>
             <span className="hh-show-name">{shown?.name ?? "No team"}</span>
           </div>

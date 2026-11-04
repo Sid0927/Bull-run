@@ -6,7 +6,7 @@ import { LIBRARY, LIBRARY_BY_ID, ROLE_GROUPS, roleFrom } from "../../cards/libra
 import { SHOW_LABELS, TEAM_COLORS, type Config, type Role, type Team } from "../../cards/types.ts";
 import { Icon } from "../ui.tsx";
 import { teamOf, teamStyle } from "./CardArt.tsx";
-import { isCoreRole, isCoreTeam } from "../../cards/core.ts";
+import { hasSpyEach, isCoreRole, isCoreTeam, setSpyEach } from "../../cards/core.ts";
 
 const SAVED = "hh.setups";
 
@@ -293,6 +293,12 @@ export function Setup({ initial, players, onSave, onCancel, busy }: { initial: C
           </button>
         }
       >
+        <Switch
+          checked={hasSpyEach(c)}
+          onChange={(v) => setC((prev) => setSpyEach(prev, v))}
+          label="A Spy on each side"
+          hint="One Spy on Blue and one on Red. A Spy plays for its own side, but showing its team shows the other side's colour."
+        />
         {picking && <RolePicker config={c} onAdd={addRole} />}
         {c.roles.length === 0 ? (
           !picking && <p className="muted small">No roles yet: every card will be a plain team card. Tap Add roles to pick some.</p>

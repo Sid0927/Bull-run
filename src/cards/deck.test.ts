@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildDeck, configProblems, keepKeyCardsDealt, shuffle, splitGroups } from "./deck.ts";
-import { BLUE_GOAL, BOMBER_ROLE, PRESIDENT_ROLE, RED_GOAL, withCore } from "./core.ts";
+import { BLUE_GOAL, BOMBER_ROLE, PRESIDENT_ROLE, RED_GOAL, hasSpyEach, setSpyEach, withCore } from "./core.ts";
 import { PRESETS, cleanConfig } from "./presets.ts";
 import { LIBRARY, roleFrom } from "./library.ts";
 import type { Config } from "./types.ts";
@@ -129,16 +129,17 @@ test("an old setup with Leaders, its own sides or a second President comes back 
     ["president", "blue", 1],
     ["bomber", "red", 1],
     ["scout", "blue", 1],
-    ["mole", "red", 1],
+    ["spy", "red", 1],
   ]);
-  assert.equal(c.roles[3].showsAsTeamId, "blue", "a Mole on Red shows as Blue");
+  assert.equal(c.roles[3].showsAsTeamId, "blue", "an old Mole on Red is now a Spy that shows as Blue");
+  assert.equal(c.roles[3].name, "Spy");
 });
 
-test("a Mole needs a team to show as", () => {
+test("a Spy needs a team to show as", () => {
   const c = structuredClone(PRESETS.find((p) => p.id === "tricky")!.config);
   assert.deepEqual(configProblems(c), []);
-  c.roles.find((r) => r.libId === "mole")!.showsAsTeamId = "";
-  assert.match(configProblems(c)[0], /Mole needs a team to show as/);
+  c.roles.find((r) => r.libId === "spy")!.showsAsTeamId = "";
+  assert.match(configProblems(c)[0], /Spy needs a team to show as/);
 });
 
 test("every library role is a usable role on its own, on top of the core", () => {
@@ -156,4 +157,22 @@ test("a pasted setup that repeats an id gets unique ids", () => {
   });
   assert.equal(new Set(c.teams.map((t) => t.id)).size, c.teams.length);
   assert.equal(new Set(c.roles.map((r) => r.id)).size, c.roles.length);
+});
+
+test("one Spy on each side: on Blue it shows as Red, on Red as Blue, and it can be turned off", () => {
+  const off = classic();
+  assert.equal(hasSpyEach(off), false);
+  const on = setSpyEach(off, true);
+  assert.equal(hasSpyEach(on), true);
+  assert.deepEqual(configProblems(on), []);
+  const cards = deck(on, 10);
+  const spies = cards.filter((c) => c.roleId.startsWith("spy-"));
+  assert.deepEqual(spies.map((c) => [c.teamId, c.showsAsTeamId]).sort(), [["blue", "red"], ["red", "blue"]]);
+  assert.equal(count(cards, "blue"), 5, "a Spy is one of its side's players");
+  assert.equal(count(cards, "red"), 5);
+  assert.equal(cards.filter((c) => c.roleId === PRESIDENT_ROLE).length, 1);
+  // Survives a save, and turns off cleanly.
+  assert.equal(hasSpyEach(cleanConfig(on)), true);
+  assert.equal(setSpyEach(on, false).roles.some((r) => r.libId === "spy"), false);
+  assert.equal(hasSpyEach(setSpyEach(on, true)), true, "turning it on twice still means one each");
 });

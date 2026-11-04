@@ -212,12 +212,9 @@
 /* Full screen, held up to someone else */
 .hh-show { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px)); animation: show-in 0.25s var(--ease) both; cursor: pointer; }
 @keyframes show-in { from { opacity: 0; } }
-.hh-show-team { background: var(--team); color: var(--team-ink); }
 .hh-show-full { background: radial-gradient(120% 90% at 50% 0%, #3b2a78, #0e0a1e 70%); color: #f1ecff; }
 .hh-show-inner { display: grid; justify-items: center; gap: 22px; text-align: center; width: 100%; }
 .hh-show-who { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; opacity: 0.85; }
-.hh-show-team { animation: show-in 0.25s var(--ease) both; }
-.hh-show-team .hh-show-team, .hh-show .hh-show-team { display: grid; justify-items: center; gap: 4px; }
 .hh-show-label { font-size: 15px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.8; }
 .hh-show-name { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; font-size: clamp(64px, 24vw, 160px); line-height: 0.9; letter-spacing: 0.01em; overflow-wrap: anywhere; animation: stamp 0.45s 0.05s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 @keyframes stamp { from { transform: scale(1.25); opacity: 0; } }
@@ -493,3 +490,23 @@
 .hh-team-fixed-name { flex: 1; font-size: 17px; }
 .hh-team-fixed-goal { margin: 8px 0 0; font-size: 14px; line-height: 1.45; }
 .hh-core-tag { flex: none; white-space: nowrap; }
+
+/* Showing your team: a dark screen with the team's colour on a card in the middle, so the room
+   isn't lit up and the people around you can't read it from across the table, while the person
+   you're showing sees the colour at a glance. */
+.hh-show-team {
+  background: radial-gradient(70% 55% at 50% 45%, color-mix(in srgb, var(--team) 26%, #0b0a12), #07060c 78%);
+  color: #f1eff8;
+}
+.hh-show-badge {
+  display: grid; justify-items: center; gap: 6px;
+  width: min(78vw, 21rem); padding: 30px 22px 34px; border-radius: 28px;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--team) 82%, #000), color-mix(in srgb, var(--team) 58%, #000));
+  color: var(--team-ink);
+  border: 1px solid color-mix(in srgb, var(--team) 55%, #fff 10%);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--team) 14%, transparent), 0 24px 70px -18px color-mix(in srgb, var(--team) 70%, transparent);
+  animation: stamp 0.45s 0.05s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+.hh-show-badge .hh-show-name { font-size: clamp(48px, 17vw, 112px); animation: none; }
+.hh-show-badge .hh-show-label { opacity: 0.75; }
+@media (prefers-reduced-motion: reduce) { .hh-show-badge { animation: none; } }

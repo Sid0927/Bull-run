@@ -1,7 +1,7 @@
 /** Starting setups a host can pick and then change, and the cleaning every saved setup goes through. */
 import type { Config, Role, Round, Team } from "./types.ts";
 import { TEAM_COLORS } from "./types.ts";
-import { LIBRARY_BY_ID, roleFrom } from "./library.ts";
+import { LIBRARY_BY_ID, RENAMED, roleFrom } from "./library.ts";
 import { withCore } from "./core.ts";
 
 export interface Preset {
@@ -51,13 +51,13 @@ export const PRESETS: Preset[] = [
   {
     id: "tricky",
     name: "Full of tricks",
-    blurb: "The President and the Bomber, plus a Mole and a Scout on each side, and a Shadow and a Drifter playing for themselves.",
+    blurb: "The President and the Bomber, plus a Spy and a Scout on each side, and a Shadow and a Drifter playing for themselves.",
     config: core({
       title: "Smoke & Mirrors",
       teams: [LONERS],
       roles: [
-        roleFrom("mole", "blue", { showsAsTeamId: "red" }),
-        roleFrom("mole", "red", { showsAsTeamId: "blue" }),
+        roleFrom("spy", "blue", { showsAsTeamId: "red" }),
+        roleFrom("spy", "red", { showsAsTeamId: "blue" }),
         roleFrom("scout", "blue"),
         roleFrom("scout", "red"),
         roleFrom("shadow", "loners"),
@@ -109,9 +109,11 @@ export function cleanConfig(input: unknown): Config {
     .slice(0, 40)
     .flatMap((r) => {
       const x = obj(r);
-      const lib = LIBRARY_BY_ID[str(x.libId, 40)];
+      const asked = str(x.libId, 40);
+      const lib = LIBRARY_BY_ID[RENAMED[asked] ?? asked];
       if (!lib) return [];
-      return [{ id: str(x.id, 40) || rid(), libId: lib.id, name: lib.name, teamId: str(x.teamId, 40), count: int(x.count, 0, 60, lib.copies), description: lib.description, show: lib.show, showsAsTeamId: lib.disguise ? str(x.showsAsTeamId, 40) : "" }];
+      const oldId = str(x.id, 40);
+      return [{ id: (RENAMED[asked] && oldId.startsWith(`${asked}-`) ? `${lib.id}-${oldId.slice(asked.length + 1)}` : oldId) || rid(), libId: lib.id, name: lib.name, teamId: str(x.teamId, 40), count: int(x.count, 0, 60, lib.copies), description: lib.description, show: lib.show, showsAsTeamId: lib.disguise ? str(x.showsAsTeamId, 40) : "" }];
     });
   const rounds: Round[] = arr(o.rounds)
     .slice(0, 12)

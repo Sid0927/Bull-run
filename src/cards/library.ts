@@ -34,7 +34,7 @@ export const LIBRARY: LibraryRole[] = [
   { id: "open-book", name: "Open Book", group: "helper", copies: 1, show: "full", disguise: false, description: "You can't hide behind a colour: whenever you show, you show your whole card." },
   { id: "herald", name: "Herald", group: "helper", copies: 1, show: "any", disguise: false, description: "When a round ends, you may tell the whole group one thing you have seen. It must be true." },
 
-  { id: "mole", name: "Mole", group: "trick", copies: 1, show: "any", disguise: true, description: "A team share shows you in the other side's colour. Your full card tells the truth." },
+  { id: "spy", name: "Spy", group: "trick", copies: 1, show: "any", disguise: true, description: "You play for your side, but a team share shows you in the other side's colour. Your full card tells the truth." },
   { id: "silent", name: "Silent", group: "trick", copies: 1, show: "none", disguise: false, description: "You can't show your card to anyone. Talk your way through." },
   { id: "veil", name: "Veil", group: "trick", copies: 1, show: "team", disguise: false, description: "You may only ever show your team. Never let anyone see the rest of your card." },
   { id: "bluffer", name: "Bluffer", group: "trick", copies: 1, show: "team", disguise: false, description: "Say you are any role you like. All you can ever show is your team colour." },
@@ -44,6 +44,9 @@ export const LIBRARY: LibraryRole[] = [
 ];
 
 export const LIBRARY_BY_ID: Record<string, LibraryRole> = Object.fromEntries(LIBRARY.map((r) => [r.id, r]));
+
+/** Roles that were renamed: a setup saved under the old name still loads. */
+export const RENAMED: Record<string, string> = { mole: "spy" };
 
 /** A role in a setup, made from the library. */
 export function roleFrom(libId: string, teamId: string, opts: { id?: string; count?: number; showsAsTeamId?: string } = {}): Role {

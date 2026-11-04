@@ -49,3 +49,22 @@ export function withCore(c: Config): Config {
     groups: true,
   };
 }
+
+/** The option of one Spy on each side: on Blue it shows as Red, on Red it shows as Blue. */
+export const SPY = "spy";
+const SPY_ON = { [BLUE]: RED, [RED]: BLUE } as const;
+
+/** Whether the setup has exactly the one-Spy-each option on: a Spy on Blue and a Spy on Red. */
+export function hasSpyEach(c: Config): boolean {
+  return ([BLUE, RED] as const).every((side) => c.roles.some((r) => r.libId === SPY && r.teamId === side && r.count === 1 && r.showsAsTeamId === SPY_ON[side]));
+}
+
+/** Turns the option on (one Spy each side, showing as the other) or off (no Spies on Blue or Red). */
+export function setSpyEach(c: Config, on: boolean): Config {
+  const others = c.roles.filter((r) => !(r.libId === SPY && (r.teamId === BLUE || r.teamId === RED)));
+  if (!on) return { ...c, roles: others };
+  const spies = ([BLUE, RED] as const).map((side) => roleFrom(SPY, side, { id: `${SPY}-${side}`, showsAsTeamId: SPY_ON[side] }));
+  // After the President and the Bomber, so the key cards stay at the top of the list.
+  const [core, rest] = [others.filter(isCoreRole), others.filter((r) => !isCoreRole(r))];
+  return { ...c, roles: [...core, ...spies, ...rest] };
+}
