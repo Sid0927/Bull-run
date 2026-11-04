@@ -66,6 +66,14 @@ export interface Card {
   goal: string;
 }
 
+/** How a game ended, as the host answered after the reveal. Null: not answered yet. */
+export interface Outcome {
+  /** Did the President and the Bomber end in the same room? (Yes: Red wins. No: Blue wins.) */
+  sameRoom: boolean | null;
+  /** Did the Lovers end in the same room? */
+  loversTogether: boolean | null;
+}
+
 export interface Timer {
   round: number;
   /** Epoch ms the round ends at, while running. */
@@ -108,6 +116,8 @@ export interface RoomView {
   myBet: string | null;
   /** For a Lover: the other Lover's name and side. Null for everyone else. */
   myLover: { name: string; teamId: string } | null;
+  /** After the reveal: how the game ended, as far as the host has said. Null before the reveal. */
+  outcome: Outcome | null;
   /** Bets can still be placed or changed (until the first round starts). */
   betsOpen: boolean;
   /** Revealed only: the card set aside, if any. */

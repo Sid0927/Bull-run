@@ -45,6 +45,7 @@ export const cardsApi = {
   timer: (code: string, action: TimerAction) => post(code, "timer", { action }),
   kick: (code: string, playerId: number) => post(code, "kick", { playerId }),
   bet: (code: string, team: string, playerId?: number) => post(code, "bet", { team, playerId }),
+  outcome: (code: string, o: { sameRoom?: boolean | null; loversTogether?: boolean | null }) => post(code, "outcome", o),
   host: (code: string, playerId: number) => post(code, "host", { playerId }),
   addTests: (code: string, count: number) => post(code, "tests", { count }),
   removeTests: (code: string) => post(code, "tests", { remove: true }),

@@ -9,7 +9,7 @@ import { randomInt } from "node:crypto";
 import { buildDeck, keepKeyCardsDealt, shuffle, splitGroups } from "../src/cards/deck.ts";
 import { PRESETS, cleanConfig } from "../src/cards/presets.ts";
 import { BLUE, LOVER_ROLES, RED } from "../src/cards/core.ts";
-import type { Card, CardRoomSummary, Config, RoomView, Timer } from "../src/cards/types.ts";
+import type { Card, CardRoomSummary, Config, Outcome, RoomView, Timer } from "../src/cards/types.ts";
 import { MAX_PLAYERS, MAX_TEST_PLAYERS } from "../src/cards/types.ts";
 import type { Store } from "./store.ts";
 
@@ -57,6 +57,8 @@ interface Room {
   kickedNames?: Record<number, string>;
   /** Set once the first round has started or the cards were revealed: bets stay closed until the next deal. */
   betsClosed?: boolean;
+  /** How the game ended, answered by the host after the reveal: the app doesn't track rooms. */
+  outcome?: Outcome;
 }
 
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I or O: they read as 1 and 0
@@ -183,6 +185,7 @@ export class CardRooms {
       myLover: this.loverOf(room, me),
       betsOpen: this.betsOpen(room),
       setAside: room.revealed ? room.setAside : null,
+      outcome: room.revealed ? (room.outcome ?? { sameRoom: null, loversTogether: null }) : null,
       timer: room.timer,
       version: room.version,
       boot: this.boot,
@@ -229,6 +232,7 @@ export class CardRooms {
     });
     room.setAside = room.config.setAside ? cards[room.players.length] : null;
     room.betsClosed = false;
+    room.outcome = undefined;
     room.dealt = true;
     room.revealed = false;
     room.deal += 1;
@@ -247,6 +251,7 @@ export class CardRooms {
     room.dealt = false;
     room.revealed = false;
     room.betsClosed = false;
+    room.outcome = undefined;
     room.setAside = null;
     room.timer = { round: 0, endsAt: null, remaining: this.roundMs(room, 0) };
     this.changed(room);
@@ -294,6 +299,22 @@ export class CardRooms {
       default:
         throw new RoomError(400, "Unknown timer action.");
     }
+    this.changed(room);
+  }
+
+  /**
+   * After the reveal, the host (or an admin) says where the President and the Bomber ended up, and
+   * whether the Lovers did, so every phone can show who won. Rooms aren't tracked by the app, so
+   * this is the one thing it has to be told. An answer can be changed; null clears it.
+   */
+  setOutcome(code: string, user: Who, input: { sameRoom?: unknown; loversTogether?: unknown }) {
+    const room = this.get(code);
+    const me = this.player(room, user);
+    if (me.userId !== room.hostId && !user.isAdmin) throw new RoomError(403, "The host says how the game ended.");
+    if (!room.revealed) throw new RoomError(400, "Reveal the cards first.");
+    const yesNo = (v: unknown, was: boolean | null) => (v === true || v === false ? v : v === null ? null : was);
+    const o = room.outcome ?? { sameRoom: null, loversTogether: null };
+    room.outcome = { sameRoom: yesNo(input.sameRoom, o.sameRoom), loversTogether: yesNo(input.loversTogether, o.loversTogether) };
     this.changed(room);
   }
 

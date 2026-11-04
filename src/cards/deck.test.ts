@@ -263,3 +263,34 @@ test("turning the Spy switch on never leaves two roles with one id", () => {
   assert.equal(new Set(on.roles.map((r) => r.id)).size, on.roles.length);
   assert.equal(hasSpyEach(on), true);
 });
+
+test("who won: Red with the President and Bomber together, Blue apart; Spies with their real side; Gambler and Lovers", async () => {
+  const { result } = await import("./outcome.ts");
+  const c = setLovers(setSpyEach({ ...classic(), roles: [...classic().roles, roleFrom("gambler", "loners", { id: "g" }), roleFrom("drifter", "loners", { id: "d" })] }, true), true);
+  const cards = deck(c, 9);
+  const by = (id: string) => cards.find((x) => x.roleId === id)!;
+  const seats = [
+    { name: "Pres", card: by(PRESIDENT_ROLE) },
+    { name: "Bomb", card: by(BOMBER_ROLE) },
+    { name: "BlueSpy", card: by("spy-blue") },
+    { name: "LoverB", card: by("lover-blue") },
+    { name: "LoverR", card: by("lover-red") },
+    { name: "Gam", card: by("g"), bet: "red" },
+    { name: "Drift", card: by("d") },
+  ];
+  const none = result(seats, c, null);
+  assert.equal(none.side, null);
+  assert.equal(none.gamblers[0].won, null);
+  const together = result(seats, c, { sameRoom: true, loversTogether: true });
+  assert.equal(together.side, "red");
+  assert.ok(together.sideWinners.includes("Bomb") && together.sideWinners.includes("LoverR"));
+  assert.ok(!together.sideWinners.includes("BlueSpy"), "a Blue Spy loses with Blue, whatever it showed");
+  assert.equal(together.gamblers[0].won, true);
+  assert.deepEqual(together.lovers, { names: ["LoverB", "LoverR"], won: true });
+  assert.deepEqual(together.checkYourself, [{ name: "Drift", role: "Drifter" }]);
+  const apart = result(seats, c, { sameRoom: false, loversTogether: false });
+  assert.equal(apart.side, "blue");
+  assert.ok(apart.sideWinners.includes("Pres") && apart.sideWinners.includes("BlueSpy"));
+  assert.equal(apart.gamblers[0].won, false);
+  assert.equal(apart.lovers!.won, false);
+});

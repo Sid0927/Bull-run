@@ -6,6 +6,7 @@ import type { Me } from "../../shared/api.ts";
 import { Avatar, Icon } from "../ui.tsx";
 import { CardsError, cardsApi } from "./api.ts";
 import { CardBack, CardFace, ShowScreen, possessive, teamOf, teamStyle } from "./CardArt.tsx";
+import { result } from "../../cards/outcome.ts";
 import { Setup } from "./Setup.tsx";
 
 /** The room, kept fresh by the server's change pings (with a slow poll in case the stream drops). */
@@ -202,7 +203,7 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
         </div>
       ) : (
         <>
-          {view.revealed ? <RevealBoard view={view} /> : <Waiting view={view} hostName={host?.name ?? ""} onEdit={() => setEditing(true)} />}
+          {view.revealed ? <RevealBoard view={view} act={act} busy={busy} /> : <Waiting view={view} hostName={host?.name ?? ""} onEdit={() => setEditing(true)} />}
           {view.dealt && view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
           {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={!view.dealt} />}
           <Players view={view} act={act} busy={busy} />
@@ -341,7 +342,7 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
         <ul className="hh-facts">
           {c.groups && (
             <li>
-              <Icon name="swap" size={16} /> Two groups: {c.groupNames[0]} and {c.groupNames[1]}
+              <Icon name="swap" size={16} /> Two rooms: {c.groupNames[0]} and {c.groupNames[1]}
             </li>
           )}
           {c.rounds.length > 0 && (
@@ -578,10 +579,10 @@ function Countdown({ view, offset, busy, act }: { view: RoomView; offset: number
         </div>
       </div>
       <div className="hh-timer-side">
-        <p className="hh-timer-status">{done ? (swap ? `Time's up. Each group sends ${swap} ${swap === 1 ? "player" : "players"} across.` : "Time's up.") : running ? "Round in play" : timer.remaining < total ? "Paused" : "Ready to start"}</p>
+        <p className="hh-timer-status">{done ? (swap ? `Time's up. Each room sends ${swap} ${swap === 1 ? "player" : "players"} across.` : "Time's up.") : running ? "Round in play" : timer.remaining < total ? "Paused" : "Ready to start"}</p>
         {swap > 0 && !done && (
           <p className="muted small">
-            <Icon name="swap" size={14} /> Then each group sends {swap} across
+            <Icon name="swap" size={14} /> Then each room sends {swap} {swap === 1 ? "player" : "players"} across
           </p>
         )}
         {view.host && (
@@ -797,10 +798,77 @@ function TestCards({ view, act, busy }: { view: RoomView; act: Act; busy: boolea
 
 /* ── The end ──────────────────────────────────────────────────────────────────── */
 
-function RevealBoard({ view }: { view: RoomView }) {
+/**
+ * After the reveal: who won. The app doesn't track who is in which room, so the host answers one
+ * question (two with Lovers) and every phone shows the result.
+ */
+function WhoWon({ view, act, busy }: { view: RoomView; act: Act; busy: boolean }) {
+  const c = view.config;
+  const o = view.outcome ?? { sameRoom: null, loversTogether: null };
+  const r = result(view.players, c, view.outcome);
+  const canAnswer = view.host || view.canReveal;
+  const side = r.side ? teamOf(c, r.side) : undefined;
+  const ask = (label: string, value: boolean | null, set: (v: boolean) => Promise<RoomView>, yes: string, no: string) => (
+    <div className="hh-ask">
+      <span className="field-label">{label}</span>
+      {canAnswer ? (
+        <div className="seg seg-fill" role="group" aria-label={label}>
+          {[
+            [true, yes],
+            [false, no],
+          ].map(([v, text]) => (
+            <button key={String(v)} className={value === v ? "on" : ""} aria-pressed={value === v} disabled={busy} onClick={() => act(() => set(v as boolean))}>
+              {text as string}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="small muted">{value === null ? "Waiting for the host to say." : value ? yes : no}</p>
+      )}
+    </div>
+  );
+  return (
+    <section className="panel hh-whowon" aria-label="Who won">
+      <h2>
+        <Icon name="crown" /> Who won?
+      </h2>
+      {ask("Where did the President and the Bomber end up?", o.sameRoom, (v) => cardsApi.outcome(view.code, { sameRoom: v }), "Same room", "Different rooms")}
+      {r.lovers && ask("Did the Lovers end in the same room?", o.loversTogether, (v) => cardsApi.outcome(view.code, { loversTogether: v }), "Together", "Apart")}
+      {r.side && (
+        <div className="hh-winner" style={teamStyle(side)}>
+          <b>{side?.name} wins</b>
+          <span>{r.sideWinners.join(", ")}</span>
+        </div>
+      )}
+      {(r.gamblers.length > 0 || r.lovers || r.checkYourself.length > 0) && (
+        <ul className="hh-personal">
+          {r.gamblers.map((g) => (
+            <li key={g.name}>
+              <b>{g.name}</b>, the Gambler, {g.bet ? `bet on ${teamOf(c, g.bet)?.name ?? g.bet}` : "placed no bet"}
+              {g.won === null ? "." : g.won ? <span className="won"> and wins.</span> : <span> and loses.</span>}
+            </li>
+          ))}
+          {r.lovers && (
+            <li>
+              <b>{r.lovers.names.join(" and ")}</b>, the Lovers{r.lovers.won === null ? "." : r.lovers.won ? <span className="won">, win together.</span> : <span>, don't win.</span>}
+            </li>
+          )}
+          {r.checkYourself.map((x) => (
+            <li key={x.name}>
+              <b>{x.name}</b>, the {x.role}: check the goal on your card.
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function RevealBoard({ view, act, busy }: { view: RoomView; act: Act; busy: boolean }) {
   const c: Config = view.config;
   return (
     <section className="hh-reveal">
+      <WhoWon view={view} act={act} busy={busy} />
       <h2 className="hh-reveal-title">
         <Icon name="eye" /> Everyone's cards
       </h2>

@@ -126,7 +126,11 @@ export function deckSummary(config: Config, players: number): string {
   const built = buildDeck(config, players);
   if ("error" in built) return built.error;
   const byTeam = config.teams
-    .map((t) => `${built.cards.filter((c) => c.teamId === t.id).length} ${t.name}`)
+    .map((t) => {
+      const n = built.cards.filter((c) => c.teamId === t.id).length;
+      // "1 Loner", "2 Loners"; Blue and Red read the same either way.
+      return `${n} ${n === 1 && t.name.endsWith("s") ? t.name.slice(0, -1) : t.name}`;
+    })
     .filter((s) => !s.startsWith("0 "));
   return `${players} players: ${byTeam.join(", ")}${config.setAside ? " (one card set aside)" : ""}.`;
 }

@@ -525,3 +525,16 @@
 .hh-lover { display: flex; gap: 10px; align-items: flex-start; width: min(100%, 26rem); margin: 0; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--team) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--team) 40%, transparent); font-size: 14px; line-height: 1.45; }
 .hh-lover > span[aria-hidden] { color: #d94f8f; font-size: 18px; line-height: 1.2; }
 .hh-sheet .hh-lover { justify-self: center; }
+
+/* After the reveal: who won. */
+.hh-whowon { display: grid; gap: 14px; margin-bottom: 6px; }
+.hh-whowon h2 { margin: 0; }
+.hh-ask { display: grid; gap: 6px; }
+.hh-ask p { margin: 0; }
+.hh-winner { display: grid; gap: 2px; padding: 14px 16px; border-radius: 16px; background: var(--team); color: var(--team-ink); animation: stamp 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.hh-winner b { font-family: var(--font-display); font-size: 28px; text-transform: uppercase; line-height: 1; }
+.hh-winner span { font-size: 14px; opacity: 0.9; }
+.hh-personal { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.45; }
+.hh-personal li { padding: 8px 12px; border-radius: 12px; background: var(--panel-2); }
+.hh-personal .won { color: var(--accent); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .hh-winner { animation: none; } }

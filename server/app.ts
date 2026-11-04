@@ -562,6 +562,9 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
         case "kick":
           cards.kick(code, user, pid);
           break;
+        case "outcome":
+          cards.setOutcome(code, user, { sameRoom: b.sameRoom, loversTogether: b.loversTogether });
+          break;
         case "bet":
           cards.bet(code, user, String(b.team ?? ""), Number.isInteger(pid) ? pid : undefined);
           break;

@@ -276,3 +276,20 @@ test("bets stay closed once round 1 has started or the cards were seen, until th
   rooms.bet(code, gamblerOf(), "blue");
   assert.equal(rooms.view(code, gamblerOf()).myBet, "blue");
 });
+
+test("after the reveal the host says how it ended, everyone sees it, and a new deal clears it", async () => {
+  const { rooms, code } = await table(3);
+  rooms.deal(code, ann);
+  assert.throws(() => rooms.setOutcome(code, ann, { sameRoom: true }), (e: unknown) => e instanceof RoomError && e.status === 400); // not revealed
+  assert.equal(rooms.view(code, ben).outcome, null);
+  rooms.reveal(code, ann, true);
+  assert.throws(() => rooms.setOutcome(code, ben, { sameRoom: true }), (e: unknown) => e instanceof RoomError && e.status === 403); // not the host
+  rooms.setOutcome(code, ann, { sameRoom: true });
+  rooms.setOutcome(code, ann, { loversTogether: false });
+  assert.deepEqual(rooms.view(code, ben).outcome, { sameRoom: true, loversTogether: false });
+  rooms.setOutcome(code, ann, { sameRoom: false });
+  assert.equal(rooms.view(code, cy).outcome!.sameRoom, false, "an answer can be changed");
+  rooms.deal(code, ann, true);
+  rooms.reveal(code, ann, true);
+  assert.deepEqual(rooms.view(code, ben).outcome, { sameRoom: null, loversTogether: null });
+});
