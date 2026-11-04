@@ -28,7 +28,7 @@ export function Hud({ s, status, sub, mine, mySeat, waitingOn }: { s: GameState;
         <b>
           {mine && <span className="pulse-dot light" />}
           {!mine && !ended && waitingOn.length > 0 && <Avatar name={s.players[waitingOn[0]].name} seat={waitingOn[0]} size={20} />}
-          {status}
+          <span className="hud-text">{status}</span>
         </b>
         <span className="hud-sub">{[sub, ...notes].filter(Boolean).join(" · ")}</span>
       </div>

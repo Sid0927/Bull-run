@@ -63,12 +63,14 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
   const limiter = new LoginLimiter();
   const joinLimiter = new LoginLimiter(10);
   const codeLimiter = new LoginLimiter(30);
-  const ipLimiter = new LoginLimiter(30);
-  // New accounts from one address: a few at a time is a family on one Wi-Fi; more is a script.
-  const signupLimiter = new LoginLimiter(5);
+  // Per address, every sign-in counted: a party on one Wi-Fi all signing in at once is well under it.
+  const ipLimiter = new LoginLimiter(60);
+  // New accounts from one address: a group signing up together at one table (The Dallas Incident
+  // is played by a room full of people) is a dozen; far more than that is a script.
+  const signupLimiter = new LoginLimiter(12);
   // Every sign-up attempt from one address, refused ones included, so the form can't be used to
   // test a list of emails for accounts.
-  const signupTries = new LoginLimiter(20);
+  const signupTries = new LoginLimiter(30);
   const openSignup = opts.openSignup !== false;
   const log = opts.log ?? (() => {});
   const mailer = opts.mailer ?? mailerFromEnv({}, log);
@@ -313,7 +315,7 @@ export function createApp(opts: AppOptions): { server: Server; hub: Hub; cards: 
           if (blockedNoted.size > 5000) blockedNoted.clear();
           await attempt("blocked", null);
         }
-        throw new HttpError(429, "Too many wrong passwords. Wait ten minutes and try again.");
+        throw new HttpError(429, limiter.blocked(...keys) ? "Too many wrong passwords. Wait ten minutes and try again." : "Too many sign-ins from this network. Wait ten minutes and try again.");
       }
       limiter.fail(...keys); // counted before checking, so parallel guesses can't slip past
       ipLimiter.fail(`ip:${ip}`);

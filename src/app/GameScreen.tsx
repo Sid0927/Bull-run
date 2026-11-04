@@ -45,7 +45,7 @@ export function GameScreen({ id, me, local }: { id: number; me: Me; onRules: () 
       else {
         // Refused mid-game (the admin gave this seat to someone else): stop showing the board.
         setU(null);
-        setError(status === 403 ? "You are no longer a player in this game." : message);
+        setError(status === 403 ? "You're not a player in this game, so it can't be shown here." : message);
       }
     };
     return local ? local.follow(onUpdate, setConnected, onRefused) : follow(id, onUpdate, setConnected, onRefused);

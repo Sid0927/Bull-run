@@ -143,10 +143,12 @@
 .hh-leave { justify-self: center; }
 
 /* Players */
-.hh-players ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; }
-.hh-players li { position: relative; display: flex; align-items: center; gap: 10px; min-height: 52px; border-top: 1px solid var(--line); }
+.hh-players ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.hh-players { min-width: 0; }
+.hh-players li { position: relative; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 52px; border-top: 1px solid var(--line); }
 .hh-players li:first-child { border-top: 0; }
-.hh-player-name { flex: 1; font-weight: 600; }
+.hh-player-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-host-tag, .hh-player-menu { flex: none; }
 .hh-host-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--foil); background: color-mix(in srgb, var(--foil) 14%, transparent); padding: 2px 9px; border-radius: 999px; }
 .hh-player-menu { position: relative; display: flex; align-items: center; gap: 6px; }
 .hh-player-actions { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; display: grid; gap: 6px; padding: 8px; min-width: 11rem; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); animation: pop 0.15s var(--ease); }
@@ -438,7 +440,7 @@
    size and long text scrolls inside it; anywhere else (a sheet, held up) it grows freely. */
 .hh-card { aspect-ratio: 5 / 7.4; }
 .hh-flip-side.front > .hh-face { height: 100%; overflow: hidden; }
-.hh-flip-side.front .hh-face-body { overflow-y: auto; min-height: 0; justify-content: center; }
+.hh-flip-side.front .hh-face-body { overflow-y: auto; min-height: 0; justify-content: safe center; }
 .hh-flip-side.front .hh-face { grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .hh-face-desc { font-size: 14px; }
 .hh-face-goal p { font-size: 13.5px; }

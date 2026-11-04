@@ -447,9 +447,9 @@ describe("signing up", () => {
 
   test("one address can't make accounts without limit", async () => {
     const codes: number[] = [];
-    for (let i = 0; i < 7; i++) codes.push((await signup({ email: `p${i}@flood.test`, username: `flood${i}`, password: "flood-pass" }, "198.51.100.200")).status);
-    assert.deepEqual(codes.slice(0, 5), [200, 200, 200, 200, 200]);
-    assert.equal(codes[6], 429);
+    for (let i = 0; i < 14; i++) codes.push((await signup({ email: `p${i}@flood.test`, username: `flood${i}`, password: "flood-pass" }, "198.51.100.200")).status);
+    assert.ok(codes.slice(0, 12).every((c) => c === 200), codes.join(",")); // a table of a dozen signing up together
+    assert.equal(codes[13], 429);
   });
 
   test("sign-up can be switched off", async () => {
@@ -571,12 +571,12 @@ describe("fixes from the second review", () => {
 
   test("sign-up attempts from one address are capped, refused ones included", async () => {
     const codes: number[] = [];
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 32; i++) {
       const r = await fetch(`${base}/api/signup`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.77" }, body: JSON.stringify({ email: `probe${i}@example.com`, username: "asha", password: "probe-pass" }) });
       codes.push(r.status);
     }
-    assert.ok(codes.slice(0, 20).every((c) => c === 409), codes.join(","));
-    assert.equal(codes[21], 429);
+    assert.ok(codes.slice(0, 30).every((c) => c === 409), codes.join(","));
+    assert.equal(codes[31], 429);
   });
 
   test("changing only the capitals of a confirmed email keeps it confirmed", async () => {

@@ -266,6 +266,8 @@ export class CardRooms {
     room.revealed = on;
     // Somebody who has seen every card must not be able to bet afterwards, even if they're hidden again.
     if (on) room.betsClosed = true;
+    // The game is over once the cards are up: the clock stops where it was rather than running on.
+    if (on && room.timer.endsAt !== null) room.timer = { ...room.timer, endsAt: null, remaining: Math.max(0, room.timer.endsAt - this.now()) };
     this.changed(room);
   }
 

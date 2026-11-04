@@ -96,6 +96,21 @@ export function App() {
   if (route.name === "game") return shell(<GameScreen key={route.id} id={route.id} me={me} onRules={openRules} />, true);
   if (route.name === "practice" && practice)
     return shell(<GameScreen key={`practice-${practice.n}`} id={0} me={me} onRules={openRules} local={practice.source} />, true);
+  // A practice game lives only in this page, so a reload ends it: say so rather than quietly
+  // showing the home screen under a #/practice address.
+  if (route.name === "practice")
+    return shell(
+      <main className="page">
+        <div className="empty-state">
+          <BullLogo size={48} />
+          <h1 className="page-title">That practice game has ended</h1>
+          <p>Practice games are played on this phone only, so reloading the page ends them. Start another from Bull Run.</p>
+          <a className="button primary" href="#/bull-run">
+            Back to Bull Run
+          </a>
+        </div>
+      </main>,
+    );
   if (route.name === "admin" && me.isAdmin) return shell(<Admin me={me} />);
   if (route.name === "lobby") return shell(<Lobby me={me} />);
   if (route.name === "cards") return shell(<CardsHome me={me} go={go} />);
@@ -651,7 +666,8 @@ function Lobby({ me }: { me: Me }) {
   );
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000);
+    // Often enough that "your move" shows up soon after the others finish; hidden tabs skip it.
+    const t = setInterval(() => document.visibilityState === "visible" && load(), 5000);
     const onVisible = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", onVisible);
     return () => {

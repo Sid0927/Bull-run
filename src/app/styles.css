@@ -642,7 +642,9 @@ button.confirm-sell:not(:disabled), button.confirm-short:not(:disabled) { backgr
 /* ── The rulebook ─────────────────────────────────────────────────── */
 .rulebook { min-height: 100%; }
 .rulebook-bar { position: sticky; top: 0; z-index: 4; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
-.rulebook-bar .brand { font-size: 20px; text-transform: uppercase; }
+.rulebook-bar .brand { font-size: 20px; text-transform: uppercase; min-width: 0; }
+.rulebook-bar > button { flex: none; }
+@media (max-width: 360px) { .rulebook-bar .rules-tag { display: none; } }
 .rules { max-width: 46rem; margin: 0 auto; padding-block: 24px 64px; padding-inline: 16px; line-height: 1.65; font-size: 15.5px; }
 .rules h1 { margin: 0; font-size: 48px; text-transform: uppercase; }
 .rules h2 { font-size: 26px; margin: 0 0 8px; text-wrap: balance; display: block; }
@@ -940,7 +942,9 @@ body::before {
 .hud-r { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
 .hud-of { font-size: 11px; opacity: 0.75; }
 .hud-status { flex: 1; min-width: 0; display: grid; }
-.hud-status b { display: flex; align-items: center; gap: 8px; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hud-status b { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 16px; white-space: nowrap; }
+.hud-status b > * { flex: none; }
+.hud-status b > .hud-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hud-sub { font-size: 12.5px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hud-cash { display: grid; justify-items: end; line-height: 1.1; }
 .hud-cash span { font-size: 11px; opacity: 0.75; }
@@ -982,9 +986,10 @@ body::before {
 .latest-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-left: 4px; }
 
 /* Summary cards. */
+.activity { min-width: 0; }
 .activity h2 { margin-bottom: 12px; }
 .sum-list { display: grid; gap: 10px; }
-.sum { display: grid; gap: 6px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); }
+.sum { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); }
 .sum.latest { background: var(--panel); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent); }
 .sum header { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sum header b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; }

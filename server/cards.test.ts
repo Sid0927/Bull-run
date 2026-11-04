@@ -356,3 +356,19 @@ test("a pasted setup can't give another card the President's, Bomber's or a Love
   assert.doesNotThrow(() => rooms.bet(code, gambler, "blue"));
   for (const u of people.filter((u) => rooms.view(code, u).myCard?.name === "Scout")) assert.equal(rooms.view(code, u).myLover, null);
 });
+
+test("revealing the cards stops the round clock", async () => {
+  let now = 5_000_000;
+  const rooms = new CardRooms(new MemoryStore(), () => {}, () => now);
+  const code = rooms.create(ann);
+  rooms.join(code, ben);
+  rooms.join(code, cy);
+  rooms.deal(code, ann);
+  rooms.timer(code, ann, "start");
+  now += 20_000;
+  rooms.reveal(code, ann, true);
+  const left = rooms.view(code, ann).timer.remaining;
+  now += 60_000;
+  assert.equal(rooms.view(code, ann).timer.endsAt, null);
+  assert.equal(rooms.view(code, ann).timer.remaining, left);
+});

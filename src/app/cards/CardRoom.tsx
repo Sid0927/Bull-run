@@ -9,6 +9,24 @@ import { CardBack, CardFace, ShowScreen, possessive, teamOf, teamStyle } from ".
 import { result } from "../../cards/outcome.ts";
 import { Setup } from "./Setup.tsx";
 
+/** Rooms this tab left on purpose: opening one again (Back, or the link) asks before rejoining. */
+const LEFT_KEY = "cards-left";
+function leftRooms(): string[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(LEFT_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+function markLeft(code: string, left: boolean) {
+  try {
+    const rest = leftRooms().filter((c) => c !== code);
+    sessionStorage.setItem(LEFT_KEY, JSON.stringify(left ? [...rest, code].slice(-20) : rest));
+  } catch {
+    /* private mode: nothing remembered, nothing lost */
+  }
+}
+
 /** The room, kept fresh by the server's change pings (with a slow poll in case the stream drops). */
 function useRoom(code: string) {
   const [view, setView] = useState<RoomView | null>(null);
@@ -32,6 +50,7 @@ function useRoom(code: string) {
         // link joins by itself. After having been in it, it must never quietly put them back: they
         // may have left on purpose from another tab. They are asked instead.
         if (wasIn.current) return setError({ status: 404, gone: true, text: "You left it, the host removed you, or it closed." });
+        if (leftRooms().includes(code)) return setError({ status: 404, gone: true, text: "You left this room." });
         return cardsApi.join(code).then(take, (j: CardsError) => setError({ status: j.status, text: j.message }));
       }),
     [code, take],
@@ -73,7 +92,10 @@ function useRoom(code: string) {
   }, [code, load, out]);
   const rejoin = useCallback(
     () =>
-      cardsApi.join(code).then(take, (j: CardsError) =>
+      cardsApi.join(code).then((v) => {
+        markLeft(code, false);
+        take(v);
+      }, (j: CardsError) =>
         setError({ status: j.status === 403 ? 403 : 404, text: j.status === 403 ? j.message : "This room has closed." }),
       ),
     [code, take],
@@ -222,7 +244,11 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
               className="ghost-link danger-text hh-leave"
               disabled={busy}
               onClick={() => {
-                if (confirm("Leave this room?")) act(() => cardsApi.leave(code)).then((ok) => ok && go("#/cards"));
+                if (confirm("Leave this room?")) act(() => cardsApi.leave(code)).then((ok) => {
+                  if (!ok) return;
+                  markLeft(code, true);
+                  go("#/cards");
+                });
               }}
             >
               <Icon name="out" size={16} /> Leave room
