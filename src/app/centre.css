@@ -510,3 +510,14 @@
 .hh-show-badge .hh-show-name { font-size: clamp(48px, 17vw, 112px); animation: none; }
 .hh-show-badge .hh-show-label { opacity: 0.75; }
 @media (prefers-reduced-motion: reduce) { .hh-show-badge { animation: none; } }
+
+/* The Gambler's secret bet, under the turned-over card. */
+.hh-bet { display: grid; gap: 8px; width: min(100%, 26rem); padding: 12px 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.hh-bet-head { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; font-size: 14px; }
+.hh-bet-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hh-bet-btn { min-height: 46px; gap: 6px; border-radius: 12px; font-weight: 700; background: color-mix(in srgb, var(--team) 10%, var(--panel)); color: var(--ink); border: 1.5px solid color-mix(in srgb, var(--team) 45%, transparent); }
+.hh-bet-btn.on { background: var(--team); color: var(--team-ink); border-color: var(--team); }
+.hh-bet-btn:disabled:not(.on) { opacity: 0.5; }
+.hh-bet-note { margin: 0; }
+.hh-sheet .hh-bet { justify-self: center; }
+.hh-reveal-bet { font-weight: 500; opacity: 0.8; }

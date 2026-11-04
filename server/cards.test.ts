@@ -190,3 +190,36 @@ test("a host who is not an admin is never sent test players' cards", async () =>
   rooms.deal(code, ben);
   assert.ok(rooms.view(code, ben).players.every((p) => !p.testCard));
 });
+
+test("the Gambler bets on Blue or Red in secret, can change it until round 1 starts, and it shows at the reveal", async () => {
+  const { rooms, code } = await table(3);
+  const setup = rooms.view(code, ann).config;
+  rooms.setConfig(code, ann, { ...setup, roles: [...setup.roles, { id: "g", libId: "gambler", teamId: "loners", count: 1 }], oddRoleId: "", rounds: [{ minutes: 2, swap: 1 }] });
+  rooms.deal(code, ann);
+  const people = [ann, ben, cy];
+  const gambler = people.find((u) => rooms.view(code, u).myCard?.roleId === "g")!;
+  const other = people.find((u) => u !== gambler)!;
+  const refused = (f: () => void, status: number) => assert.throws(f, (e: unknown) => e instanceof RoomError && e.status === status);
+
+  refused(() => rooms.bet(code, other, "blue"), 403); // only the Gambler bets
+  refused(() => rooms.bet(code, gambler, "green"), 400);
+  assert.equal(rooms.view(code, gambler).betsOpen, true);
+  rooms.bet(code, gambler, "blue");
+  assert.equal(rooms.view(code, gambler).myBet, "blue");
+  // Nobody else is told, in their own bet or in the player list.
+  const theirs = rooms.view(code, other);
+  assert.equal(theirs.myBet, null);
+  assert.ok(theirs.players.every((p) => p.bet === undefined));
+  rooms.bet(code, gambler, "red"); // a change of mind, before the first round
+  assert.equal(rooms.view(code, gambler).myBet, "red");
+
+  rooms.timer(code, ann, "start");
+  assert.equal(rooms.view(code, gambler).betsOpen, false);
+  refused(() => rooms.bet(code, gambler, "blue"), 409);
+  assert.equal(rooms.view(code, gambler).myBet, "red", "the bet is locked as it was");
+
+  rooms.reveal(code, ann, true);
+  assert.equal(rooms.view(code, other).players.find((p) => p.id === gambler.id)?.bet, "red");
+  rooms.deal(code, ann, true);
+  assert.equal(rooms.view(code, gambler).myBet, null, "a new deal clears the bet");
+});

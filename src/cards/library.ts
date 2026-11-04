@@ -40,6 +40,7 @@ export const LIBRARY: LibraryRole[] = [
   { id: "bluffer", name: "Bluffer", group: "trick", copies: 1, show: "team", disguise: false, description: "Say you are any role you like. All you can ever show is your team colour." },
 
   { id: "drifter", name: "Drifter", group: "loner", copies: 1, show: "any", disguise: false, description: "You win if you end the game in the group with more people in it." },
+  { id: "gambler", name: "Gambler", group: "loner", copies: 1, show: "any", disguise: false, description: "Before the first round starts, secretly bet in the app on Blue or Red. You win if the side you bet on wins." },
   { id: "shadow", name: "Shadow", group: "loner", copies: 1, show: "any", disguise: false, description: "Before the first round, secretly tell the host one player's name. You win if you end in the same group as them." },
 ];
 

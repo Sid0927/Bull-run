@@ -44,6 +44,7 @@ export const cardsApi = {
   reveal: (code: string, on: boolean) => post(code, "reveal", { on }),
   timer: (code: string, action: TimerAction) => post(code, "timer", { action }),
   kick: (code: string, playerId: number) => post(code, "kick", { playerId }),
+  bet: (code: string, team: string, playerId?: number) => post(code, "bet", { team, playerId }),
   host: (code: string, playerId: number) => post(code, "host", { playerId }),
   addTests: (code: string, count: number) => post(code, "tests", { count }),
   removeTests: (code: string) => post(code, "tests", { remove: true }),

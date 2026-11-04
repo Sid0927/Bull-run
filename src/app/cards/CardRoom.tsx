@@ -190,12 +190,12 @@ export function CardRoom({ code, me, go }: { code: string; me: Me; go: (hash: st
         // laptop), or one under the other, timer and host tools first (on a phone).
         <div className="hh-table">
           <div className="hh-table-card">
-            <Dealt view={view} me={me} />
+            <Dealt view={view} me={me} act={act} busy={busy} />
           </div>
           <div className="hh-table-side">
             {view.config.rounds.length > 0 && <Countdown view={view} offset={offset.current} busy={busy} act={act} />}
             {view.host || view.canReveal ? <HostBar view={view} act={act} busy={busy} /> : null}
-            {view.host && view.players.some((p) => p.test) && <TestCards view={view} />}
+            {view.host && view.players.some((p) => p.test) && <TestCards view={view} act={act} busy={busy} />}
             {view.config.notes.trim() && <HouseRules notes={view.config.notes} open={false} />}
             <Players view={view} act={act} busy={busy} />
           </div>
@@ -367,7 +367,54 @@ function Waiting({ view, hostName, onEdit }: { view: RoomView; hostName: string;
 
 /* ── This phone's card ────────────────────────────────────────────────────────── */
 
-function Dealt({ view, me }: { view: RoomView; me: Me }) {
+type Act = (f: () => Promise<RoomView>, done?: string) => Promise<boolean | undefined>;
+
+/** Whether a dealt card is the Gambler, read from the room's setup (role ids are the host's). */
+const isGambler = (view: RoomView, card: Card | undefined | null) => !!card && view.config.roles.some((r) => r.id === card.roleId && r.libId === "gambler");
+
+/**
+ * The Gambler's secret bet. Only drawn while the card is turned over: a bet panel always on the
+ * screen would tell anyone glancing at the phone that its holder is the Gambler.
+ */
+function BetPanel({ view, bet, act, busy, playerId, onUse }: { view: RoomView; bet: string | null; act: Act; busy: boolean; playerId?: number; onUse?: () => void }) {
+  const sides = view.config.teams.filter((t) => t.id === "blue" || t.id === "red");
+  return (
+    <div className="hh-bet" role="group" aria-label="Your bet">
+      <p className="hh-bet-head">
+        <Icon name="flag" size={15} /> {view.betsOpen ? "Your secret bet: who wins?" : bet ? "Your bet is locked" : "Bets are closed"}
+      </p>
+      <div className="hh-bet-btns">
+        {sides.map((s) => (
+          <button
+            key={s.id}
+            className={`hh-bet-btn ${bet === s.id ? "on" : ""}`}
+            style={teamStyle(s)}
+            aria-pressed={bet === s.id}
+            disabled={busy || !view.betsOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUse?.();
+              act(() => cardsApi.bet(view.code, s.id, playerId));
+            }}
+          >
+            {bet === s.id && <Icon name="check" size={16} />} {s.name}
+          </button>
+        ))}
+      </div>
+      <p className="muted small hh-bet-note">
+        {view.betsOpen
+          ? bet
+            ? `You're betting on ${sides.find((s) => s.id === bet)?.name}. You can change it until the first round starts.`
+            : "Nobody else sees it. You can change it until the first round starts."
+          : bet
+            ? `You bet on ${sides.find((s) => s.id === bet)?.name}.`
+            : "The first round started before you placed a bet."}
+      </p>
+    </div>
+  );
+}
+
+function Dealt({ view, me, act, busy }: { view: RoomView; me: Me; act: Act; busy: boolean }) {
   const card = view.myCard as Card;
   const [open, setOpen] = useState(false);
   const [showing, setShowing] = useState<"team" | "full" | null>(null);
@@ -433,6 +480,19 @@ function Dealt({ view, me }: { view: RoomView; me: Me }) {
         </span>
       </button>
       <p className="muted small center hh-flip-note">{open ? "Tap the card to hide it. It hides by itself after a few seconds." : "Only you can see this. Shield the screen when you look."}</p>
+      {open && isGambler(view, card) && (
+        <BetPanel
+          view={view}
+          bet={view.myBet}
+          act={act}
+          busy={busy}
+          onUse={() => {
+            // Betting keeps the card turned over a little longer, rather than hiding mid-choice.
+            window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(() => setOpen(false), 8000);
+          }}
+        />
+      )}
       {/* Both buttons look the same on every card: a disabled one would tell a neighbour the card is
           Silent or a Veil. A card that can't be shown that way says so only when it is asked to. */}
       <div className="hh-show-btns">
@@ -661,7 +721,7 @@ function Players({ view, act, busy }: { view: RoomView; act: (f: () => Promise<R
 }
 
 /** For the host trying a game alone: each test player's card, face down until opened. */
-function TestCards({ view }: { view: RoomView }) {
+function TestCards({ view, act, busy }: { view: RoomView; act: Act; busy: boolean }) {
   const [open, setOpen] = useState<PlayerView | null>(null);
   const [showing, setShowing] = useState<"team" | "full" | null>(null);
   const tests = view.players.filter((p) => p.test && p.testCard);
@@ -703,6 +763,7 @@ function TestCards({ view }: { view: RoomView }) {
               </button>
             </div>
             <CardFace card={card} config={view.config} />
+            {isGambler(view, card) && <BetPanel view={view} bet={view.players.find((p) => p.id === open.id)?.testBet ?? null} act={act} busy={busy} playerId={open.id} />}
             <div className="hh-show-btns">
               <button className="hh-show-btn team" disabled={card.show === "full" || card.show === "none"} onClick={() => setShowing("team")}>
                 <Icon name="shield" /> <span>Show team</span>
@@ -740,7 +801,10 @@ function RevealBoard({ view }: { view: RoomView }) {
               {people.map((p) => (
                 <li key={p.id} className={p.card && !p.card.roleId.startsWith("member:") ? "special" : ""}>
                   <span className="truncate">{p.name}</span>
-                  <b className="truncate">{p.card?.name}</b>
+                  <b className="truncate">
+                    {p.card?.name}
+                    {isGambler(view, p.card) && <span className="hh-reveal-bet"> · {p.bet ? `bet on ${c.teams.find((t) => t.id === p.bet)?.name ?? p.bet}` : "no bet"}</span>}
+                  </b>
                 </li>
               ))}
             </ul>

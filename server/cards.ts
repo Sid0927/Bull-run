@@ -8,6 +8,7 @@
 import { randomInt } from "node:crypto";
 import { buildDeck, keepKeyCardsDealt, shuffle, splitGroups } from "../src/cards/deck.ts";
 import { PRESETS, cleanConfig } from "../src/cards/presets.ts";
+import { BLUE, RED } from "../src/cards/core.ts";
 import type { Card, CardRoomSummary, Config, RoomView, Timer } from "../src/cards/types.ts";
 import { MAX_PLAYERS, MAX_TEST_PLAYERS } from "../src/cards/types.ts";
 import type { Store } from "./store.ts";
@@ -34,6 +35,8 @@ interface Player {
   test?: boolean;
   card: Card | null;
   group: 0 | 1 | null;
+  /** A Gambler's secret bet on which side wins (a team id), or null before they choose. */
+  bet?: string | null;
 }
 
 interface Room {
@@ -163,8 +166,8 @@ export class CardRooms {
         name: p.name,
         host: p.userId === room.hostId,
         ...(p.test ? { test: true } : {}),
-        ...(p.test && p.card && me.userId === room.hostId && user.isAdmin ? { testCard: p.card } : {}),
-        ...(room.revealed && p.card ? { card: p.card } : {}),
+        ...(p.test && p.card && me.userId === room.hostId && user.isAdmin ? { testCard: p.card, testBet: p.bet ?? null } : {}),
+        ...(room.revealed && p.card ? { card: p.card, bet: p.bet ?? null } : {}),
         // Nobody is sent where anyone else is: who goes across is played out in the room, not tracked.
       })),
       dealt: room.dealt,
@@ -172,6 +175,9 @@ export class CardRooms {
       revealed: room.revealed,
       myCard: me.card,
       myGroup: me.group,
+      // Only the Gambler's own phone is told their bet; everyone else sees it when the cards are revealed.
+      myBet: me.bet ?? null,
+      betsOpen: this.betsOpen(room),
       setAside: room.revealed ? room.setAside : null,
       timer: room.timer,
       version: room.version,
@@ -215,6 +221,7 @@ export class CardRooms {
     room.players.forEach((p, i) => {
       p.card = cards[i];
       p.group = room.config.groups ? groups[i] : null;
+      p.bet = null;
     });
     room.setAside = room.config.setAside ? cards[room.players.length] : null;
     room.dealt = true;
@@ -230,6 +237,7 @@ export class CardRooms {
     for (const p of room.players) {
       p.card = null;
       p.group = null;
+      p.bet = null;
     }
     room.dealt = false;
     room.revealed = false;
@@ -276,6 +284,42 @@ export class CardRooms {
         throw new RoomError(400, "Unknown timer action.");
     }
     this.changed(room);
+  }
+
+  /**
+   * The Gambler bets on the side they think will win. Only the holder of a Gambler card may, only
+   * on Blue or Red, and only until the first round's timer starts (or, with no rounds, until the
+   * cards are revealed); until then they may change their mind. A host who is an admin can place a
+   * test player's bet, as they can open its card.
+   */
+  bet(code: string, user: Who, team: string, forPlayerId?: number) {
+    const room = this.get(code);
+    const me = this.player(room, user);
+    let who = me;
+    if (forPlayerId !== undefined && forPlayerId !== me.userId) {
+      const p = room.players.find((x) => x.userId === forPlayerId);
+      if (!p?.test || me.userId !== room.hostId || !user.isAdmin) throw new RoomError(403, "You can only bet for yourself.");
+      who = p;
+    }
+    if (!room.dealt || !who.card) throw new RoomError(400, "The cards haven't been dealt.");
+    if (this.libIdOf(room, who.card) !== "gambler") throw new RoomError(403, "Only the Gambler bets.");
+    if (team !== BLUE && team !== RED) throw new RoomError(400, "Bet on Blue or Red.");
+    if (!this.betsOpen(room)) throw new RoomError(409, "Bets closed when the first round started.");
+    who.bet = team;
+    this.changed(room);
+  }
+
+  /** Which library role a dealt card is, from the room's setup (role ids are the host's to choose). */
+  private libIdOf(room: Room, card: Card): string | undefined {
+    return room.config.roles.find((r) => r.id === card.roleId)?.libId;
+  }
+
+  /** Bets stay open until the first round has been started, or with no rounds, until the reveal. */
+  private betsOpen(room: Room): boolean {
+    if (!room.dealt || room.revealed) return false;
+    const t = room.timer;
+    if (room.config.rounds.length === 0) return true;
+    return t.round === 0 && t.endsAt === null && t.remaining >= this.roundMs(room, 0);
   }
 
   kick(code: string, user: Who, playerId: number) {
