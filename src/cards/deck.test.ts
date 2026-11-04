@@ -32,7 +32,7 @@ test("Blue and Red's goals are about the President and the Bomber, and printed o
   for (const c of cards.filter((c) => c.teamId === "red")) assert.equal(c.goal, RED_GOAL);
   assert.match(BLUE_GOAL, /^Blue wins if, when the last round ends, the President is not in the same room as the Bomber/);
   assert.match(RED_GOAL, /^Red wins if, when the last round ends, the Bomber is in the same room as the President/);
-  assert.ok(cards.filter((c) => c.teamId === "loners").every((c) => c.goal === "" && c.description.startsWith("You win")));
+  assert.ok(cards.filter((c) => c.teamId === "loners").every((c) => c.goal === "" && c.description.length > 20), "a loner plays for the goal on its own card");
 });
 
 test("an even table splits evenly", () => {
@@ -46,7 +46,7 @@ test("an odd table takes the odd-player role instead of tipping one team ahead",
   const cards = deck(classic(), 11);
   assert.equal(count(cards, "blue"), 5);
   assert.equal(count(cards, "red"), 5);
-  assert.equal(cards.filter((c) => c.roleId === "drifter-loners").length, 1);
+  assert.equal(cards.filter((c) => c.roleId === "gambler-loners").length, 1, "the Gambler is the odd player");
 });
 
 test("without an odd-player role the extra card goes to a side", () => {

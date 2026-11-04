@@ -42,8 +42,8 @@ export const PRESETS: Preset[] = [
     config: core({
       title: "President & Bomber",
       teams: [LONERS],
-      roles: [roleFrom("drifter", "loners", { count: 0 })],
-      oddRoleId: "drifter-loners",
+      roles: [roleFrom("gambler", "loners", { count: 0 })],
+      oddRoleId: "gambler-loners",
       rounds: ROUNDS,
       notes: `${END_RULE}\nShowing is always both ways: you both show, or nobody does.`,
     }),
@@ -51,7 +51,7 @@ export const PRESETS: Preset[] = [
   {
     id: "tricky",
     name: "Full of tricks",
-    blurb: "The President and the Bomber, plus a Spy and a Scout on each side, and a Shadow and a Drifter playing for themselves.",
+    blurb: "The President and the Bomber, plus a Spy and a Scout on each side, and a Shadow and a Gambler playing for themselves.",
     config: core({
       title: "Smoke & Mirrors",
       teams: [LONERS],
@@ -61,9 +61,9 @@ export const PRESETS: Preset[] = [
         roleFrom("scout", "blue"),
         roleFrom("scout", "red"),
         roleFrom("shadow", "loners"),
-        roleFrom("drifter", "loners", { count: 0 }),
+        roleFrom("gambler", "loners", { count: 0 }),
       ],
-      oddRoleId: "drifter-loners",
+      oddRoleId: "gambler-loners",
       setAside: true,
       rounds: [
         { minutes: 5, swap: 2 },
